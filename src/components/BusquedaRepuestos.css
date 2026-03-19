@@ -1,0 +1,437 @@
+.busqueda-repuestos {
+  padding: 2.5rem 2rem 3rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #f5f6f8;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.busqueda-repuestos-titulo {
+  text-align: center;
+  margin: 0 0 0.5rem;
+  font-size: var(--seccion-titulo-size, 1.4rem);
+  font-weight: var(--seccion-titulo-weight, 600);
+  color: var(--seccion-titulo-color, #2d3748);
+  letter-spacing: -0.01em;
+}
+
+.busqueda-repuestos-subtitulo {
+  text-align: center;
+  margin: 0 0 1.75rem;
+  font-size: var(--seccion-subtitulo-size, 0.95rem);
+  color: var(--seccion-subtitulo-color, #4a5568);
+}
+
+.busqueda-repuestos-filtros {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 1rem;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 700px) {
+  .busqueda-repuestos-filtros {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 400px) {
+  .busqueda-repuestos-filtros {
+    grid-template-columns: 1fr;
+  }
+}
+
+.busqueda-repuestos-campo label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: var(--form-label-size, 0.875rem);
+  font-weight: var(--form-label-weight, 500);
+  color: var(--form-label-color, #2d3748);
+}
+
+.busqueda-repuestos-campo select {
+  width: 100%;
+  padding: var(--form-input-padding, 0.6rem 0.75rem);
+  font-size: 0.95rem;
+  border: var(--form-border, 1px solid #e2e8f0);
+  border-radius: var(--form-input-radius, 6px);
+  background: #fff;
+  color: #2d3748;
+}
+
+.busqueda-repuestos-campo select:focus {
+  outline: none;
+  border-color: var(--form-focus-color, #1e3a5f);
+}
+
+.busqueda-repuestos-btn {
+  padding: 0.65rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--form-input-radius, 6px);
+  background: var(--btn-primary-bg, #1e3a5f);
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.busqueda-repuestos-btn:hover:not(:disabled) {
+  background: var(--btn-primary-hover, #2c5282);
+}
+
+.busqueda-repuestos-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.busqueda-repuestos-mensaje {
+  margin: 1rem 0 0;
+  font-size: 0.95rem;
+  color: #2d3748;
+}
+
+.busqueda-repuestos-mensaje.aviso {
+  color: #718096;
+}
+
+/* Resultados: grid compacto */
+.busqueda-repuestos-resultados {
+  margin-top: 2rem;
+}
+
+.busqueda-repuestos-resultados-titulo {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--seccion-titulo-color, #2d3748);
+}
+
+/* Tarjetas: una arriba de otra, compactas y anchas (igual que ventas cerca de mi zona) */
+.busqueda-repuestos-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.busqueda-repuestos-card {
+  display: flex;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.busqueda-repuestos-card:hover {
+  border-color: #cbd5e0;
+  box-shadow: 0 2px 8px rgba(30, 58, 95, 0.08);
+}
+
+.busqueda-repuestos-card-foto {
+  width: 160px;
+  min-width: 160px;
+  height: 160px;
+  background: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.busqueda-repuestos-card-foto img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.busqueda-repuestos-card-foto-placeholder {
+  font-size: 1.1rem;
+  color: #718096;
+  text-align: center;
+  padding: 0.5rem;
+}
+
+.busqueda-repuestos-card-cuerpo {
+  flex: 1;
+  padding: 0.9rem 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.busqueda-repuestos-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.busqueda-repuestos-card-nombre {
+  margin: 0 0 0.2rem;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #1e3a5f;
+  line-height: 1.2;
+}
+
+.busqueda-repuestos-card-vehiculo {
+  margin: 0 0 0.15rem;
+  font-size: 1.1rem;
+  color: #718096;
+}
+
+.busqueda-repuestos-card-desc {
+  margin: 0 0 0.15rem;
+  font-size: 1.1rem;
+  color: #4a5568;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.busqueda-repuestos-card-precio {
+  margin: 0 0 0.1rem;
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.busqueda-repuestos-card-vendedor {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #718096;
+}
+
+.busqueda-repuestos-card-botones {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.busqueda-repuestos-card-btn {
+  padding: 0.7rem 1.1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: #1e3a5f;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.busqueda-repuestos-card-btn:hover {
+  background: #2c5282;
+}
+
+.busqueda-repuestos-card-btn-ubicacion {
+  background: #2d3748;
+}
+
+.busqueda-repuestos-card-btn-ubicacion:hover {
+  background: #4a5568;
+}
+
+@media (max-width: 640px) {
+  .busqueda-repuestos-card-cuerpo {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .busqueda-repuestos-card-botones {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* Modal contactar vendedor — compacto */
+.busqueda-repuestos-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.busqueda-repuestos-modal {
+  background: #f5f6f8;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  max-width: 380px;
+  width: 100%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.busqueda-repuestos-modal.busqueda-repuestos-modal-con-mapa {
+  max-width: 480px;
+}
+
+.busqueda-repuestos-modal-titulo-seccion {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #2d3748;
+  line-height: 1.3;
+  text-decoration: underline;
+  text-align: center;
+}
+
+.busqueda-repuestos-modal h3.busqueda-repuestos-modal-titulo-seccion {
+  margin: 0 0 0.25rem;
+}
+
+.busqueda-repuestos-modal h4.busqueda-repuestos-modal-titulo-seccion {
+  margin: 0.6rem 0 0.2rem;
+}
+
+.busqueda-repuestos-modal-repuesto {
+  margin: 0 0 0.15rem;
+  font-size: 0.9rem;
+  color: #2d3748;
+  line-height: 1.3;
+}
+
+.busqueda-repuestos-modal-descripcion {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: #718096;
+  line-height: 1.35;
+}
+
+.busqueda-repuestos-modal-producto-box {
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.busqueda-repuestos-modal-botones {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.busqueda-repuestos-modal-datos {
+  margin: 0 0 0.75rem;
+  line-height: 1.25;
+}
+
+.busqueda-repuestos-modal-linea {
+  margin: 0 0 0.2rem;
+  font-size: 0.85rem;
+  color: #2d3748;
+}
+
+.busqueda-repuestos-modal-metodos-pago {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.busqueda-repuestos-modal-metodos-pago-lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.busqueda-repuestos-modal-metodo-pago-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #edf2f7;
+  color: #2d3748;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid #e2e8f0;
+}
+
+.busqueda-repuestos-modal-etiqueta {
+  display: inline-block;
+  min-width: 6.5rem;
+  color: #718096;
+  font-weight: 500;
+}
+
+.busqueda-repuestos-modal-whatsapp {
+  display: inline-block;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px;
+  background: #25d366;
+  color: #fff;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.busqueda-repuestos-modal-whatsapp:hover {
+  background: #20bd5a;
+}
+
+.busqueda-repuestos-modal-sin-contacto {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: #718096;
+  font-style: italic;
+}
+
+.busqueda-repuestos-modal-cerrar {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #2d3748;
+  cursor: pointer;
+  display: block;
+  margin: 0.5rem auto 0;
+}
+
+.busqueda-repuestos-modal-cerrar:hover {
+  background: #f8f9fb;
+}
+
+/* Modal pregunta ubicación */
+.busqueda-repuestos-modal-ubicacion-pregunta {
+  max-width: 380px;
+}
+
+.busqueda-repuestos-modal-pregunta-texto {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  color: #2d3748;
+  line-height: 1.5;
+}
+
+/* Modal mapa ubicación vendedor */
+.busqueda-repuestos-modal-overlay-mapa .busqueda-repuestos-modal {
+  max-width: 480px;
+}
+
+.busqueda-repuestos-modal-mapa .busqueda-repuestos-modal-titulo-seccion {
+  margin: 0 0 0.25rem;
+}
+
+.busqueda-repuestos-modal-vendedor-nombre {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: #718096;
+}
+
+.busqueda-repuestos-modal-cerrar-mapa {
+  margin-top: 1rem;
+}

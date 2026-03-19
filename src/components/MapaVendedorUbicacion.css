@@ -1,0 +1,34 @@
+.mapa-vendedor-ubicacion {
+  width: 100%;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.mapa-vendedor-ruta-info {
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: #4a5568;
+}
+
+.mapa-vendedor-error,
+.mapa-vendedor-cargando {
+  margin: 0;
+  padding: 1rem;
+  font-size: 0.9rem;
+  color: #718096;
+  text-align: center;
+  background: #f8f9fb;
+  border-radius: 6px;
+}
+
+.mapa-vendedor-error {
+  color: #c53030;
+}
+
+.mapa-vendedor-ruta-error {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  text-align: left;
+}

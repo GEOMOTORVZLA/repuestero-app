@@ -1,0 +1,38 @@
+/**
+ * Marcas de vehículos predeterminadas para filtrar repuestos (mercado Venezuela).
+ * Ordenadas por relevancia en el mercado local.
+ */
+export const MARCAS_VEHICULOS = [
+  'JAC',
+  'Toyota',
+  'Chery',
+  'Chevrolet',
+  'Changan',
+  'Ford',
+  'Hyundai',
+  'Fiat',
+  'Renault',
+  'Nissan',
+  'Honda',
+  'Kia',
+  'Volkswagen',
+  'Foton',
+  'Mazda',
+  'Mitsubishi',
+  'Jeep',
+  'Dodge',
+  'Peugeot',
+  'Suzuki',
+  'Geely',
+  'BMW',
+  'Mercedes-Benz',
+  'Audi',
+  'Daewoo',
+  'Chrysler',
+  'Isuzu',
+  'Subaru',
+  'Citroën',
+  'BAIC',
+  'Otra',
+  'Aplica varias marcas',
+] as const;

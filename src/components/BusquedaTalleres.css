@@ -1,0 +1,264 @@
+.busqueda-talleres {
+  margin-top: 1.5rem;
+}
+
+.busqueda-talleres-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.busqueda-talleres-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.busqueda-talleres-campo label {
+  font-size: var(--form-label-size, 0.875rem);
+  font-weight: var(--form-label-weight, 500);
+  color: var(--form-label-color, #2d3748);
+}
+
+.busqueda-talleres-campo select {
+  padding: var(--form-input-padding, 0.6rem 0.75rem);
+  font-size: 0.95rem;
+  border: var(--form-border, 1px solid #e2e8f0);
+  border-radius: var(--form-input-radius, 6px);
+  min-width: 180px;
+  background: #fff;
+  color: #2d3748;
+}
+
+.busqueda-talleres-campo select:focus {
+  outline: none;
+  border-color: var(--form-focus-color, #1e3a5f);
+}
+
+.busqueda-talleres-campo select:disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+.busqueda-talleres-btn {
+  padding: 0.65rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--form-input-radius, 6px);
+  background: var(--btn-primary-bg, #1e3a5f);
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.busqueda-talleres-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(30, 58, 95, 0.25);
+}
+
+.busqueda-talleres-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.busqueda-talleres-mensaje,
+.busqueda-talleres-sin-resultados {
+  margin: 1.5rem 0 0;
+  font-size: 0.95rem;
+  color: #4a5568;
+  text-align: center;
+}
+
+/* Resultados: grid de tarjetas (mismo estilo que repuestos/vendedores) */
+.busqueda-talleres-resultados {
+  margin-top: 1.5rem;
+}
+
+.busqueda-talleres-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.busqueda-talleres-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1.1rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.busqueda-talleres-card:hover {
+  border-color: #cbd5e0;
+  box-shadow: 0 2px 8px rgba(30, 58, 95, 0.08);
+}
+
+.busqueda-talleres-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.busqueda-talleres-card-nombre {
+  margin: 0 0 0.2rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1e3a5f;
+  line-height: 1.2;
+}
+
+.busqueda-talleres-card-especialidad {
+  margin: 0 0 0.15rem;
+  font-size: 1.1rem;
+  color: #718096;
+}
+
+.busqueda-talleres-card-ubicacion {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #4a5568;
+}
+
+.busqueda-talleres-card-botones {
+  flex-shrink: 0;
+}
+
+.busqueda-talleres-card-btn {
+  padding: 0.7rem 1.1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: #1e3a5f;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.busqueda-talleres-card-btn:hover {
+  background: #2c5282;
+}
+
+@media (max-width: 640px) {
+  .busqueda-talleres-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .busqueda-talleres-card-botones {
+    width: 100%;
+  }
+}
+
+/* Modal contactar taller */
+.busqueda-talleres-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.busqueda-talleres-modal {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  max-width: 380px;
+  width: 100%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.busqueda-talleres-modal.busqueda-talleres-modal-con-mapa {
+  max-width: 480px;
+}
+
+.busqueda-talleres-modal-titulo {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #2d3748;
+}
+
+.busqueda-talleres-modal-titulo-seccion {
+  margin: 0.6rem 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #2d3748;
+}
+
+.busqueda-talleres-modal-datos {
+  margin: 0 0 0.75rem;
+  line-height: 1.35;
+}
+
+.busqueda-talleres-modal-linea {
+  margin: 0 0 0.2rem;
+  font-size: 0.95rem;
+  color: #2d3748;
+}
+
+.busqueda-talleres-modal-etiqueta {
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.busqueda-talleres-modal-botones {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.busqueda-talleres-modal-botones .busqueda-talleres-card-btn {
+  display: inline-block;
+  margin: 0.5rem auto 0;
+}
+
+.busqueda-talleres-modal-whatsapp {
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 6px;
+  background: #25d366;
+  color: #fff;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.busqueda-talleres-modal-whatsapp:hover {
+  background: #20bd5a;
+}
+
+.busqueda-talleres-modal-cerrar {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #2d3748;
+  cursor: pointer;
+  display: block;
+  margin: 0.5rem auto 0;
+}
+
+.busqueda-talleres-modal-cerrar:hover {
+  background: #f8f9fb;
+}
+
+.busqueda-talleres-modal-mapa {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+}

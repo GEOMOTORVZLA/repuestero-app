@@ -1,0 +1,110 @@
+.selector-registro {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: #1e3a5f; /* mismo fondo que inicio de sesión */
+}
+
+.selector-registro-card {
+  max-width: 520px;
+  width: 100%;
+  padding: 2rem;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+  position: relative;
+}
+
+.selector-registro-volver {
+  background: none;
+  border: none;
+  color: #4a5568;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+}
+
+.selector-registro-volver:hover {
+  color: #1e3a5f;
+}
+
+.selector-registro-titulo {
+  text-align: center;
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.selector-registro-subtitulo {
+  text-align: center;
+  margin: 0 0 1.5rem;
+  font-size: 0.95rem;
+  color: #4a5568;
+}
+
+.selector-registro-opciones {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 560px) {
+  .selector-registro-opciones {
+    grid-template-columns: 1fr;
+  }
+}
+
+.selector-registro-opcion {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 1.5rem 1rem;
+  border: none;
+  border-radius: 10px;
+  background: #1e3a5f;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.selector-registro-opcion:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+.selector-registro-nombre {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: #fff;
+}
+
+.selector-registro-desc {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.9);
+  text-align: center;
+}
+
+.selector-registro-login {
+  text-align: center;
+  margin: 1.5rem 0 0;
+  font-size: 0.9rem;
+  color: #4a5568;
+}
+
+.selector-registro-login-link {
+  background: none;
+  border: none;
+  color: #1e3a5f;
+  cursor: pointer;
+  font-size: inherit;
+  text-decoration: underline;
+}
+
+.selector-registro-login-link:hover {
+  color: #2c5282;
+}

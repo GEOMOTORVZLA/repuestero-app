@@ -1,0 +1,480 @@
+.vendedores-cerca {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem 3rem;
+  background: #f5f6f8;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.vendedores-cerca-titulo {
+  text-align: center;
+  margin: 0 0 0.5rem;
+  font-size: var(--seccion-titulo-size, 1.4rem);
+  font-weight: var(--seccion-titulo-weight, 600);
+  color: var(--seccion-titulo-color, #2d3748);
+  letter-spacing: -0.01em;
+}
+
+.vendedores-cerca-subtitulo {
+  text-align: center;
+  margin: 0 0 1.75rem;
+  font-size: var(--seccion-subtitulo-size, 0.95rem);
+  color: var(--seccion-subtitulo-color, #4a5568);
+}
+
+/* Filtros: Estado, Ciudad, Buscar centrados */
+.vendedores-cerca-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.vendedores-cerca-filtros-campos label {
+  display: block;
+  font-size: var(--form-label-size, 0.875rem);
+  font-weight: var(--form-label-weight, 500);
+  color: var(--form-label-color, #2d3748);
+  margin-bottom: 0.35rem;
+}
+
+.vendedores-cerca-filtros-campos select {
+  padding: var(--form-input-padding, 0.6rem 0.75rem);
+  font-size: 0.95rem;
+  border: var(--form-border, 1px solid #e2e8f0);
+  border-radius: var(--form-input-radius, 6px);
+  min-width: 160px;
+  background: #fff;
+  color: #2d3748;
+}
+
+.vendedores-cerca-filtros-campos select:focus {
+  outline: none;
+  border-color: var(--form-focus-color, #1e3a5f);
+}
+
+.vendedores-cerca-btn-ubicar {
+  padding: 0.6rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--form-input-radius, 6px);
+  background: var(--btn-primary-bg, #1e3a5f);
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.vendedores-cerca-btn-ubicar:hover:not(:disabled) {
+  background: var(--btn-primary-hover, #2c5282);
+}
+
+.vendedores-cerca-btn-ubicar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.vendedores-cerca-instruccion {
+  margin: 1.5rem 0 0;
+  padding: 1rem;
+  font-size: 0.95rem;
+  color: #4a5568;
+  background: #f8f9fb;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.vendedores-cerca-resultados {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.vendedores-cerca-resultados-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.vendedores-cerca-resultados-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.vendedores-cerca-resultados .vendedores-cerca-gps {
+  margin-left: 0;
+}
+
+.vendedores-cerca-btn-gps,
+.vendedores-cerca-btn-quitar-gps {
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--form-input-radius, 6px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.vendedores-cerca-btn-gps {
+  background: var(--btn-primary-bg, #1e3a5f);
+  color: #fff;
+}
+
+.vendedores-cerca-btn-gps:hover:not(:disabled) {
+  background: var(--btn-primary-hover, #2c5282);
+}
+
+.vendedores-cerca-btn-gps:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.vendedores-cerca-btn-quitar-gps {
+  background: #4a5568;
+  color: #fff;
+}
+
+.vendedores-cerca-btn-quitar-gps:hover {
+  background: #2d3748;
+}
+
+.vendedores-cerca-gps-error {
+  text-align: center;
+  color: #b91c1c;
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem;
+}
+
+.vendedores-cerca-gps-ok {
+  text-align: center;
+  color: #15803d;
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem;
+}
+
+.vendedores-cerca-cargando,
+.vendedores-cerca-error,
+.vendedores-cerca-sin-resultados {
+  margin: 1rem 0;
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.vendedores-cerca-error {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.vendedores-cerca-sin-resultados {
+  color: #666;
+  background: #f1f5f9;
+}
+
+/* Cards compactas: nombre, teléfono, WhatsApp, Ubicación */
+.vendedores-cerca-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 0.75rem;
+}
+
+.vendedores-cerca-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.85rem 1rem;
+  background: #f8f9fb;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.vendedores-cerca-item:hover {
+  border-color: #cbd5e0;
+  box-shadow: 0 2px 8px rgba(30, 58, 95, 0.08);
+}
+
+.vendedores-cerca-item-nombre {
+  font-weight: 600;
+  color: #1e3a5f;
+  font-size: 0.95rem;
+}
+
+.vendedores-cerca-item-telefono {
+  font-size: 0.9rem;
+  color: #4a5568;
+}
+
+.vendedores-cerca-item-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.vendedores-cerca-btn-whatsapp {
+  display: inline-block;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px;
+  background: #25d366;
+  color: #fff;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.vendedores-cerca-btn-whatsapp:hover {
+  background: #20bd5a;
+}
+
+.vendedores-cerca-btn-ubicacion {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid #1e3a5f;
+  border-radius: 6px;
+  background: #fff;
+  color: #1e3a5f;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.vendedores-cerca-btn-ubicacion:hover {
+  background: #1e3a5f;
+  color: #fff;
+}
+
+.vendedores-cerca-item-distancia {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #718096;
+}
+
+.vendedores-cerca-chips {
+  margin-top: 0.35rem;
+}
+
+/* Tarjetas: una arriba de otra, compactas y anchas */
+.vendedores-cerca-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.vendedores-cerca-card {
+  display: flex;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.vendedores-cerca-card:hover {
+  border-color: #cbd5e0;
+  box-shadow: 0 2px 8px rgba(30, 58, 95, 0.08);
+}
+
+.vendedores-cerca-card-cuerpo {
+  flex: 1;
+  padding: 0.9rem 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.vendedores-cerca-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.vendedores-cerca-card-nombre {
+  margin: 0 0 0.2rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1e3a5f;
+  line-height: 1.2;
+}
+
+.vendedores-cerca-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  color: #718096;
+}
+
+.vendedores-cerca-card-distancia,
+.vendedores-cerca-card-subtitulo {
+  color: #4a5568;
+}
+
+.vendedores-cerca-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.vendedores-cerca-card-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: #edf2f7;
+  color: #2d3748;
+  font-size: 0.7rem;
+  font-weight: 500;
+  border: 1px solid #e2e8f0;
+}
+
+.vendedores-cerca-card-botones {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.vendedores-cerca-card-btn {
+  padding: 0.7rem 1.1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: #1e3a5f;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.vendedores-cerca-card-btn:hover {
+  background: #2c5282;
+}
+
+.vendedores-cerca-card-btn-ubicacion {
+  background: #2d3748;
+}
+
+.vendedores-cerca-card-btn-ubicacion:hover {
+  background: #4a5568;
+}
+
+/* Modal mapa ubicación */
+.vendedores-cerca-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.vendedores-cerca-modal {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.vendedores-cerca-modal-titulo {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.vendedores-cerca-modal-nombre {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: #718096;
+}
+
+.vendedores-cerca-modal-cerrar {
+  margin-top: 1rem;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #2d3748;
+  cursor: pointer;
+}
+
+.vendedores-cerca-modal-cerrar:hover {
+  background: #f8f9fb;
+}
+
+.vendedores-cerca-modal-contactar {
+  max-width: 480px;
+}
+
+.vendedores-cerca-modal-ruta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+}
+
+.vendedores-cerca-modal-ruta-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #718096;
+}
+
+.vendedores-cerca-modal-ruta-btn {
+  display: inline-block;
+  margin: 0.5rem auto 0;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px;
+  background: #2d3748;
+  color: #fff;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.vendedores-cerca-modal-ruta-btn:hover {
+  background: #4a5568;
+}
+
+@media (max-width: 640px) {
+  .vendedores-cerca-filtros {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .vendedores-cerca-gps {
+    margin-left: 0;
+  }
+
+  .vendedores-cerca-card-cuerpo {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .vendedores-cerca-card-botones {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

@@ -1,0 +1,561 @@
+/* Paleta: blanco, grises, azul profesional */
+.landing {
+  min-height: 100vh;
+  background: #f5f6f8;
+}
+
+.landing-header {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.landing-logo {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e3a5f;
+  letter-spacing: -0.02em;
+}
+
+.landing-header-botones {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.landing-btn-login,
+.landing-btn-crear {
+  padding: 0.6rem 1.4rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: 1px solid #1e3a5f;
+  border-radius: 6px;
+  background: #fff;
+  color: #1e3a5f;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.landing-btn-login:hover,
+.landing-btn-crear:hover {
+  background: #1e3a5f;
+  color: #fff;
+}
+
+.landing-hero-banner {
+  position: relative;
+  width: 100%;
+  height: 420px;
+  overflow: hidden;
+}
+
+.landing-hero-slides {
+  position: absolute;
+  inset: 0;
+}
+
+.landing-hero-slide {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 1.2s ease-in-out;
+}
+
+.landing-hero-slide.activo {
+  opacity: 1;
+  z-index: 1;
+}
+
+.landing-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  z-index: 2;
+}
+
+.landing-hero-contenido {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+}
+
+.landing-hero-titulo-banner {
+  margin: 0 0 0.5rem;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.landing-hero-subtitulo {
+  margin: 0 0 1.5rem;
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.landing-busqueda {
+  display: flex;
+  max-width: 560px;
+  width: 100%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.landing-busqueda-input {
+  flex: 1;
+  padding: 1rem 1.25rem;
+  font-size: 1rem;
+  border: none;
+  outline: none;
+}
+
+.landing-busqueda-input::placeholder {
+  color: #a0aec0;
+}
+
+.landing-busqueda-btn {
+  padding: 1rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  background: #1e3a5f;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.landing-busqueda-btn:hover {
+  background: #2c5282;
+}
+
+@media (max-width: 600px) {
+  .landing-hero-banner {
+    height: 380px;
+  }
+  .landing-hero-titulo-banner {
+    font-size: 1.5rem;
+  }
+  .landing-busqueda {
+    flex-direction: column;
+  }
+}
+
+.landing-categorias {
+  padding: 2.5rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.landing-categorias .landing-seccion-titulo {
+  margin-bottom: 1.5rem;
+}
+
+.landing-categorias-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1.25rem;
+  perspective: 800px;
+}
+
+@media (max-width: 900px) {
+  .landing-categorias-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 500px) {
+  .landing-categorias-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Lista repuestos por categoría (desplegada al clicar) */
+.lista-repuestos-categoria {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.lista-repuestos-categoria-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.lista-repuestos-categoria-header .busqueda-repuestos-resultados-titulo {
+  margin: 0;
+}
+
+/* Sección Encuentra el taller que necesitas aquí */
+.landing-taller {
+  padding: 2.5rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #f5f6f8;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.landing-taller .landing-seccion-titulo {
+  margin-bottom: 1.5rem;
+  color: var(--seccion-titulo-color, #2d3748);
+}
+
+.landing-taller-contenido {
+  display: flex;
+  align-items: flex-start;
+  gap: 2rem;
+}
+
+.landing-taller-imagen {
+  width: 140px;
+  height: 140px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.landing-taller-texto {
+  flex: 1;
+}
+
+.landing-taller-texto p {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  color: #4a5568;
+  line-height: 1.6;
+}
+
+@media (max-width: 600px) {
+  .landing-taller-contenido {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+}
+
+.landing-categoria-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  text-decoration: none;
+  color: #2d3748;
+  font-weight: 500;
+  font-size: 0.9rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* Círculo gris claro con icono blanco; al hover efecto 3D flotando hacia adelante */
+.landing-categoria-circulo {
+  width: 100px;
+  height: 100px;
+  min-width: 100px;
+  min-height: 100px;
+  border-radius: 50%;
+  background: #d1d5db;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  will-change: transform;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.landing-categoria-item:hover .landing-categoria-circulo {
+  transform: translateY(-8px) scale(1.08);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.18), 0 8px 16px rgba(0, 0, 0, 0.12);
+}
+
+.landing-categoria-icono {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+
+/* Imagen de categoría +25% más; círculo sigue 100px (overflow recorta) */
+.landing-categoria-icono-img {
+  width: 156px;
+  height: 156px;
+  min-width: 156px;
+  min-height: 156px;
+  object-fit: contain;
+  border-radius: 50%;
+  display: block;
+}
+
+.landing-categoria-nombre {
+  text-align: center;
+  line-height: 1.2;
+}
+
+.landing-hero {
+  text-align: center;
+  padding: 4rem 2rem;
+  max-width: 720px;
+  margin: 0 auto;
+  background: linear-gradient(180deg, #1e3a5f 0%, #2c5282 100%);
+  color: #fff;
+}
+
+.landing-hero-titulo {
+  margin: 0 0 1rem;
+  font-size: 1.85rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.landing-hero-texto {
+  margin: 0 0 2rem;
+  font-size: 1.05rem;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+}
+
+.landing-btn-cta {
+  padding: 0.85rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: #fff;
+  color: #1e3a5f;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.landing-btn-cta:hover {
+  background: #e8eef4;
+  transform: translateY(1px);
+}
+
+.landing-beneficios {
+  padding: 3.5rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #fff;
+}
+
+.landing-seccion-titulo {
+  text-align: center;
+  margin: 0 0 2.5rem;
+  font-size: var(--seccion-titulo-size, 1.4rem);
+  font-weight: var(--seccion-titulo-weight, 600);
+  color: var(--seccion-titulo-color, #2d3748);
+  letter-spacing: -0.01em;
+}
+
+.landing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+
+.landing-card {
+  padding: 1.75rem;
+  background: #f8f9fb;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  text-align: center;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.landing-card:hover {
+  border-color: #cbd5e0;
+  box-shadow: 0 4px 12px rgba(30, 58, 95, 0.08);
+}
+
+.landing-card-icon {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.landing-card-img {
+  display: block;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 1rem;
+  object-fit: contain;
+}
+
+.landing-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1e3a5f;
+}
+
+.landing-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #4a5568;
+  line-height: 1.5;
+}
+
+/* Sección Sobre la empresa */
+.landing-empresa {
+  padding: 3.5rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #f5f6f8;
+}
+
+.landing-empresa .landing-seccion-titulo {
+  color: #2d3748;
+}
+
+.landing-empresa-contenido {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 2.5rem;
+  align-items: start;
+}
+
+.landing-empresa-col h3 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e3a5f;
+}
+
+.landing-empresa-descripcion {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #4a5568;
+  line-height: 1.6;
+}
+
+.landing-empresa-datos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.landing-empresa-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.landing-empresa-label {
+  color: #718096;
+  font-weight: 500;
+}
+
+.landing-empresa-item a {
+  color: #1e3a5f;
+  text-decoration: none;
+}
+
+.landing-empresa-item a:hover {
+  text-decoration: underline;
+}
+
+.landing-empresa-redes-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.landing-empresa-red {
+  display: inline-block;
+  padding: 0.5rem 0;
+  font-size: 0.9rem;
+  color: #1e3a5f;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.landing-empresa-red:hover {
+  color: #2c5282;
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .landing-empresa-contenido {
+    grid-template-columns: 1fr;
+  }
+}
+
+.landing-cta {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+}
+
+.landing-cta h2 {
+  margin: 0 0 1.5rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.landing-cta .landing-btn-cta {
+  background: #1e3a5f;
+  color: #fff;
+}
+
+.landing-cta .landing-btn-cta:hover {
+  background: #2c5282;
+  color: #fff;
+}
+
+.landing-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.5rem 2rem;
+  background: #2d3748;
+  color: #a0aec0;
+}
+
+.landing-footer p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.landing-footer-link {
+  background: none;
+  border: none;
+  color: #90cdf4;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.landing-footer-link:hover {
+  color: #fff;
+  text-decoration: underline;
+}

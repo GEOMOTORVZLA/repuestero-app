@@ -1,0 +1,390 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
+import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
+import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
+import './VendedoresCercaDeMi.css';
+import './BusquedaRepuestos.css';
+
+export interface TiendaCerca {
+  id: string;
+  nombre: string | null;
+  nombre_comercial: string | null;
+  estado: string | null;
+  ciudad: string | null;
+  latitud: number;
+  longitud: number;
+  telefono: string | null;
+  direccion: string | null;
+  rif: string | null;
+  metodos_pago: string[] | null;
+  distanciaKm?: number;
+}
+
+/** Distancia aproximada en km entre dos puntos (fórmula de Haversine) */
+function distanciaKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371; // radio Tierra en km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+export function VendedoresCercaDeMi() {
+  const [tiendas, setTiendas] = useState<TiendaCerca[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [estadoFiltro, setEstadoFiltro] = useState('');
+  const [ciudadFiltro, setCiudadFiltro] = useState('');
+  const [usandoGps, setUsandoGps] = useState(false);
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+  const [gpsObteniendo, setGpsObteniendo] = useState(false);
+  const [mensaje, setMensaje] = useState('');
+
+  const cargarTiendas = async () => {
+    setCargando(true);
+    setError(null);
+    const { data, err } = await supabase
+      .from('tiendas')
+      .select('id, nombre, nombre_comercial, rif, estado, ciudad, latitud, longitud, telefono, direccion, metodos_pago');
+
+    if (err) {
+      setError(err.message);
+      setTiendas([]);
+    } else {
+      setTiendas((data ?? []) as TiendaCerca[]);
+    }
+    setCargando(false);
+  };
+
+  useEffect(() => {
+    cargarTiendas();
+  }, []);
+
+  const obtenerMiUbicacion = () => {
+    setGpsError(null);
+    setGpsObteniendo(true);
+    if (!navigator.geolocation) {
+      setGpsError('Tu navegador no soporta geolocalización.');
+      setGpsObteniendo(false);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setUsandoGps(true);
+        setGpsObteniendo(false);
+      },
+      () => {
+        setGpsError('No se pudo obtener tu ubicación. Revisa los permisos del navegador.');
+        setGpsObteniendo(false);
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
+  const quitarGps = () => {
+    setUsandoGps(false);
+    setGpsCoords(null);
+    setGpsError(null);
+  };
+
+  const ciudadesOpciones = estadoFiltro ? getCiudadesPorEstado(estadoFiltro) : [];
+
+  // Lista a mostrar: filtrar por estado/ciudad y ordenar por distancia si hay GPS
+  const listaMostrar = ((): TiendaCerca[] => {
+    let list = [...tiendas];
+
+    if (estadoFiltro) {
+      list = list.filter((t) => (t.estado ?? '').trim() === estadoFiltro);
+    }
+    if (ciudadFiltro) {
+      list = list.filter((t) => (t.ciudad ?? '').trim() === ciudadFiltro);
+    }
+
+    if (usandoGps && gpsCoords) {
+      list = list.map((t) => ({
+        ...t,
+        distanciaKm: distanciaKm(gpsCoords.lat, gpsCoords.lng, t.latitud, t.longitud),
+      }));
+      list.sort((a, b) => (a.distanciaKm ?? 0) - (b.distanciaKm ?? 0));
+    } else {
+      // Ordenar por estado y ciudad para vista por zona
+      list.sort((a, b) => {
+        const estA = (a.estado ?? '').localeCompare(b.estado ?? '');
+        if (estA !== 0) return estA;
+        return (a.ciudad ?? '').localeCompare(b.ciudad ?? '');
+      });
+    }
+
+    return list;
+  })();
+
+  const nombreTienda = (t: TiendaCerca) => t.nombre_comercial || t.nombre || 'Sin nombre';
+  const linkWhatsApp = (t: TiendaCerca) => {
+    const tel = (t.telefono ?? '').replace(/\D/g, '');
+    if (!tel) return null;
+    const full = tel.startsWith('58') ? tel : `58${tel}`;
+    return `https://wa.me/${full}`;
+  };
+
+  const [contactarTienda, setContactarTienda] = useState<TiendaCerca | null>(null);
+  const [mostrarRutaEnModal, setMostrarRutaEnModal] = useState(false);
+  const [ubicado, setUbicado] = useState(false);
+  const cerrarContactar = () => {
+    setContactarTienda(null);
+    setMostrarRutaEnModal(false);
+  };
+  const linkRutaGoogleMaps = (t: TiendaCerca) => {
+    const dest = `${t.latitud},${t.longitud}`;
+    if (gpsCoords) {
+      const origin = `${gpsCoords.lat},${gpsCoords.lng}`;
+      return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}&travelmode=driving`;
+    }
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=driving`;
+  };
+
+  const ubicar = () => {
+    if (!estadoFiltro.trim()) {
+      setMensaje('Selecciona al menos el estado para ver los vendedores cerca de tu zona.');
+      setUbicado(false);
+      return;
+    }
+    setMensaje('');
+    setUbicado(true);
+  };
+
+  const abrirContactar = (t: TiendaCerca) => {
+    setContactarTienda(t);
+    setMostrarRutaEnModal(false);
+  };
+
+  return (
+    <section className="vendedores-cerca" id="vendedores-cerca">
+      <h2 className="vendedores-cerca-titulo">Ventas de repuestos cerca de mi zona</h2>
+      <p className="vendedores-cerca-subtitulo">
+        Encuentra a nuestros vendedores de repuestos: por ciudad o por cercanía con tu ubicación.
+      </p>
+
+      <div className="vendedores-cerca-filtros">
+        <div className="vendedores-cerca-filtros-campos">
+          <label htmlFor="vendedores-estado">Estado</label>
+          <select
+            id="vendedores-estado"
+            value={estadoFiltro}
+            onChange={(e) => {
+              setEstadoFiltro(e.target.value);
+              setCiudadFiltro('');
+              setUbicado(false);
+              setMensaje('');
+            }}
+          >
+            <option value="">Selecciona el estado</option>
+            {ESTADOS_VENEZUELA.map((e) => (
+              <option key={e} value={e}>{e}</option>
+            ))}
+          </select>
+        </div>
+        <div className="vendedores-cerca-filtros-campos">
+          <label htmlFor="vendedores-ciudad">Ciudad / Municipio</label>
+          <select
+            id="vendedores-ciudad"
+            value={ciudadFiltro}
+            onChange={(e) => {
+              setCiudadFiltro(e.target.value);
+              setUbicado(false);
+              setMensaje('');
+            }}
+            disabled={!estadoFiltro}
+          >
+            <option value="">Selecciona municipio</option>
+            {ciudadesOpciones.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="button"
+          className="vendedores-cerca-btn-ubicar"
+          onClick={ubicar}
+        >
+          Buscar
+        </button>
+      </div>
+
+      {ubicado && (
+        <div className="vendedores-cerca-resultados">
+          <div className="vendedores-cerca-resultados-header">
+            <h3>Vendedores en {ciudadFiltro ? `${ciudadFiltro}, ` : ''}{estadoFiltro}</h3>
+            <div className="vendedores-cerca-gps">
+              {!usandoGps ? (
+                <button
+                  type="button"
+                  className="vendedores-cerca-btn-gps"
+                  onClick={obtenerMiUbicacion}
+                  disabled={gpsObteniendo}
+                >
+                  {gpsObteniendo ? 'Obteniendo…' : '📍 Ordenar por cercanía'}
+                </button>
+              ) : (
+                <button type="button" className="vendedores-cerca-btn-quitar-gps" onClick={quitarGps}>
+                  Quitar orden por cercanía
+                </button>
+              )}
+            </div>
+          </div>
+          {gpsError && <p className="vendedores-cerca-gps-error">{gpsError}</p>}
+          {usandoGps && <p className="vendedores-cerca-gps-ok">Listado ordenado del más cercano al más lejano según tu ubicación.</p>}
+          {cargando ? (
+            <p className="vendedores-cerca-cargando">Cargando vendedores…</p>
+          ) : error ? (
+            <p className="vendedores-cerca-error">{error}</p>
+          ) : listaMostrar.length === 0 ? (
+            <p className="vendedores-cerca-sin-resultados">
+              No hay vendedores registrados en la zona seleccionada. Prueba otro estado o municipio.
+            </p>
+          ) : (
+            <div className="vendedores-cerca-grid">
+              {listaMostrar.map((t) => (
+                <article key={t.id} className="vendedores-cerca-card">
+                  <div className="vendedores-cerca-card-cuerpo">
+                    <div className="vendedores-cerca-card-info">
+                      <h4 className="vendedores-cerca-card-nombre">{nombreTienda(t)}</h4>
+                      <div className="vendedores-cerca-card-meta">
+                        {(t.ciudad || t.estado) && (
+                          <span className="vendedores-cerca-card-ubicacion">
+                            {[t.ciudad, t.estado].filter(Boolean).join(', ')}
+                          </span>
+                        )}
+                        {t.distanciaKm != null && (
+                          <span className="vendedores-cerca-card-distancia">{t.distanciaKm.toFixed(1)} km</span>
+                        )}
+                        {!t.distanciaKm && (
+                          <span className="vendedores-cerca-card-subtitulo">Vendedor de repuestos</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="vendedores-cerca-card-botones">
+                      <button
+                        type="button"
+                        className="vendedores-cerca-card-btn"
+                        onClick={() => abrirContactar(t)}
+                      >
+                        Contactar vendedor
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {mensaje && (
+        <p className="vendedores-cerca-instruccion">
+          {mensaje}
+        </p>
+      )}
+
+      {contactarTienda && (
+        <div className="busqueda-repuestos-modal-overlay" onClick={cerrarContactar} role="dialog" aria-modal="true" aria-labelledby="modal-contactar-vendedor-titulo">
+          <div className="busqueda-repuestos-modal vendedores-cerca-modal-contactar" onClick={(e) => e.stopPropagation()}>
+            <h3 id="modal-contactar-vendedor-titulo" className="busqueda-repuestos-modal-titulo-seccion">Datos del vendedor</h3>
+            <div className="busqueda-repuestos-modal-datos">
+              <p className="busqueda-repuestos-modal-linea"><span className="busqueda-repuestos-modal-etiqueta">Nombre comercial</span> {nombreTienda(contactarTienda)}</p>
+              {contactarTienda.rif != null && contactarTienda.rif !== '' && (
+                <p className="busqueda-repuestos-modal-linea"><span className="busqueda-repuestos-modal-etiqueta">RIF</span> {contactarTienda.rif}</p>
+              )}
+              {(contactarTienda.ciudad || contactarTienda.estado) && (
+                <p className="busqueda-repuestos-modal-linea"><span className="busqueda-repuestos-modal-etiqueta">Ubicación</span> {[contactarTienda.ciudad, contactarTienda.estado].filter(Boolean).join(', ')}</p>
+              )}
+              {contactarTienda.telefono && (
+                <p className="busqueda-repuestos-modal-linea"><span className="busqueda-repuestos-modal-etiqueta">Teléfono</span> {contactarTienda.telefono}</p>
+              )}
+              {contactarTienda.direccion && (
+                <p className="busqueda-repuestos-modal-linea"><span className="busqueda-repuestos-modal-etiqueta">Dirección</span> {contactarTienda.direccion}</p>
+              )}
+              {Array.isArray(contactarTienda.metodos_pago) && contactarTienda.metodos_pago.length > 0 && (
+                <div className="busqueda-repuestos-modal-linea busqueda-repuestos-modal-metodos-pago">
+                  <span className="busqueda-repuestos-modal-etiqueta">Formas de pago</span>
+                  <div className="busqueda-repuestos-modal-metodos-pago-lista">
+                    {contactarTienda.metodos_pago.map((m) => (
+                      <span key={m} className="busqueda-repuestos-modal-metodo-pago-chip">{m}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <h4 className="busqueda-repuestos-modal-titulo-seccion">Ubicación</h4>
+            <MapVendedorUbicacion
+              lat={contactarTienda.latitud}
+              lng={contactarTienda.longitud}
+              nombreVendedor={nombreTienda(contactarTienda)}
+              userLat={gpsCoords?.lat}
+              userLng={gpsCoords?.lng}
+              mostrarRutaDesdeUsuario={mostrarRutaEnModal}
+            />
+            <div className="busqueda-repuestos-modal-botones">
+              {contactarTienda.telefono && linkWhatsApp(contactarTienda) ? (
+                <a
+                  href={linkWhatsApp(contactarTienda)!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="busqueda-repuestos-modal-whatsapp"
+                >
+                  Contactar por WhatsApp
+                </a>
+              ) : (
+                <p className="busqueda-repuestos-modal-sin-contacto">Sin teléfono registrado.</p>
+              )}
+              {contactarTienda.latitud != null && contactarTienda.longitud != null && (
+                <div className="vendedores-cerca-modal-ruta">
+                  <p className="vendedores-cerca-modal-ruta-hint">
+                    Usa <strong>Ver ruta en vivo</strong> cuando ya estés listo para ir a la tienda.
+                  </p>
+                  <button
+                    type="button"
+                    className="vendedores-cerca-modal-ruta-btn"
+                    onClick={() => setMostrarRutaEnModal(true)}
+                    disabled={!gpsCoords}
+                  >
+                    Ver ruta en vivo en el mapa
+                  </button>
+                  {!gpsCoords && (
+                    <p className="vendedores-cerca-modal-ruta-hint">
+                      Activa primero la opción de ordenar por cercanía para usar tu ubicación.
+                    </p>
+                  )}
+                  <a
+                    href={linkRutaGoogleMaps(contactarTienda)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="vendedores-cerca-modal-ruta-btn"
+                  >
+                    Abrir en Google Maps para navegar
+                  </a>
+                </div>
+              )}
+              <button type="button" className="busqueda-repuestos-modal-cerrar" onClick={cerrarContactar}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </section>
+  );
+}

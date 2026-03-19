@@ -1,0 +1,362 @@
+.mis-productos {
+  width: 100%;
+}
+
+.mis-productos-editor {
+  margin-bottom: 1rem;
+}
+
+.mis-productos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+
+.mis-productos-card {
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  padding: 0.6rem 0.75rem;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+  display: flex;
+  flex-direction: row;
+  gap: 0.75rem;
+}
+
+.mis-productos-card-foto {
+  width: 110px;
+  min-width: 110px;
+  height: 120px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mis-productos-card-foto img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mis-productos-card-foto-placeholder {
+  font-size: 0.8rem;
+  color: #718096;
+}
+
+.mis-productos-card-cuerpo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.3rem;
+}
+
+.mis-productos-card-info {
+  flex: 1;
+}
+
+.mis-productos-card-nombre {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e3a5f;
+}
+
+.mis-productos-card-vehiculo {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #718096;
+}
+
+.mis-productos-card-precio {
+  margin: 0.1rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.mis-productos-card-desc {
+  margin: 0.15rem 0 0.4rem;
+  font-size: 0.85rem;
+  color: #4a5568;
+}
+
+.mis-productos-card-status {
+  margin: 0.15rem 0 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mis-productos-card-status.activo {
+  color: #2f855a;
+}
+
+.mis-productos-card-status.pausado {
+  color: #b7791f;
+}
+
+.mis-productos-card-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.mis-productos-mensaje {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #4a5568;
+}
+
+.mis-productos-error {
+  color: #c53030;
+}
+
+.mis-productos-btn-primario,
+.mis-productos-btn-secundario {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+}
+
+.mis-productos-btn-primario {
+  background: #1e3a5f;
+  color: #fff;
+}
+
+.mis-productos-btn-primario:hover {
+  background: #2c5282;
+}
+
+.mis-productos-btn-secundario {
+  background: #edf2f7;
+  color: #2d3748;
+}
+
+.mis-productos-btn-secundario:hover {
+  background: #e2e8f0;
+}
+
+.mis-productos-btn-eliminar {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  background: #e53e3e;
+  color: #fff;
+}
+
+.mis-productos-btn-eliminar:hover:not(:disabled) {
+  background: #c53030;
+}
+
+.mis-productos-btn-pausar,
+.mis-productos-btn-activar {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.mis-productos-btn-pausar {
+  background: #f6e05e;
+  color: #1a202c;
+}
+
+.mis-productos-btn-pausar:hover:not(:disabled) {
+  background: #efd34b;
+}
+
+.mis-productos-btn-activar {
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.mis-productos-btn-activar:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.mis-productos-btn-pausar:disabled,
+.mis-productos-btn-activar:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.mis-productos-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 1rem;
+}
+
+.mis-productos-modal {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  max-width: 380px;
+  width: 100%;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
+}
+
+.mis-productos-modal-titulo {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.mis-productos-modal-texto {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: #4a5568;
+}
+
+.mis-productos-modal-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.mis-productos-detalle {
+  background: #fff;
+  border-radius: 10px;
+  padding: 1rem 1.2rem 1.2rem;
+  max-width: 520px;
+  width: 100%;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.35);
+}
+
+.mis-productos-detalle-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-bottom: 0.6rem;
+}
+
+.mis-productos-detalle-nombre {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1e3a5f;
+}
+
+.mis-productos-detalle-categoria {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #718096;
+}
+
+.mis-productos-detalle-galeria {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.7rem;
+}
+
+.mis-productos-detalle-galeria-principal {
+  width: 100%;
+  max-height: 260px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #111;
+}
+
+.mis-productos-detalle-galeria-principal img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mis-productos-detalle-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.mis-productos-detalle-thumb {
+  border: none;
+  padding: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #e2e8f0;
+}
+
+.mis-productos-detalle-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mis-productos-detalle-thumb.activa {
+  outline: 2px solid #1e3a5f;
+  outline-offset: 1px;
+}
+
+.mis-productos-detalle-info {
+  margin-bottom: 0.6rem;
+}
+
+.mis-productos-detalle-linea {
+  margin: 0 0 0.25rem;
+  font-size: 0.88rem;
+  color: #4a5568;
+}
+
+.mis-productos-detalle-linea strong {
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.mis-productos-detalle-metricas {
+  margin-bottom: 0.7rem;
+}
+
+.mis-productos-detalle-metricas h4 {
+  margin: 0 0 0.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1e3a5f;
+}
+
+.mis-productos-detalle-metricas-texto {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #4a5568;
+}
+
+.mis-productos-detalle-cerrar {
+  margin: 0.5rem auto 0;
+  display: block;
+  background: #1e3a5f;
+  color: #fff;
+}
+
+@media (max-width: 640px) {
+  .mis-productos-tabla th:nth-child(4),
+  .mis-productos-tabla td:nth-child(4) {
+    display: none;
+  }
+}
+

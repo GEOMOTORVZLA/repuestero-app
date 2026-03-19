@@ -1,0 +1,159 @@
+.lista-tiendas {
+  margin-top: 2rem;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.lista-tiendas.cargando,
+.lista-tiendas.error {
+  text-align: center;
+  color: #666;
+}
+
+.lista-tiendas .error {
+  color: #c00;
+}
+
+.lista-tiendas-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.lista-tiendas-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.btn-refrescar {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.9rem;
+  border: 1px solid #646cff;
+  border-radius: 6px;
+  background: white;
+  color: #646cff;
+  cursor: pointer;
+}
+
+.btn-refrescar:hover {
+  background: #f0f0ff;
+}
+
+.lista-tiendas .sin-tiendas {
+  color: #888;
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.tabla-wrap {
+  overflow-x: auto;
+}
+
+.lista-tiendas table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.lista-tiendas th,
+.lista-tiendas td {
+  padding: 0.6rem 0.8rem;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.lista-tiendas th {
+  background: #f8f8f8;
+  font-weight: 600;
+}
+
+.lista-tiendas tbody tr:hover {
+  background: #fafafa;
+}
+
+.btn-editar,
+.btn-eliminar {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 0.4rem;
+}
+
+.btn-editar {
+  background: #646cff;
+  color: white;
+}
+
+.btn-editar:hover {
+  background: #535bf2;
+}
+
+.btn-eliminar {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-eliminar:hover {
+  background: #c82333;
+}
+
+.fila-editar td {
+  background: #f8f9fa;
+  padding: 1rem;
+}
+
+.form-editar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.form-editar input {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.form-editar > div {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-guardar {
+  padding: 0.5rem 1rem;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-guardar:hover {
+  background: #218838;
+}
+
+.btn-cancelar {
+  padding: 0.5rem 1rem;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-cancelar:hover {
+  background: #5a6268;
+}
+
+.lista-tiendas .mensaje {
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+  color: #080;
+}

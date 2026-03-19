@@ -1,0 +1,159 @@
+.registro-tienda {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  text-align: left;
+}
+
+.registro-tienda h2 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.registro-tienda input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  box-sizing: border-box;
+}
+
+.registro-tienda input:focus {
+  outline: none;
+  border-color: #646cff;
+}
+
+.registro-tienda .registro-tienda-ubicacion {
+  margin-bottom: 1rem;
+}
+
+.registro-tienda .registro-tienda-ubicacion label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.3rem;
+  margin-top: 0.6rem;
+}
+
+.registro-tienda .registro-tienda-ubicacion select {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  box-sizing: border-box;
+  background: #fff;
+}
+
+.registro-tienda .coordenadas {
+  margin-bottom: 1rem;
+}
+
+.registro-tienda .coordenadas label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.registro-tienda .hint {
+  font-size: 0.8rem;
+  color: #666;
+  margin: 0.5rem 0;
+  line-height: 1.3;
+}
+
+.registro-tienda .campos-coords {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.registro-tienda .campos-coords input {
+  margin-bottom: 0;
+}
+
+.registro-tienda .botones {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.registro-tienda .btn-registrar {
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.registro-tienda button {
+  padding: 0.6rem 1rem;
+  font-size: 0.95rem;
+  border: none;
+  border-radius: 6px;
+  background: #646cff;
+  color: white;
+  cursor: pointer;
+}
+
+.registro-tienda button:hover:not(:disabled) {
+  background: #535bf2;
+}
+
+.registro-tienda button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.registro-tienda .mensaje {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.registro-tienda .mensaje.error {
+  color: #c00;
+}
+
+.registro-tienda .mensaje.ok {
+  color: #080;
+}
+
+.registro-tienda-metodos-pago {
+  margin-bottom: 1rem;
+}
+
+.registro-tienda-metodos-pago label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.registro-tienda-metodos-pago-hint {
+  font-size: 0.8rem;
+  color: #666;
+  margin: 0 0 0.5rem;
+}
+
+.registro-tienda-metodos-pago-opciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.registro-tienda-metodos-pago-opcion {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.registro-tienda-metodos-pago-opcion input {
+  width: auto;
+  margin: 0 0.75rem 0 0;
+  flex-shrink: 0;
+}

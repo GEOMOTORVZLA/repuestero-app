@@ -1,0 +1,562 @@
+import { useState } from 'react';
+import { supabase } from '../supabaseClient';
+import {
+  TIPOS_RIF,
+  CODIGOS_TELEFONO,
+  CODIGOS_AREA_FIJO,
+  ESPECIALIDADES_TALLER,
+} from '../data/registroVenezuela';
+import { MARCAS_MODELOS } from '../data/marcasModelos';
+import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
+import type { TipoRegistro } from './SelectorTipoRegistro';
+
+const MARCAS_TALLER = ['Multimarca', ...Object.keys(MARCAS_MODELOS).sort()];
+import './FormRegistro.css';
+
+const METODOS_PAGO = ['Efectivo', 'Pagomovil', 'Transferencia', 'Zelle', 'Binance', 'Cashea'] as const;
+
+interface FormRegistroProps {
+  tipo: TipoRegistro;
+  onVolver: () => void;
+  onExito: () => void;
+}
+
+export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
+  const [tipoPersona, setTipoPersona] = useState<'natural' | 'juridico'>('natural');
+  const [nombreJuridico, setNombreJuridico] = useState('');
+  const [nombreComercial, setNombreComercial] = useState('');
+  const [codigoTel, setCodigoTel] = useState(CODIGOS_TELEFONO[0].codigo);
+  const [restoTel, setRestoTel] = useState('');
+  const [esFijo, setEsFijo] = useState(false);
+  const [tipoRif, setTipoRif] = useState<string>(TIPOS_RIF[0]);
+  const [numeroRif, setNumeroRif] = useState('');
+  const [email, setEmail] = useState('');
+  const [ramoEspecifico, setRamoEspecifico] = useState('');
+  const [especialidadTaller, setEspecialidadTaller] = useState(ESPECIALIDADES_TALLER[0]);
+  const [marcaTaller, setMarcaTaller] = useState(MARCAS_TALLER[0]);
+  const [acercaDeTaller, setAcercaDeTaller] = useState('');
+  const [estadoTaller, setEstadoTaller] = useState('');
+  const [ciudadTaller, setCiudadTaller] = useState('');
+  const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [mostrarPassword, setMostrarPassword] = useState(false);
+  const [latitudGps, setLatitudGps] = useState('');
+  const [longitudGps, setLongitudGps] = useState('');
+  const [gpsDetectando, setGpsDetectando] = useState(false);
+  const [gpsMensaje, setGpsMensaje] = useState('');
+  const [mensaje, setMensaje] = useState('');
+  const [cargando, setCargando] = useState(false);
+  const [metodosPago, setMetodosPago] = useState<string[]>([]);
+
+  const titulo =
+    tipo === 'vendedor'
+      ? 'Registro de Vendedor'
+      : tipo === 'usuario'
+        ? 'Registro de Usuario'
+        : 'Registro de Taller';
+
+  const detectarUbicacion = () => {
+    setGpsMensaje('');
+    if (!navigator.geolocation) {
+      setGpsMensaje('Tu navegador no soporta geolocalización. Puedes escribir las coordenadas manualmente.');
+      return;
+    }
+    setGpsDetectando(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatitudGps(pos.coords.latitude.toFixed(6));
+        setLongitudGps(pos.coords.longitude.toFixed(6));
+        setGpsDetectando(false);
+        setGpsMensaje(
+          `Ubicación detectada: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`
+        );
+      },
+      () => {
+        setGpsDetectando(false);
+        setGpsMensaje('No se pudo obtener la ubicación. Puedes escribir las coordenadas manualmente.');
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMensaje('');
+    if (password !== passwordConfirm) {
+      setMensaje('Las contraseñas no coinciden.');
+      return;
+    }
+    if (password.length < 6) {
+      setMensaje('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+    if (!email.trim()) {
+      setMensaje('Indica tu correo electrónico.');
+      return;
+    }
+
+    // Preparamos el metadata del registro para poder mostrar/recuperar
+    // los datos del vendedor/taller aunque Supabase requiera confirmación de email
+    // (cuando no hay sesión inmediata todavía).
+    const latMeta = parseFloat(String(latitudGps).replace(',', '.')) || 0;
+    const lngMeta = parseFloat(String(longitudGps).replace(',', '.')) || 0;
+    const telefonoCompletoMeta = restoTel ? `${codigoTel}${restoTel}` : null;
+    const rifCompletoMeta =
+      tipo === 'vendedor'
+        ? `${tipoRif}${numeroRif.replace(/\D/g, '')}`.trim() || null
+        : null;
+
+    const signupMetadata =
+      tipo === 'vendedor'
+        ? {
+            perfil_vendedor: {
+              nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi tienda',
+              nombre_comercial:
+                nombreComercial.trim() || nombreJuridico.trim() || 'Mi tienda',
+              rif: rifCompletoMeta,
+              telefono: telefonoCompletoMeta,
+              latitud: latMeta,
+              longitud: lngMeta,
+              metodos_pago: metodosPago.length ? metodosPago : null,
+            },
+          }
+        : tipo === 'taller'
+          ? {
+              perfil_taller: {
+                nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi taller',
+                nombre_comercial:
+                  nombreComercial.trim() || nombreJuridico.trim() || 'Mi taller',
+                especialidad: especialidadTaller,
+                marca_vehiculo: marcaTaller || null,
+                acerca_de: acercaDeTaller.trim() || null,
+                estado: estadoTaller.trim() || null,
+                ciudad: ciudadTaller.trim() || null,
+                telefono: telefonoCompletoMeta,
+                email: email.trim() || null,
+                latitud: latMeta,
+                longitud: lngMeta,
+                metodos_pago: metodosPago.length ? metodosPago : null,
+              },
+            }
+          : {};
+
+    setCargando(true);
+    const { data: signUpData, error } = await supabase.auth.signUp(
+      {
+        email: email.trim(),
+        password,
+        options: {
+          data: signupMetadata,
+        },
+      } as any
+    );
+    if (error) {
+      setCargando(false);
+      const msg = error.message?.toLowerCase().includes('rate limit')
+        ? 'Se enviaron demasiados correos en poco tiempo. Espera unos minutos e intenta de nuevo.'
+        : error.message;
+      setMensaje(msg);
+      return;
+    }
+    // Si el usuario requiere confirmación de correo, normalmente NO hay sesión todavía.
+    // En ese caso NO intentamos insertar en `tiendas`/`talleres`, porque RLS usa auth.uid()
+    // y auth.uid() no existe hasta que el usuario confirma e inicia sesión.
+    const sessionUserId = signUpData?.session?.user?.id ?? null;
+    if (!sessionUserId) {
+      setCargando(false);
+      setMensaje('Cuenta creada. Confirma tu correo y luego inicia sesión para completar tu registro.');
+      return;
+    }
+
+    if (sessionUserId) {
+      const lat = parseFloat(String(latitudGps).replace(',', '.')) || 0;
+      const lng = parseFloat(String(longitudGps).replace(',', '.')) || 0;
+      const telefonoCompleto = restoTel ? `${codigoTel}${restoTel}` : null;
+      if (tipo === 'vendedor') {
+        const rifCompleto = `${tipoRif}${numeroRif.replace(/\D/g, '')}`.trim() || null;
+        const { error: insertError } = await supabase.from('tiendas').insert({
+          user_id: sessionUserId,
+          nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi tienda',
+          nombre_comercial: nombreComercial.trim() || nombreJuridico.trim() || 'Mi tienda',
+          rif: rifCompleto,
+          telefono: telefonoCompleto,
+          latitud: lat,
+          longitud: lng,
+          metodos_pago: metodosPago.length ? metodosPago : null,
+        });
+        if (insertError) {
+          setCargando(false);
+          setMensaje(insertError.message || 'Error al guardar la tienda.');
+          return;
+        }
+      } else if (tipo === 'taller') {
+        const { error: insertError } = await supabase.from('talleres').insert({
+          user_id: sessionUserId,
+          nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi taller',
+          nombre_comercial: nombreComercial.trim() || nombreJuridico.trim() || 'Mi taller',
+          especialidad: especialidadTaller,
+          marca_vehiculo: marcaTaller || null,
+          acerca_de: acercaDeTaller.trim() || null,
+          estado: estadoTaller.trim() || null,
+          ciudad: ciudadTaller.trim() || null,
+          telefono: telefonoCompleto,
+          email: email.trim() || null,
+          latitud: lat,
+          longitud: lng,
+          metodos_pago: metodosPago.length ? metodosPago : null,
+        });
+        if (insertError) {
+          setCargando(false);
+          setMensaje(insertError.message || 'Error al guardar el taller. Revisa que en Supabase existan las columnas marca_vehiculo y acerca_de (ejecuta supabase-talleres-marca-acerca.sql).');
+          return;
+        }
+      }
+    }
+
+    // Si ya hay sesión, significa que el usuario puede usar la cuenta y (en este flujo) ya creamos la fila
+    // en `tiendas`/`talleres`. Mostramos éxito y salimos del registro.
+    setCargando(false);
+    const tituloExito =
+      tipo === 'vendedor'
+        ? 'Vendedor registrado exitosamente.'
+        : tipo === 'taller'
+          ? 'Taller registrado exitosamente.'
+          : 'Cuenta registrada exitosamente.';
+    setMensaje(tituloExito);
+    onExito();
+  };
+
+  return (
+    <div className="form-registro">
+      <div className="form-registro-card">
+        <button type="button" className="form-registro-volver" onClick={onVolver}>
+          ← Volver
+        </button>
+        <h2 className="form-registro-titulo">{titulo}</h2>
+
+        <form onSubmit={handleSubmit} className="form-registro-form">
+          <div className="form-registro-campo form-registro-tipo-persona">
+            <label>Tipo de persona</label>
+            <div className="form-registro-botones-radio">
+              <button
+                type="button"
+                className={tipoPersona === 'natural' ? 'activo' : ''}
+                onClick={() => setTipoPersona('natural')}
+              >
+                Natural
+              </button>
+              <button
+                type="button"
+                className={tipoPersona === 'juridico' ? 'activo' : ''}
+                onClick={() => setTipoPersona('juridico')}
+              >
+                Jurídico
+              </button>
+            </div>
+          </div>
+
+          <div className="form-registro-campo">
+            <label htmlFor="nombreJuridico">Nombre Jurídico</label>
+            <input
+              id="nombreJuridico"
+              type="text"
+              value={nombreJuridico}
+              onChange={(e) => setNombreJuridico(e.target.value)}
+              placeholder="Razón social o nombre completo"
+              disabled={cargando}
+            />
+          </div>
+
+          <div className="form-registro-campo">
+            <label htmlFor="nombreComercial">Nombre comercial</label>
+            <input
+              id="nombreComercial"
+              type="text"
+              value={nombreComercial}
+              onChange={(e) => setNombreComercial(e.target.value)}
+              placeholder="Nombre con el que te conocen"
+              disabled={cargando}
+            />
+          </div>
+
+          <div className="form-registro-campo form-registro-telefono">
+            <label>Teléfono empresa</label>
+            <div className="form-registro-telefono-tipo">
+              <button
+                type="button"
+                className={!esFijo ? 'activo' : ''}
+                onClick={() => { setEsFijo(false); setCodigoTel(CODIGOS_TELEFONO[0].codigo); }}
+              >
+                Móvil
+              </button>
+              <button
+                type="button"
+                className={esFijo ? 'activo' : ''}
+                onClick={() => { setEsFijo(true); setCodigoTel(CODIGOS_AREA_FIJO[0].codigo); }}
+              >
+                Fijo
+              </button>
+            </div>
+            <div className="form-registro-telefono-inputs">
+              <select
+                value={codigoTel}
+                onChange={(e) => setCodigoTel(e.target.value)}
+                disabled={cargando}
+              >
+                {!esFijo
+                  ? CODIGOS_TELEFONO.map(({ codigo, compania }) => (
+                      <option key={codigo} value={codigo}>
+                        {codigo} ({compania})
+                      </option>
+                    ))
+                  : CODIGOS_AREA_FIJO.map(({ codigo, ciudad }) => (
+                      <option key={codigo} value={codigo}>
+                        {codigo} ({ciudad})
+                      </option>
+                    ))}
+              </select>
+              <input
+                type="tel"
+                value={restoTel}
+                onChange={(e) => setRestoTel(e.target.value.replace(/\D/g, '').slice(0, 7))}
+                placeholder={esFijo ? "1234567" : "1234567"}
+                maxLength={7}
+                disabled={cargando}
+              />
+            </div>
+          </div>
+
+          <div className="form-registro-campo form-registro-rif">
+            <label>RIF</label>
+            <div className="form-registro-rif-inputs">
+              <select
+                value={tipoRif}
+                onChange={(e) => setTipoRif(e.target.value)}
+                disabled={cargando}
+              >
+                {TIPOS_RIF.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={numeroRif}
+                onChange={(e) => setNumeroRif(e.target.value)}
+                placeholder="12345678-9"
+                disabled={cargando}
+              />
+            </div>
+          </div>
+
+          <div className="form-registro-campo">
+            <label htmlFor="email">Correo electrónico</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="correo@ejemplo.com"
+              required
+              disabled={cargando}
+            />
+          </div>
+
+          {tipo === 'taller' ? (
+            <>
+              <div className="form-registro-campo">
+                <label htmlFor="especialidad">Especialidad del taller</label>
+                <select
+                  id="especialidad"
+                  value={especialidadTaller}
+                  onChange={(e) => setEspecialidadTaller(e.target.value as typeof ESPECIALIDADES_TALLER[number])}
+                  disabled={cargando}
+                >
+                  {ESPECIALIDADES_TALLER.map((esp) => (
+                    <option key={esp} value={esp}>{esp}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-registro-campo">
+                <label htmlFor="marcaTaller">Marca de vehículos</label>
+                <select
+                  id="marcaTaller"
+                  value={marcaTaller}
+                  onChange={(e) => setMarcaTaller(e.target.value)}
+                  disabled={cargando}
+                >
+                  {MARCAS_TALLER.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+                <p className="form-registro-hint">Indica en qué marca te especializas o elige &quot;Multimarca&quot; si atiendes varias.</p>
+              </div>
+              <div className="form-registro-campo">
+                <label htmlFor="acercaDeTaller">Acerca de nosotros</label>
+                <textarea
+                  id="acercaDeTaller"
+                  value={acercaDeTaller}
+                  onChange={(e) => setAcercaDeTaller(e.target.value)}
+                  placeholder="Breve reseña de los servicios que ofrece el taller..."
+                  rows={4}
+                  disabled={cargando}
+                  className="form-registro-textarea"
+                />
+              </div>
+              <div className="form-registro-campo">
+                <label htmlFor="estadoTaller">Estado</label>
+                <select
+                  id="estadoTaller"
+                  value={estadoTaller}
+                  onChange={(e) => { setEstadoTaller(e.target.value); setCiudadTaller(''); }}
+                  disabled={cargando}
+                >
+                  <option value="">Selecciona el estado</option>
+                  {ESTADOS_VENEZUELA.map((e) => (
+                    <option key={e} value={e}>{e}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-registro-campo">
+                <label htmlFor="ciudadTaller">Ciudad / Municipio</label>
+                <select
+                  id="ciudadTaller"
+                  value={ciudadTaller}
+                  onChange={(e) => setCiudadTaller(e.target.value)}
+                  disabled={cargando || !estadoTaller}
+                >
+                  <option value="">Selecciona ciudad o municipio</option>
+                  {(estadoTaller ? getCiudadesPorEstado(estadoTaller) : []).map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <p className="form-registro-hint">Estado y ciudad permiten que te encuentren al buscar por ubicación.</p>
+              </div>
+            </>
+          ) : (
+            <div className="form-registro-campo">
+              <label htmlFor="ramo">Ramo específico</label>
+              <input
+                id="ramo"
+                type="text"
+                value={ramoEspecifico}
+                onChange={(e) => setRamoEspecifico(e.target.value)}
+                placeholder="Ej: Repuestos automotrices, Lubricantes"
+                disabled={cargando}
+              />
+            </div>
+          )}
+
+          {(tipo === 'vendedor' || tipo === 'taller') && (
+            <div className="form-registro-campo form-registro-metodos-pago">
+              <label>Formas de pago que aceptas</label>
+              <p className="form-registro-metodos-pago-hint">
+                Selecciona cómo pueden pagarte los clientes. Se mostrará en tu ficha al contactar.
+              </p>
+              <div className="form-registro-metodos-pago-opciones">
+                {METODOS_PAGO.map((metodo) => (
+                  <label key={metodo} className="form-registro-metodos-pago-opcion">
+                    <input
+                      type="checkbox"
+                      value={metodo}
+                      checked={metodosPago.includes(metodo)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setMetodosPago((prev) => [...prev, metodo]);
+                        } else {
+                          setMetodosPago((prev) => prev.filter((m) => m !== metodo));
+                        }
+                      }}
+                      disabled={cargando}
+                    />
+                    {metodo}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="form-registro-campo form-registro-gps">
+            <label>Ubicación por coordenadas (GPS)</label>
+            <p className="form-registro-gps-hint">
+              Este dato es importante para la geolocalización de tu cuenta dentro de la plataforma.
+            </p>
+            <div className="form-registro-gps-controles">
+              <button
+                type="button"
+                onClick={detectarUbicacion}
+                disabled={cargando || gpsDetectando}
+                className="form-registro-gps-boton"
+              >
+                {gpsDetectando ? 'Detectando ubicación…' : 'Usar mi ubicación actual'}
+              </button>
+            </div>
+            <div className="form-registro-gps-inputs">
+              <input
+                type="text"
+                placeholder="Latitud (ej: 10.500000)"
+                value={latitudGps}
+                onChange={(e) => setLatitudGps(e.target.value)}
+                disabled={cargando}
+              />
+              <input
+                type="text"
+                placeholder="Longitud (ej: -66.900000)"
+                value={longitudGps}
+                onChange={(e) => setLongitudGps(e.target.value)}
+                disabled={cargando}
+              />
+            </div>
+            {gpsMensaje && <p className="form-registro-gps-mensaje">{gpsMensaje}</p>}
+          </div>
+
+          <div className="form-registro-campo">
+            <label htmlFor="password">Contraseña</label>
+            <div className="form-registro-password-wrap">
+              <input
+                id="password"
+                type={mostrarPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Mínimo 6 caracteres"
+                required
+                minLength={6}
+                disabled={cargando}
+              />
+              <button
+                type="button"
+                className="form-registro-toggle-password"
+                onClick={() => setMostrarPassword((v) => !v)}
+              >
+                {mostrarPassword ? 'Ocultar' : 'Mostrar'}
+              </button>
+            </div>
+          </div>
+
+          <div className="form-registro-campo">
+            <label htmlFor="passwordConfirm">Confirmar contraseña</label>
+            <input
+              id="passwordConfirm"
+              type={mostrarPassword ? 'text' : 'password'}
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              placeholder="Repite la contraseña"
+              required
+              minLength={6}
+              disabled={cargando}
+            />
+          </div>
+
+          {mensaje && (
+            <p className={`form-registro-mensaje ${mensaje.includes('no coinciden') || mensaje.includes('Error') ? 'error' : ''}`}>
+              {mensaje}
+            </p>
+          )}
+
+          <button type="submit" className="form-registro-submit" disabled={cargando}>
+            {cargando ? 'Creando cuenta...' : 'Crear cuenta'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}

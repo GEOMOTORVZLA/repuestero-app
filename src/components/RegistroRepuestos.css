@@ -1,0 +1,165 @@
+.registro-repuestos {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 1.1rem 1.2rem;
+  text-align: left;
+}
+
+.registro-repuestos h2 {
+  margin-top: 0;
+  margin-bottom: 0.85rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #2d3748;
+  text-align: center;
+}
+
+.registro-repuestos select,
+.registro-repuestos input {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.95rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  box-sizing: border-box;
+  background: #fff;
+  color: #2d3748;
+}
+
+.registro-repuestos select:focus,
+.registro-repuestos input:focus {
+  outline: none;
+  border-color: #1e3a5f;
+  box-shadow: 0 0 0 1px rgba(30, 58, 95, 0.15);
+}
+
+.registro-repuestos .btn-registrar {
+  width: 100%;
+  padding: 0.65rem 1rem;
+  font-size: 0.95rem;
+  border: none;
+  border-radius: 6px;
+  background: #1e3a5f;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.registro-repuestos .btn-registrar:hover:not(:disabled) {
+  background: #2c5282;
+}
+
+.registro-repuestos .btn-registrar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.registro-repuestos-acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.btn-cancelar-editar {
+  width: 100%;
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #2d3748;
+  cursor: pointer;
+}
+
+.btn-cancelar-editar:hover:not(:disabled) {
+  background: #f8f9fb;
+}
+
+.registro-repuestos .mensaje {
+  margin: 1rem 0 0;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.registro-repuestos .mensaje.error {
+  color: #c00;
+}
+
+.registro-repuestos .mensaje.ok {
+  color: #080;
+}
+
+.registro-repuestos-precio {
+  margin-bottom: 1rem;
+}
+
+.registro-repuestos-moneda {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.registro-repuestos-moneda label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.registro-repuestos-moneda input[type="radio"] {
+  width: auto;
+  margin: 0;
+}
+
+.registro-repuestos-aviso {
+  padding: 1rem;
+  color: #666;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.registro-repuestos-tienda-fija {
+  font-size: 0.95rem;
+  color: #4a5568;
+  margin-bottom: 0.75rem;
+}
+
+.registro-repuestos-comentarios {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.95rem;
+  font-style: italic;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  resize: vertical;
+  min-height: 72px;
+  max-height: 160px;
+}
+
+.registro-repuestos-comentarios:focus {
+  outline: none;
+  border-color: #1e3a5f;
+  box-shadow: 0 0 0 1px rgba(30, 58, 95, 0.15);
+}
+
+.registro-repuestos-fotos {
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  color: #4a5568;
+}
+
+.registro-repuestos-fotos-label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-weight: 500;
+}
+
+.registro-repuestos-fotos input[type="file"] {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+}

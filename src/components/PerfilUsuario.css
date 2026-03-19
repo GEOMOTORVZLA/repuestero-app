@@ -1,0 +1,132 @@
+.perfil-usuario {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .perfil-usuario-seccion {
+    background: #fff;
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  }
+  
+  .perfil-usuario-titulo {
+    margin: 0 0 0.75rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #2d3748;
+  }
+  
+  .perfil-usuario-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+  }
+  
+  .perfil-usuario-campo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  
+  .perfil-usuario-campo-full {
+    grid-column: 1 / -1;
+  }
+  
+  .perfil-usuario-campo label {
+    font-size: 0.85rem;
+    color: #4a5568;
+  }
+  
+  .perfil-usuario-campo input {
+    padding: 0.5rem 0.7rem;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    font-size: 0.9rem;
+  }
+  
+  .perfil-usuario-campo input:disabled {
+    background: #f7fafc;
+    color: #718096;
+  }
+  
+  .perfil-usuario-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .perfil-usuario-mensaje {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #4a5568;
+  }
+  
+  .perfil-usuario-mensaje.error {
+    color: #c53030;
+  }
+  
+  .perfil-usuario-mensaje.ok {
+    color: #2f855a;
+  }
+  
+  .perfil-usuario-boton,
+  .perfil-usuario-boton-secundario {
+    align-self: flex-start;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.85rem;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+  }
+  
+  .perfil-usuario-boton {
+    background: #1e3a5f;
+    color: #fff;
+  }
+  
+  .perfil-usuario-boton:hover:not(:disabled) {
+    background: #2c5282;
+  }
+  
+  .perfil-usuario-boton-secundario {
+    background: #edf2f7;
+    color: #2d3748;
+  }
+  
+  .perfil-usuario-boton-secundario:hover:not(:disabled) {
+    background: #e2e8f0;
+  }
+
+.perfil-usuario-cta {
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.perfil-usuario-registro-tienda {
+  margin-top: 1rem;
+}
+
+.perfil-usuario-botones-editar {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.btn-cancelar-editar {
+  background: #f1f5f9;
+  color: #2d3748;
+  border: none;
+  cursor: pointer;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+  border-radius: 999px;
+}
+
+.btn-cancelar-editar:hover:not(:disabled) {
+  background: #e2e8f0;
+}

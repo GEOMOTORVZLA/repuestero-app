@@ -1,0 +1,89 @@
+.importar-productos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.importar-productos-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.importar-productos-titulo {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.importar-productos-link {
+  background: #e6f4ea;
+  color: #14532d;
+  border: none;
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.importar-productos-link:hover:not(:disabled) {
+  background: #c9efd8;
+}
+
+.importar-productos-boton {
+  background: #f6e05e;
+  color: #1a202c;
+  border: none;
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.importar-productos-boton:hover:not(:disabled) {
+  background: #efd34b;
+}
+
+.importar-productos-botones-row {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.importar-productos-boton:disabled,
+.importar-productos-link:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.importar-productos-mensaje {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #4a5568;
+}
+
+.importar-productos-mensaje.error {
+  color: #c53030;
+}
+
+.importar-productos-mensaje.ok {
+  color: #2f855a;
+}
+
+.importar-productos-errores {
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+}
+
+.importar-productos-errores ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
