@@ -71,3 +71,11 @@ export default defineConfig([
   },
 ])
 ```
+
+## Moderación (vendedores, talleres y productos)
+
+En Supabase ejecuta **`supabase-aprobacion-contenido.sql`**: estados de aprobación, RLS (solo contenido aprobado es visible públicamente, además de membresía activa), triggers para evitar auto-aprobación y RPCs para el panel admin.
+
+Marca administradores con `raw_user_meta_data.role = 'admin'` (ver `supabase-admin-panel.sql`).
+
+Para **eliminar usuarios** desde el panel admin: ejecuta **`supabase-admin-eliminar-usuario.sql`** (RPC `admin_eliminar_usuario`).

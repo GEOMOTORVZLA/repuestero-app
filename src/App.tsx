@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { Auth } from './components/Auth';
 import { Landing } from './components/Landing';
@@ -6,15 +7,50 @@ import { SelectorTipoRegistro } from './components/SelectorTipoRegistro';
 import type { TipoRegistro } from './components/SelectorTipoRegistro';
 import { FormRegistro } from './components/FormRegistro';
 import { Dashboard } from './components/Dashboard';
+import { verticalDesdePathname, rutaInicioVertical } from './utils/verticalVehiculo';
 import './App.css';
 
-function App() {
+function AppShell() {
   const { user, loading } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const vertical = verticalDesdePathname(location.pathname);
+
   const [mostrarAuth, setMostrarAuth] = useState(false);
   const [crearCuentaTipo, setCrearCuentaTipo] = useState<null | 'selector' | TipoRegistro>(null);
+  const [mostrarPanel, setMostrarPanel] = useState(false);
+
+  useEffect(() => {
+    if (!user) setMostrarPanel(false);
+  }, [user]);
+
+  const irAlInicioVertical = () => {
+    navigate(rutaInicioVertical(vertical));
+  };
 
   if (loading) {
     return <p className="app-loading">Cargando...</p>;
+  }
+
+  if (user) {
+    if (mostrarPanel) {
+      return (
+        <Dashboard
+          vertical={vertical}
+          onVolverInicio={() => {
+            setMostrarPanel(false);
+            irAlInicioVertical();
+          }}
+        />
+      );
+    }
+    return (
+      <Landing
+        vertical={vertical}
+        sessionUser={user}
+        onIrAPanel={() => setMostrarPanel(true)}
+      />
+    );
   }
 
   if (!user) {
@@ -58,6 +94,7 @@ function App() {
     }
     return (
       <Landing
+        vertical={vertical}
         onMostrarLogin={() => setMostrarAuth(true)}
         onMostrarCrearCuenta={() => {
           setMostrarAuth(true);
@@ -67,7 +104,15 @@ function App() {
     );
   }
 
-  return <Dashboard />;
+  return null;
 }
 
-export default App;
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<AppShell />} />
+      <Route path="/motos" element={<AppShell />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}

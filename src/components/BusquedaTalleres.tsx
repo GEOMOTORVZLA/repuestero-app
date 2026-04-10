@@ -2,14 +2,20 @@ import { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import { ESPECIALIDADES_TALLER } from '../data/registroVenezuela';
+import { normalizeEspecialidadesTallerDb } from '../utils/tallerEspecialidades';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
+import './avisoSeleccionarEstado.css';
+import './BusquedaRepuestos.css';
+import './VendedoresCercaDeMi.css';
 import './BusquedaTalleres.css';
 
 export interface Taller {
   id: string;
   nombre: string | null;
   nombre_comercial: string | null;
-  especialidad: string | null;
+  rif: string | null;
+  /** text[] en Supabase; el cliente acepta también string legacy */
+  especialidad: string[] | string | null;
   marca_vehiculo: string | null;
   acerca_de: string | null;
   estado: string | null;
@@ -33,27 +39,35 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
   const [talleres, setTalleres] = useState<Taller[]>([]);
   const [cargando, setCargando] = useState(false);
   const [buscado, setBuscado] = useState(false);
+  const [avisoSeleccionarEstado, setAvisoSeleccionarEstado] = useState(false);
   const [contactarTaller, setContactarTaller] = useState<Taller | null>(null);
-  const [mostrarMapaEnModal, setMostrarMapaEnModal] = useState(false);
 
   const ciudadesOpciones = estado ? getCiudadesPorEstado(estado) : [];
 
   const buscar = async () => {
-    setCargando(true);
-    setBuscado(true);
     onBuscar?.();
+    setBuscado(true);
     setTalleres([]);
+
+    if (!estado.trim()) {
+      setAvisoSeleccionarEstado(true);
+      setCargando(false);
+      return;
+    }
+
+    setAvisoSeleccionarEstado(false);
+    setCargando(true);
 
     let query = supabase
       .from('talleres')
-      .select('id, nombre, nombre_comercial, especialidad, marca_vehiculo, acerca_de, estado, ciudad, telefono, email, direccion, latitud, longitud, metodos_pago');
+      .select(
+        'id, nombre, nombre_comercial, rif, especialidad, marca_vehiculo, acerca_de, estado, ciudad, telefono, email, direccion, latitud, longitud, metodos_pago'
+      );
 
     if (especialidad) {
-      query = query.eq('especialidad', especialidad);
+      query = query.contains('especialidad', [especialidad]);
     }
-    if (estado) {
-      query = query.eq('estado', estado);
-    }
+    query = query.eq('estado', estado);
     if (ciudad) {
       query = query.eq('ciudad', ciudad);
     }
@@ -77,13 +91,11 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
     return `https://wa.me/${num}`;
   };
 
-  const abrirContactar = (t: Taller) => {
+  const abrirDetalleTaller = (t: Taller) => {
     setContactarTaller(t);
-    setMostrarMapaEnModal(false);
   };
   const cerrarContactar = () => {
     setContactarTaller(null);
-    setMostrarMapaEnModal(false);
   };
 
   const tieneUbicacion = (t: Taller) =>
@@ -105,7 +117,12 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
           <select
             id="taller-especialidad"
             value={especialidad}
-            onChange={(e) => setEspecialidad(e.target.value)}
+            onChange={(e) => {
+              setEspecialidad(e.target.value);
+              setBuscado(false);
+              setTalleres([]);
+              setAvisoSeleccionarEstado(false);
+            }}
           >
             <option value="">Todas</option>
             {ESPECIALIDADES_TALLER.map((esp) => (
@@ -118,9 +135,15 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
           <select
             id="taller-estado"
             value={estado}
-            onChange={(e) => { setEstado(e.target.value); setCiudad(''); }}
+            onChange={(e) => {
+              setEstado(e.target.value);
+              setCiudad('');
+              setAvisoSeleccionarEstado(false);
+              setBuscado(false);
+              setTalleres([]);
+            }}
           >
-            <option value="">Todos</option>
+            <option value="">Selecciona el estado</option>
             {ESTADOS_VENEZUELA.map((e) => (
               <option key={e} value={e}>{e}</option>
             ))}
@@ -131,7 +154,12 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
           <select
             id="taller-ciudad"
             value={ciudad}
-            onChange={(e) => setCiudad(e.target.value)}
+            onChange={(e) => {
+              setCiudad(e.target.value);
+              setBuscado(false);
+              setTalleres([]);
+              setAvisoSeleccionarEstado(false);
+            }}
             disabled={!estado}
           >
             <option value="">Todas</option>
@@ -152,136 +180,199 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
 
       {cargando ? (
         <p className="busqueda-talleres-mensaje">Buscando talleres…</p>
+      ) : buscado && avisoSeleccionarEstado ? (
+        <p className="aviso-seleccionar-estado" role="status">
+          Debes seleccionar un estado
+        </p>
       ) : buscado && talleres.length === 0 ? (
         <p className="busqueda-talleres-sin-resultados">
-          No hay talleres registrados con los filtros seleccionados. Prueba con otras opciones.
+          No hay talleres con estos filtros: revisa <strong>estado</strong> y <strong>ciudad</strong> (deben
+          coincidir con el registro). En la web solo se listan talleres <strong>aprobados</strong> y con{' '}
+          <strong>membresía vigente</strong>. Si ya aprobaste uno en admin y no aparece, en Supabase ejecuta
+          una vez <code className="busqueda-talleres-sin-resultados-code">supabase-talleres-membresia-inicial.sql</code>{' '}
+          (o vuelve a pulsar &quot;Aprobar&quot; tras desplegar el SQL actualizado del repositorio).
         </p>
       ) : buscado && talleres.length > 0 ? (
         <div className="busqueda-talleres-resultados">
-          <div className="busqueda-talleres-grid">
-            {talleres.map((t) => (
-              <article key={t.id} className="busqueda-talleres-card">
-                <div className="busqueda-talleres-card-info">
-                  <h4 className="busqueda-talleres-card-nombre">{nombreTaller(t)}</h4>
-                  <p className="busqueda-talleres-card-especialidad">{t.especialidad || '—'}</p>
-                  <p className="busqueda-talleres-card-ubicacion">
-                    {[t.estado, t.ciudad].filter(Boolean).join(', ') || 'Ubicación no indicada'}
-                  </p>
-                </div>
-                <div className="busqueda-talleres-card-botones">
+            <div className="busqueda-talleres-grid">
+            {talleres.map((t) => {
+              const espList = normalizeEspecialidadesTallerDb(t.especialidad);
+              const labelCard = `Ver datos de ${nombreTaller(t)}`;
+              return (
+                <article key={t.id} className="vendedores-cerca-card">
                   <button
                     type="button"
-                    className="busqueda-talleres-card-btn"
-                    onClick={() => abrirContactar(t)}
+                    className="busqueda-talleres-card-resumen"
+                    onClick={() => abrirDetalleTaller(t)}
+                    aria-label={labelCard}
                   >
-                    Contactar
+                    <div className="vendedores-cerca-card-cuerpo busqueda-talleres-card-cuerpo-solo">
+                      <div className="vendedores-cerca-card-info">
+                        <h4 className="vendedores-cerca-card-nombre">{nombreTaller(t)}</h4>
+                        <div className="vendedores-cerca-card-meta">
+                          {(t.ciudad || t.estado) && (
+                            <span className="vendedores-cerca-card-ubicacion">
+                              {[t.ciudad, t.estado].filter(Boolean).join(', ')}
+                            </span>
+                          )}
+                          <span className="vendedores-cerca-card-subtitulo">Taller</span>
+                        </div>
+                        {espList.length > 0 && (
+                          <div className="busqueda-talleres-card-chips-row" aria-label="Especialidades">
+                            {espList.map((esp) => (
+                              <span key={esp} className="busqueda-talleres-chip">
+                                {esp}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </button>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         </div>
       ) : null}
 
       {contactarTaller && (
         <div
-          className="busqueda-talleres-modal-overlay"
+          className="busqueda-repuestos-modal-overlay"
           onClick={cerrarContactar}
           role="dialog"
           aria-modal="true"
           aria-labelledby="modal-taller-titulo"
         >
           <div
-            className={`busqueda-talleres-modal ${mostrarMapaEnModal && tieneUbicacion(contactarTaller) ? 'busqueda-talleres-modal-con-mapa' : ''}`}
+            className="busqueda-repuestos-modal vendedores-cerca-modal-contactar"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 id="modal-taller-titulo" className="busqueda-talleres-modal-titulo">
+            <h3 id="modal-taller-titulo" className="busqueda-repuestos-modal-titulo-seccion">
               Datos del taller
             </h3>
-            <div className="busqueda-talleres-modal-datos">
-              <p className="busqueda-talleres-modal-linea">
-                <span className="busqueda-talleres-modal-etiqueta">Nombre</span>{' '}
-                {nombreTaller(contactarTaller)}
-              </p>
-              <p className="busqueda-talleres-modal-linea">
-                <span className="busqueda-talleres-modal-etiqueta">Especialidad</span>{' '}
-                {contactarTaller.especialidad || '—'}
-              </p>
-              <p className="busqueda-talleres-modal-linea">
-                <span className="busqueda-talleres-modal-etiqueta">Estado</span>{' '}
-                {contactarTaller.estado || '—'}
-              </p>
-              <p className="busqueda-talleres-modal-linea">
-                <span className="busqueda-talleres-modal-etiqueta">Ciudad</span>{' '}
-                {contactarTaller.ciudad || '—'}
-              </p>
-              {contactarTaller.telefono && (
-                <p className="busqueda-talleres-modal-linea">
-                  <span className="busqueda-talleres-modal-etiqueta">Teléfono</span>{' '}
-                  {contactarTaller.telefono}
+            <div className="busqueda-repuestos-modal-producto-box">
+              <div className="busqueda-repuestos-modal-datos">
+                <p className="busqueda-repuestos-modal-linea">
+                  <span className="busqueda-repuestos-modal-etiqueta">Nombre comercial</span>
+                  <span className="busqueda-repuestos-modal-valor-negrita">{nombreTaller(contactarTaller)}</span>
                 </p>
-              )}
-              {contactarTaller.email && (
-                <p className="busqueda-talleres-modal-linea">
-                  <span className="busqueda-talleres-modal-etiqueta">Correo electrónico</span>{' '}
-                  {contactarTaller.email}
-                </p>
-              )}
-              {contactarTaller.direccion && (
-                <p className="busqueda-talleres-modal-linea">
-                  <span className="busqueda-talleres-modal-etiqueta">Dirección</span>{' '}
-                  {contactarTaller.direccion}
-                </p>
-              )}
+                {contactarTaller.rif != null && String(contactarTaller.rif).trim() !== '' && (
+                  <p className="busqueda-repuestos-modal-linea">
+                    <span className="busqueda-repuestos-modal-etiqueta">RIF</span>
+                    <span>{contactarTaller.rif}</span>
+                  </p>
+                )}
+                {(contactarTaller.ciudad || contactarTaller.estado) && (
+                  <p className="busqueda-repuestos-modal-linea">
+                    <span className="busqueda-repuestos-modal-etiqueta">Ubicación</span>
+                    <span>{[contactarTaller.ciudad, contactarTaller.estado].filter(Boolean).join(', ')}</span>
+                  </p>
+                )}
+                {contactarTaller.telefono && (
+                  <p className="busqueda-repuestos-modal-linea">
+                    <span className="busqueda-repuestos-modal-etiqueta">Teléfono</span>
+                    <span>{contactarTaller.telefono}</span>
+                  </p>
+                )}
+                {contactarTaller.email && (
+                  <p className="busqueda-repuestos-modal-linea">
+                    <span className="busqueda-repuestos-modal-etiqueta">Correo</span>
+                    <span>{contactarTaller.email}</span>
+                  </p>
+                )}
+                {contactarTaller.direccion && (
+                  <p className="busqueda-repuestos-modal-linea">
+                    <span className="busqueda-repuestos-modal-etiqueta">Dirección</span>
+                    <span>{contactarTaller.direccion}</span>
+                  </p>
+                )}
+                {(() => {
+                  const list = normalizeEspecialidadesTallerDb(contactarTaller.especialidad);
+                  if (!list.length) return null;
+                  return (
+                    <div className="busqueda-repuestos-modal-linea busqueda-repuestos-modal-metodos-pago">
+                      <span className="busqueda-repuestos-modal-etiqueta">Especialidades</span>
+                      <div className="busqueda-repuestos-modal-metodos-pago-lista">
+                        {list.map((esp) => (
+                          <span key={esp} className="busqueda-repuestos-modal-metodo-pago-chip">
+                            {esp}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+                {contactarTaller.marca_vehiculo && (
+                  <p className="busqueda-repuestos-modal-linea">
+                    <span className="busqueda-repuestos-modal-etiqueta">Marca de vehículos</span>
+                    <span>{contactarTaller.marca_vehiculo}</span>
+                  </p>
+                )}
+                {contactarTaller.acerca_de && (
+                  <p className="busqueda-repuestos-modal-linea busqueda-talleres-modal-acerca">
+                    <span className="busqueda-repuestos-modal-etiqueta busqueda-talleres-modal-acerca-etiq">
+                      Acerca del taller
+                    </span>
+                    <span className="busqueda-talleres-modal-acerca-texto">{contactarTaller.acerca_de}</span>
+                  </p>
+                )}
+                {Array.isArray(contactarTaller.metodos_pago) && contactarTaller.metodos_pago.length > 0 && (
+                  <div className="busqueda-repuestos-modal-linea busqueda-repuestos-modal-metodos-pago">
+                    <span className="busqueda-repuestos-modal-etiqueta">Formas de pago</span>
+                    <div className="busqueda-repuestos-modal-metodos-pago-lista">
+                      {contactarTaller.metodos_pago.map((m) => (
+                        <span key={m} className="busqueda-repuestos-modal-metodo-pago-chip">
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="busqueda-talleres-modal-botones">
-              {contactarTaller.telefono && contactoWhatsApp(contactarTaller) && (
-                <a
-                  href={contactoWhatsApp(contactarTaller)!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="busqueda-talleres-modal-whatsapp"
-                >
-                  Contactar por WhatsApp
-                </a>
-              )}
-              {tieneUbicacion(contactarTaller) && (
-                <button
-                  type="button"
-                  className="busqueda-talleres-card-btn"
-                  onClick={() => setMostrarMapaEnModal((v) => !v)}
-                >
-                  {mostrarMapaEnModal ? 'Ocultar ubicación' : 'Ubicación'}
-                </button>
-              )}
-              {tieneUbicacion(contactarTaller) && linkRutaGoogleMaps(contactarTaller) && (
-                <a
-                  href={linkRutaGoogleMaps(contactarTaller)!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="busqueda-talleres-card-btn"
-                >
-                  Abrir en Google Maps para navegar
-                </a>
-              )}
-              <button
-                type="button"
-                className="busqueda-talleres-modal-cerrar"
-                onClick={cerrarContactar}
-              >
-                Cerrar
-              </button>
-            </div>
-            {mostrarMapaEnModal && tieneUbicacion(contactarTaller) && (
-              <div className="busqueda-talleres-modal-mapa">
-                <h4 className="busqueda-talleres-modal-titulo-seccion">Ubicación</h4>
+
+            {tieneUbicacion(contactarTaller) && (
+              <>
+                <h4 className="busqueda-repuestos-modal-titulo-seccion">Ubicación</h4>
                 <MapVendedorUbicacion
                   lat={contactarTaller.latitud!}
                   lng={contactarTaller.longitud!}
                   nombreVendedor={nombreTaller(contactarTaller)}
+                  tipoPunto="taller"
                 />
-              </div>
+              </>
             )}
+
+            <div className="busqueda-repuestos-modal-botones">
+              {contactarTaller.telefono && contactoWhatsApp(contactarTaller) ? (
+                <a
+                  href={contactoWhatsApp(contactarTaller)!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="busqueda-repuestos-modal-whatsapp"
+                >
+                  Contactar por WhatsApp
+                </a>
+              ) : (
+                <p className="busqueda-repuestos-modal-sin-contacto">Sin teléfono registrado.</p>
+              )}
+              {tieneUbicacion(contactarTaller) && linkRutaGoogleMaps(contactarTaller) && (
+                <div className="vendedores-cerca-modal-ruta">
+                  <a
+                    href={linkRutaGoogleMaps(contactarTaller)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="vendedores-cerca-modal-ruta-btn"
+                  >
+                    Abrir en Google Maps para navegar
+                  </a>
+                </div>
+              )}
+              <button type="button" className="busqueda-repuestos-modal-cerrar" onClick={cerrarContactar}>
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}

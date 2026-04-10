@@ -3,6 +3,8 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import './MisProductos.css';
 import { EditarProducto, type ProductoEditable } from './EditarProducto';
+import { urlImagenProductoVariante } from '../utils/imagenProducto';
+import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 
 interface ProductoPanel {
   id: string;
@@ -16,12 +18,47 @@ interface ProductoPanel {
   precio_usd: number;
   moneda: string | null;
   imagen_url?: string | null;
-  imagenes_extra?: string[] | null;
+  imagenes_extra?: (string | null)[] | string[] | null;
   activo?: boolean | null;
+  created_at?: string | null;
+  stock_confirmado_at?: string | null;
+  pausado_por_stock_vencido?: boolean | null;
+  /** pendiente | aprobado | rechazado — visibilidad en la web */
+  aprobacion_publica?: string | null;
+  vertical?: VerticalVehiculo | null;
 }
 
 interface MisProductosProps {
   refreshTrigger?: number;
+}
+
+function diasDesdeFechaISO(fechaIso: string | null | undefined): number | null {
+  if (!fechaIso) return null;
+  const ts = Date.parse(fechaIso);
+  if (Number.isNaN(ts)) return null;
+  const dias = Math.floor((Date.now() - ts) / (1000 * 60 * 60 * 24));
+  return Math.max(0, dias);
+}
+
+function semaforoStockProducto(p: ProductoPanel): {
+  clase: 'verde' | 'amarillo' | 'rojo' | 'vencido' | 'sin-fecha';
+  texto: string;
+} {
+  const base = p.stock_confirmado_at ?? p.created_at ?? null;
+  const dias = diasDesdeFechaISO(base);
+  if (dias == null) {
+    return { clase: 'sin-fecha', texto: 'Sin fecha de stock' };
+  }
+  if (dias <= 9) {
+    return { clase: 'verde', texto: `Stock confirmado hace ${dias} día(s)` };
+  }
+  if (dias <= 15) {
+    return { clase: 'amarillo', texto: `Stock por confirmar (${dias} día(s))` };
+  }
+  if (dias <= 20) {
+    return { clase: 'rojo', texto: `Stock crítico (${dias} día(s))` };
+  }
+  return { clase: 'vencido', texto: `Vencido (${dias} día(s) sin confirmar)` };
 }
 
 export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
@@ -66,7 +103,7 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
       const { data: productosData, error: errProd } = await supabase
         .from('productos')
         .select(
-          'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo'
+          'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, aprobacion_publica, created_at, stock_confirmado_at, pausado_por_stock_vencido, vertical'
         )
         .in('tienda_id', tiendaIds)
         .order('nombre');
@@ -100,10 +137,14 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
     };
     setContactosDetalle(null);
     if (productoDetalle) {
+      const primeraExtra =
+        Array.isArray(productoDetalle.imagenes_extra) &&
+        productoDetalle.imagenes_extra.find((u) => typeof u === 'string' && u.trim());
       setFotoDetalleActiva(
-        productoDetalle.imagen_url ??
-          (productoDetalle.imagenes_extra && productoDetalle.imagenes_extra[0]) ??
-          null
+        (typeof productoDetalle.imagen_url === 'string' && productoDetalle.imagen_url.trim()
+          ? productoDetalle.imagen_url
+          : null) ??
+          (typeof primeraExtra === 'string' ? primeraExtra : null)
       );
       cargarContactos();
     } else {
@@ -115,25 +156,46 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
     return null;
   }
 
+  const alertaStock = (
+    <div className="mis-productos-alerta-stock" role="status">
+      <strong>Control de inventario:</strong> todo producto con más de 20 días sin actualización de stock
+      será pausado automáticamente y dejará de verse en búsquedas públicas hasta que lo reactives.
+    </div>
+  );
+
   if (cargando) {
-    return <p className="mis-productos-mensaje">Cargando tus productos…</p>;
+    return (
+      <div className="mis-productos">
+        {alertaStock}
+        <p className="mis-productos-mensaje">Cargando tus productos…</p>
+      </div>
+    );
   }
 
   if (error) {
-    return <p className="mis-productos-mensaje mis-productos-error">{error}</p>;
+    return (
+      <div className="mis-productos">
+        {alertaStock}
+        <p className="mis-productos-mensaje mis-productos-error">{error}</p>
+      </div>
+    );
   }
 
   if (productos.length === 0) {
     return (
-      <p className="mis-productos-mensaje">
-        Aún no tienes productos registrados. Usa el botón &quot;Vender nuevo producto&quot; para crear tu
-        primera publicación.
-      </p>
+      <div className="mis-productos">
+        {alertaStock}
+        <p className="mis-productos-mensaje">
+          Aún no tienes productos registrados. Usa el botón &quot;Vender nuevo producto&quot; para crear tu
+          primera publicación.
+        </p>
+      </div>
     );
   }
 
   return (
     <div className="mis-productos">
+      {alertaStock}
       {productoDetalle && (
         <div
           className="mis-productos-modal-overlay"
@@ -152,7 +214,15 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
             <div className="mis-productos-detalle-galeria">
               <div className="mis-productos-detalle-galeria-principal">
                 {fotoDetalleActiva ? (
-                  <img src={fotoDetalleActiva} alt={productoDetalle.nombre} />
+                  <img
+                    src={urlImagenProductoVariante(fotoDetalleActiva, 'vista') ?? fotoDetalleActiva}
+                    alt={productoDetalle.nombre}
+                    width={1080}
+                    height={1080}
+                    loading="lazy"
+                    decoding="async"
+                    sizes="(max-width: 900px) 90vw, 640px"
+                  />
                 ) : (
                   <div className="mis-productos-card-foto-placeholder">Sin fotos cargadas</div>
                 )}
@@ -172,7 +242,15 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
                         }`}
                         onMouseEnter={() => setFotoDetalleActiva(url)}
                       >
-                        <img src={url} alt="Foto del producto" />
+                        <img
+                          src={urlImagenProductoVariante(url, 'miniatura') ?? url}
+                          alt="Foto del producto"
+                          width={160}
+                          height={160}
+                          loading="lazy"
+                          decoding="async"
+                          sizes="80px"
+                        />
                       </button>
                     ))}
                 </div>
@@ -281,6 +359,10 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
         {productos.map((p) => {
           const vehiculo = [p.marca, p.modelo, p.anio].filter(Boolean).join(' · ');
           const estaActivo = p.activo !== false;
+          const semaforoStock = semaforoStockProducto(p);
+          const mod = (p.aprobacion_publica ?? 'pendiente').toLowerCase();
+          const claseMod =
+            mod === 'aprobado' ? 'aprobado' : mod === 'rechazado' ? 'rechazado' : 'pendiente';
           return (
             <article
               key={p.id}
@@ -289,34 +371,71 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
             >
               <div className="mis-productos-card-foto">
                 {p.imagen_url ? (
-                  <img src={p.imagen_url} alt={p.nombre} />
+                  <img
+                    src={urlImagenProductoVariante(p.imagen_url, 'tarjeta') ?? p.imagen_url}
+                    alt={p.nombre}
+                    width={400}
+                    height={400}
+                    loading="lazy"
+                    decoding="async"
+                    fetchPriority="low"
+                    sizes="(max-width: 640px) 42vw, 200px"
+                  />
                 ) : (
                   <div className="mis-productos-card-foto-placeholder">Sin foto</div>
                 )}
               </div>
               <div className="mis-productos-card-cuerpo">
-                <div className="mis-productos-card-info">
-                  <h3 className="mis-productos-card-nombre">{p.nombre}</h3>
-                  <p
-                    className={`mis-productos-card-status ${
-                      estaActivo ? 'activo' : 'pausado'
-                    }`}
-                  >
-                    {estaActivo ? 'PRODUCTO ACTIVO' : 'PRODUCTO PAUSADO'}
-                  </p>
-                  <p className="mis-productos-card-vehiculo">{vehiculo || 'Vehículo no especificado'}</p>
-                  <p className="mis-productos-card-precio">
-                    {p.moneda === 'BS' ? 'Bs' : 'USD'}{' '}
-                    {Number(p.precio_usd).toLocaleString(undefined, {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2,
-                    })}
-                  </p>
-                  <p className="mis-productos-card-desc">
-                    {p.descripcion && p.descripcion.length > 0 ? p.descripcion : 'Sin descripción'}
-                  </p>
+                <div className="mis-productos-card-bloque-principal">
+                  <div className="mis-productos-card-info">
+                    <h3 className="mis-productos-card-nombre">{p.nombre}</h3>
+                    <div className="mis-productos-card-meta-fila" role="group" aria-label="Estado del producto">
+                      <span className="mis-productos-card-chip mis-productos-card-chip--tipo">
+                        {p.vertical === 'moto' ? 'Moto' : 'Auto'}
+                      </span>
+                      <span
+                        className={`mis-productos-card-chip ${
+                          estaActivo ? 'mis-productos-card-chip--activo' : 'mis-productos-card-chip--pausado'
+                        }`}
+                      >
+                        {estaActivo ? 'Activo' : 'Pausado'}
+                      </span>
+                      <span
+                        className={`mis-productos-card-chip mis-productos-card-chip--web mis-productos-card-chip--web-${claseMod}`}
+                      >
+                        {mod === 'aprobado' ? 'En la web' : mod === 'rechazado' ? 'No en la web' : 'Pendiente web'}
+                      </span>
+                    </div>
+                    <p
+                      className={`mis-productos-card-stock-semaforo mis-productos-card-stock-semaforo--${semaforoStock.clase}`}
+                    >
+                      {semaforoStock.texto}
+                    </p>
+                    <div className="mis-productos-card-fila-datos">
+                      <span className="mis-productos-card-vehiculo">
+                        {vehiculo || 'Vehículo no especificado'}
+                      </span>
+                      <span className="mis-productos-card-datos-sep" aria-hidden>
+                        ·
+                      </span>
+                      <span className="mis-productos-card-precio">
+                        {p.moneda === 'BS' ? 'Bs' : 'USD'}{' '}
+                        {Number(p.precio_usd).toLocaleString(undefined, {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <p className="mis-productos-card-desc">
+                      {p.descripcion && p.descripcion.length > 0 ? p.descripcion : 'Sin descripción'}
+                    </p>
+                  </div>
                 </div>
-                <div className="mis-productos-card-acciones">
+                <div
+                  className="mis-productos-card-acciones"
+                  role="group"
+                  aria-label="Acciones del producto"
+                >
                   <button
                     type="button"
                     onClick={async (e) => {
@@ -335,8 +454,9 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
                     }}
                     className="mis-productos-btn-pausar"
                     disabled={!estaActivo}
+                    title="Pausar venta"
                   >
-                    Pausar venta
+                    Pausar
                   </button>
                   <button
                     type="button"
@@ -344,20 +464,34 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
                       e.stopPropagation();
                       const { error: err } = await supabase
                         .from('productos')
-                        .update({ activo: true })
+                        .update({
+                          activo: true,
+                          stock_confirmado_at: new Date().toISOString(),
+                          pausado_por_stock_vencido: false,
+                        })
                         .eq('id', p.id);
                       if (err) {
                         setError(err.message || 'Error al activar el producto.');
                         return;
                       }
                       setProductos((prev) =>
-                        prev.map((x) => (x.id === p.id ? { ...x, activo: true } : x))
+                        prev.map((x) =>
+                          x.id === p.id
+                            ? {
+                                ...x,
+                                activo: true,
+                                stock_confirmado_at: new Date().toISOString(),
+                                pausado_por_stock_vencido: false,
+                              }
+                            : x
+                        )
                       );
                     }}
                     className="mis-productos-btn-activar"
                     disabled={estaActivo}
+                    title="Activar producto y confirmar stock"
                   >
-                    Activar producto
+                    Activar
                   </button>
                   <button
                     type="button"
@@ -366,8 +500,9 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
                       setProductoEditando(p);
                     }}
                     className="mis-productos-btn-primario"
+                    title="Editar producto"
                   >
-                    Editar producto
+                    Editar
                   </button>
                   <button
                     type="button"
@@ -377,8 +512,9 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
                     }}
                     className="mis-productos-btn-eliminar"
                     disabled={eliminandoId === p.id}
+                    title="Eliminar producto"
                   >
-                    {eliminandoId === p.id ? 'Eliminando…' : 'Eliminar producto'}
+                    {eliminandoId === p.id ? 'Borrando…' : 'Eliminar'}
                   </button>
                 </div>
               </div>

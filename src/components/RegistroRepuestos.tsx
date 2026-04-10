@@ -3,7 +3,16 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { MARCAS_VEHICULOS } from '../data/marcasVehiculos';
 import { MARCAS_MODELOS, ANOS } from '../data/marcasModelos';
+import { MARCAS_MOTOS, getModelosPorMarcaMoto } from '../data/marcasMotos';
 import { CATEGORIAS_PRODUCTO } from '../data/categoriasProducto';
+import { CATEGORIAS_PRODUCTO_MOTO } from '../data/categoriasProductoMoto';
+import type { VerticalVehiculo } from '../utils/verticalVehiculo';
+import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
+import {
+  MAX_BYTES_FOTO_PRODUCTO,
+  MAX_MB_FOTO_PRODUCTO,
+} from '../utils/imagenProducto';
+import { MAX_FOTOS_EXTRA, slotsArchivosExtraVacios } from '../utils/productoImagenesExtra';
 import './RegistroRepuestos.css';
 
 interface Tienda {
@@ -14,9 +23,16 @@ interface Tienda {
 
 interface RegistroRepuestosProps {
   onProductoRegistrado?: () => void;
+  vertical?: VerticalVehiculo;
 }
 
-export function RegistroRepuestos({ onProductoRegistrado }: RegistroRepuestosProps) {
+export function RegistroRepuestos({
+  onProductoRegistrado,
+  vertical = VERTICAL_AUTO,
+}: RegistroRepuestosProps) {
+  const esMoto = vertical === 'moto';
+  const categoriasOpciones = esMoto ? CATEGORIAS_PRODUCTO_MOTO : CATEGORIAS_PRODUCTO;
+  const marcasLista = esMoto ? [...MARCAS_MOTOS] : [...MARCAS_VEHICULOS];
   const { user } = useAuth();
   const [tiendas, setTiendas] = useState<Tienda[]>([]);
   const [cargandoTienda, setCargandoTienda] = useState(true);
@@ -31,8 +47,15 @@ export function RegistroRepuestos({ onProductoRegistrado }: RegistroRepuestosPro
   const [estado, setEstado] = useState<'idle' | 'registrando' | 'ok' | 'error'>('idle');
   const [mensaje, setMensaje] = useState('');
   const [fotoPrincipal, setFotoPrincipal] = useState<File | null>(null);
-  const [fotosExtra, setFotosExtra] = useState<File[]>([]);
+  /** Una ranura por foto adicional (1…4); no se pisan al elegir archivo en otra ranura. */
+  const [fotosExtraSlots, setFotosExtraSlots] = useState<(File | null)[]>(() => slotsArchivosExtraVacios());
   const registrandoRef = useRef(false);
+
+  const modelosMarca = esMoto
+    ? getModelosPorMarcaMoto(marca)
+    : marca
+      ? MARCAS_MODELOS[marca] ?? []
+      : [];
 
   useEffect(() => {
     if (!user) return;
@@ -61,6 +84,8 @@ export function RegistroRepuestos({ onProductoRegistrado }: RegistroRepuestosPro
           'Mi tienda') as string;
 
       const rifAuto = (perfil?.rif ?? null) as string | null;
+      const estadoAuto = (perfil?.estado ?? null) as string | null;
+      const ciudadAuto = (perfil?.ciudad ?? null) as string | null;
       const telefonoAuto = (perfil?.telefono ?? null) as string | null;
       const latAuto =
         perfil?.latitud != null ? parseFloat(String(perfil.latitud).replace(',', '.')) : null;
@@ -75,6 +100,8 @@ export function RegistroRepuestos({ onProductoRegistrado }: RegistroRepuestosPro
         nombre: (perfil?.nombre ?? nombreAuto) as string,
         nombre_comercial: nombreAuto,
         rif: rifAuto,
+        estado: estadoAuto,
+        ciudad: ciudadAuto,
         telefono: telefonoAuto,
         latitud: Number.isFinite(latAuto as number) ? (latAuto as number) : 0,
         longitud: Number.isFinite(lngAuto as number) ? (lngAuto as number) : 0,
@@ -125,7 +152,7 @@ export function RegistroRepuestos({ onProductoRegistrado }: RegistroRepuestosPro
     if (!marca) {
       registrandoRef.current = false;
       setEstado('error');
-      setMensaje('Selecciona la marca del vehículo.');
+      setMensaje(esMoto ? 'Selecciona la marca de la moto.' : 'Selecciona la marca del vehículo.');
       return;
     }
     const precioNum = parseFloat(precio.trim().replace(',', '.'));
@@ -147,19 +174,21 @@ export function RegistroRepuestos({ onProductoRegistrado }: RegistroRepuestosPro
       setMensaje('Sube al menos una foto principal del repuesto.');
       return;
     }
-    const MAX_MB = 2;
-    const maxBytes = MAX_MB * 1024 * 1024;
-    if (fotoPrincipal.size > maxBytes) {
+    if (fotoPrincipal.size > MAX_BYTES_FOTO_PRODUCTO) {
       registrandoRef.current = false;
       setEstado('error');
-      setMensaje(`La foto principal no debe superar ${MAX_MB} MB. Comprímela o elige otra.`);
+      setMensaje(
+        `La foto principal no debe superar ${MAX_MB_FOTO_PRODUCTO} MB. Comprímela o elige otra.`
+      );
       return;
     }
-    const fotoExtraGrande = fotosExtra.find((f) => f.size > maxBytes);
+    const fotoExtraGrande = fotosExtraSlots.find((f) => f && f.size > MAX_BYTES_FOTO_PRODUCTO);
     if (fotoExtraGrande) {
       registrandoRef.current = false;
       setEstado('error');
-      setMensaje(`Cada foto adicional no debe superar ${MAX_MB} MB. Comprímelas o quita la más pesada.`);
+      setMensaje(
+        `Cada foto adicional no debe superar ${MAX_MB_FOTO_PRODUCTO} MB. Comprímelas o elige otra.`
+      );
       return;
     }
 
@@ -180,6 +209,10 @@ export function RegistroRepuestos({ onProductoRegistrado }: RegistroRepuestosPro
       moneda: moneda,
       stock_actual: 0,
       activo: true,
+      aprobacion_publica: 'pendiente',
+      stock_confirmado_at: new Date().toISOString(),
+      pausado_por_stock_vencido: false,
+      vertical,
     };
 
     const { data: insertData, error } = await supabase
@@ -217,24 +250,25 @@ export function RegistroRepuestos({ onProductoRegistrado }: RegistroRepuestosPro
     const { data: principalPublic } = bucket.getPublicUrl(principalPath);
     const imagenPrincipalUrl = principalPublic.publicUrl;
 
-    const extras: string[] = [];
-    const archivosExtra = fotosExtra.slice(0, 4);
-    for (let i = 0; i < archivosExtra.length; i += 1) {
-      const file = archivosExtra[i];
+    const slotsUrls: (string | null)[] = [null, null, null, null];
+    for (let i = 0; i < MAX_FOTOS_EXTRA; i += 1) {
+      const file = fotosExtraSlots[i];
+      if (!file) continue;
       const ext = file.name.split('.').pop() || 'jpg';
       const extraPath = `${productoId}/extra-${i + 1}.${ext}`;
       const { error: upExtraError } = await bucket.upload(extraPath, file, { upsert: true });
       if (!upExtraError) {
         const { data: extraPublic } = bucket.getPublicUrl(extraPath);
-        extras.push(extraPublic.publicUrl);
+        slotsUrls[i] = extraPublic.publicUrl;
       }
     }
 
+    const tieneExtras = slotsUrls.some((s) => s != null && String(s).trim() !== '');
     const { error: updateError } = await supabase
       .from('productos')
       .update({
         imagen_url: imagenPrincipalUrl,
-        imagenes_extra: extras.length ? extras : null,
+        imagenes_extra: tieneExtras ? slotsUrls : null,
       })
       .eq('id', productoId);
 
@@ -248,7 +282,9 @@ export function RegistroRepuestos({ onProductoRegistrado }: RegistroRepuestosPro
 
     registrandoRef.current = false;
     setEstado('ok');
-    setMensaje('¡Producto registrado correctamente!');
+    setMensaje(
+      '¡Producto registrado! Quedará pendiente de autorización por un administrador antes de mostrarse en la búsqueda pública.'
+    );
     onProductoRegistrado?.();
     setNombre('');
     setCategoria('');
@@ -259,7 +295,7 @@ export function RegistroRepuestos({ onProductoRegistrado }: RegistroRepuestosPro
     setPrecio('');
     setMoneda('BS');
     setFotoPrincipal(null);
-    setFotosExtra([]);
+    setFotosExtraSlots(slotsArchivosExtraVacios());
   };
 
   if (cargandoTienda) {
@@ -282,14 +318,14 @@ export function RegistroRepuestos({ onProductoRegistrado }: RegistroRepuestosPro
 
   return (
     <div className="registro-repuestos">
-      <h2>Registrar producto</h2>
+      <h2>{esMoto ? 'Registrar producto (moto)' : 'Registrar producto'}</h2>
       <select
         value={categoria}
         onChange={(e) => setCategoria(e.target.value)}
         disabled={estado === 'registrando'}
       >
         <option value="">Categoría del producto</option>
-        {CATEGORIAS_PRODUCTO.map((c) => (
+        {categoriasOpciones.map((c) => (
           <option key={c} value={c}>
             {c}
           </option>
@@ -307,22 +343,24 @@ export function RegistroRepuestos({ onProductoRegistrado }: RegistroRepuestosPro
         value={marca}
         onChange={(e) => { setMarca(e.target.value); setModelo(''); }}
         disabled={estado === 'registrando'}
+        translate="no"
+        className="notranslate"
       >
-        <option value="">Marca del vehículo</option>
-        {MARCAS_VEHICULOS.map((m) => (
+        <option value="">{esMoto ? 'Marca de la moto' : 'Marca del vehículo'}</option>
+        {marcasLista.map((m) => (
           <option key={m} value={m}>
             {m}
           </option>
         ))}
       </select>
-      {marca && MARCAS_MODELOS[marca] && (
+      {marca && modelosMarca.length > 0 && (
         <select
           value={modelo}
           onChange={(e) => setModelo(e.target.value)}
           disabled={estado === 'registrando'}
         >
           <option value="">Modelo (opcional)</option>
-          {MARCAS_MODELOS[marca].map((m) => (
+          {modelosMarca.map((m) => (
             <option key={m} value={m}>{m}</option>
           ))}
         </select>
@@ -381,6 +419,9 @@ export function RegistroRepuestos({ onProductoRegistrado }: RegistroRepuestosPro
       </div>
       <div className="registro-repuestos-fotos">
         <label className="registro-repuestos-fotos-label">Subir foto *</label>
+        <p className="registro-repuestos-fotos-peso-ayuda">
+          Máximo {MAX_MB_FOTO_PRODUCTO} MB por imagen (JPG, PNG, WebP, etc.).
+        </p>
         <input
           type="file"
           accept="image/*"
@@ -390,17 +431,37 @@ export function RegistroRepuestos({ onProductoRegistrado }: RegistroRepuestosPro
             setFotoPrincipal(file);
           }}
         />
-        <label className="registro-repuestos-fotos-label">Subir fotos (hasta 4, opcionales)</label>
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          disabled={estado === 'registrando'}
-          onChange={(e) => {
-            const files = Array.from(e.target.files ?? []).slice(0, 4);
-            setFotosExtra(files);
-          }}
-        />
+        <span className="registro-repuestos-fotos-label">Fotos adicionales (opcionales, hasta {MAX_FOTOS_EXTRA})</span>
+        <p className="registro-repuestos-fotos-extra-ayuda">
+          Cada botón es una foto distinta; se guardan por separado y se verán todas en la ficha del producto.
+        </p>
+        <div className="registro-repuestos-fotos-extra-bloque">
+          {Array.from({ length: MAX_FOTOS_EXTRA }, (_, idx) => (
+            <div key={idx} className="registro-repuestos-fotos-extra-fila">
+              <label className="registro-repuestos-fotos-extra-etiqueta" htmlFor={`foto-extra-reg-${idx}`}>
+                Foto adicional {idx + 1}
+              </label>
+              <input
+                id={`foto-extra-reg-${idx}`}
+                type="file"
+                accept="image/*"
+                disabled={estado === 'registrando'}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  setFotosExtraSlots((prev) => {
+                    const next = [...prev];
+                    next[idx] = file;
+                    return next;
+                  });
+                  e.target.value = '';
+                }}
+              />
+              {fotosExtraSlots[idx] && (
+                <span className="registro-repuestos-fotos-extra-nombre">{fotosExtraSlots[idx]!.name}</span>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
       <button
         type="button"

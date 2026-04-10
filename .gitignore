@@ -17,6 +17,10 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Nunca versionar OAuth / credenciales (Vite sirve `public/` tal cual)
+public/client_secret*.json
+**/client_secret*.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

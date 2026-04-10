@@ -2,7 +2,11 @@ import { useMemo, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { CATEGORIAS_PRODUCTO } from '../data/categoriasProducto';
+import { CATEGORIAS_PRODUCTO_MOTO } from '../data/categoriasProductoMoto';
 import { MARCAS_VEHICULOS } from '../data/marcasVehiculos';
+import { MARCAS_MOTOS } from '../data/marcasMotos';
+import type { VerticalVehiculo } from '../utils/verticalVehiculo';
+import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import * as XLSX from 'xlsx';
 import './ImportarProductosCSV.css';
 
@@ -24,14 +28,22 @@ function normalizeHeader(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, '_');
 }
 
-// CSV parser simple pero con soporte de comillas dobles.
-// Soporta campos con comas dentro de comillas: "texto, con coma"
-function parseCSV(text: string): string[][] {
-  const input = text.replace(/^\uFEFF/, ''); // quita BOM si existe
+/** Excel en español/LATAM suele usar `;` al exportar CSV; nuestro template usa `,`. */
+function detectCsvDelimiter(firstLine: string): ',' | ';' {
+  const line = firstLine.replace(/\r$/, '');
+  const commas = line.split(',').length - 1;
+  const semis = line.split(';').length - 1;
+  return semis > commas ? ';' : ',';
+}
+
+// CSV/sep parser con soporte de comillas dobles (campos con separador dentro).
+function parseDelimited(text: string, delimiter: ',' | ';'): string[][] {
+  const input = text.replace(/^\uFEFF/, '');
   const rows: string[][] = [];
   let current: string[] = [];
   let field = '';
   let inQuotes = false;
+  const sep = delimiter;
 
   for (let i = 0; i < input.length; i++) {
     const ch = input[i];
@@ -39,7 +51,6 @@ function parseCSV(text: string): string[][] {
     if (ch === '"') {
       const next = input[i + 1];
       if (inQuotes && next === '"') {
-        // Doble comilla escapada dentro de un campo
         field += '"';
         i++;
       } else {
@@ -48,14 +59,13 @@ function parseCSV(text: string): string[][] {
       continue;
     }
 
-    if (!inQuotes && ch === ',') {
+    if (!inQuotes && ch === sep) {
       current.push(field.trim());
       field = '';
       continue;
     }
 
     if (!inQuotes && (ch === '\n' || ch === '\r')) {
-      // Manejo de CRLF
       if (ch === '\r' && input[i + 1] === '\n') i++;
       current.push(field.trim());
       field = '';
@@ -67,13 +77,20 @@ function parseCSV(text: string): string[][] {
     field += ch;
   }
 
-  // último campo
   if (field.length > 0 || current.length > 0) {
     current.push(field.trim());
     if (current.length > 1 || current.some((c) => c !== '')) rows.push(current);
   }
 
   return rows;
+}
+
+function parseCSV(text: string): string[][] {
+  const input = text.replace(/^\uFEFF/, '');
+  const firstNl = input.search(/\r?\n/);
+  const firstLine = firstNl === -1 ? input : input.slice(0, firstNl);
+  const delimiter = detectCsvDelimiter(firstLine);
+  return parseDelimited(input, delimiter);
 }
 
 function parseXLSXToRows(arrayBuffer: ArrayBuffer): string[][] {
@@ -108,8 +125,10 @@ function normalizeOptionalText(value: string): string | null {
 
 export function ImportarProductosCSV({
   onImportado,
+  vertical = VERTICAL_AUTO,
 }: {
   onImportado?: () => void;
+  vertical?: VerticalVehiculo;
 }) {
   const { user } = useAuth();
   const [archivo, setArchivo] = useState<File | null>(null);
@@ -120,17 +139,22 @@ export function ImportarProductosCSV({
 
   const categoriasLookup = useMemo(() => {
     const m = new Map<string, string>();
-    for (const c of CATEGORIAS_PRODUCTO) m.set(c.toUpperCase(), c);
+    const lista = vertical === 'moto' ? CATEGORIAS_PRODUCTO_MOTO : CATEGORIAS_PRODUCTO;
+    for (const c of lista) m.set(c.toUpperCase(), c);
     return m;
-  }, []);
+  }, [vertical]);
   const marcasLookup = useMemo(() => {
     const m = new Map<string, string>();
-    for (const b of MARCAS_VEHICULOS) m.set(b.toUpperCase(), b);
+    const lista = vertical === 'moto' ? MARCAS_MOTOS : MARCAS_VEHICULOS;
+    for (const b of lista) m.set(b.toUpperCase(), b);
+    if (vertical === 'moto') {
+      m.set('KEEWAY', 'Empire Keeway');
+    }
     return m;
-  }, []);
+  }, [vertical]);
 
-  const templateCSV = useMemo(() => {
-    return [
+  const templateHeaders = useMemo(
+    () =>
       [
         'nombre',
         'categoria',
@@ -140,12 +164,22 @@ export function ImportarProductosCSV({
         'comentarios',
         'precio',
         'moneda',
-      ].join(','),
-    ].join('\n');
-  }, []);
+      ] as const,
+    []
+  );
 
+  /** Plantilla Excel: evita que Excel (español) meta todo en una sola celda al abrir CSV. */
   const descargarTemplate = () => {
-    const blob = new Blob([templateCSV], { type: 'text/csv;charset=utf-8' });
+    const ws = XLSX.utils.aoa_to_sheet([Array.from(templateHeaders)]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Productos');
+    XLSX.writeFile(wb, 'template_productos.xlsx', { compression: true });
+  };
+
+  /** CSV con UTF-8 BOM para Excel; comas como en la spec internacional. */
+  const descargarTemplateCsv = () => {
+    const line = templateHeaders.join(',');
+    const blob = new Blob(['\uFEFF' + line + '\n'], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -173,7 +207,7 @@ export function ImportarProductosCSV({
     }
     if (!archivo) {
       setEstado('error');
-      setMensaje('Selecciona un archivo CSV o XLSX.');
+      setMensaje('Selecciona un archivo CSV, XLS o XLSX.');
       return;
     }
 
@@ -185,14 +219,14 @@ export function ImportarProductosCSV({
     }
 
     const ext = (archivo.name.split('.').pop() ?? '').toLowerCase();
-    const esXlsx = ext === 'xlsx';
+    const esExcelBinario = ext === 'xlsx' || ext === 'xls';
 
     setEstado('importando');
-    setMensaje(esXlsx ? 'Leyendo XLSX...' : 'Leyendo CSV...');
+    setMensaje(esExcelBinario ? 'Leyendo Excel...' : 'Leyendo CSV...');
 
     let parsed: string[][];
     try {
-      if (esXlsx) {
+      if (esExcelBinario) {
         const buffer = await archivo.arrayBuffer();
         parsed = parseXLSXToRows(buffer);
       } else {
@@ -201,7 +235,11 @@ export function ImportarProductosCSV({
       }
     } catch (e: any) {
       setEstado('error');
-      setMensaje(esXlsx ? 'No se pudo leer el archivo XLSX.' : 'No se pudo leer el archivo CSV.');
+      setMensaje(
+        esExcelBinario
+          ? 'No se pudo leer el archivo Excel (.xls / .xlsx).'
+          : 'No se pudo leer el archivo CSV.'
+      );
       return;
     }
 
@@ -242,7 +280,7 @@ export function ImportarProductosCSV({
     // hasta 200 para no saturar en un intento
     if (dataRows.length > 200) {
       setEstado('error');
-      setMensaje('Para esta prueba, el CSV no debe tener más de 200 filas.');
+      setMensaje('Para esta prueba, el archivo no debe tener más de 200 filas.');
       return;
     }
 
@@ -374,6 +412,10 @@ export function ImportarProductosCSV({
         moneda: r.moneda,
         stock_actual: 0,
         activo: true,
+        aprobacion_publica: 'pendiente',
+        stock_confirmado_at: new Date().toISOString(),
+        pausado_por_stock_vencido: false,
+        vertical,
       };
 
       // Nota: omitimos imagen_url e imagenes_extra por opción A (sin fotos)
@@ -398,19 +440,21 @@ export function ImportarProductosCSV({
     }
 
     setEstado('ok');
-    setMensaje(`Importación completada: ${ok} producto(s) insertados (sin fotos).`);
+    setMensaje(
+      `Importación completada: ${ok} producto(s) insertados (sin fotos). Quedan pendientes de autorización por un administrador antes de verse en la web.`
+    );
     onImportado?.();
   };
 
   return (
     <div className="importar-productos">
       <div className="importar-productos-header">
-        <h3 className="importar-productos-titulo">Importar productos desde CSV/XLSX (sin fotos)</h3>
+        <h3 className="importar-productos-titulo">Importar productos desde Excel o CSV (sin fotos)</h3>
       </div>
 
       <input
         type="file"
-        accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         onChange={(e) => setArchivo(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
         disabled={estado === 'importando'}
       />
@@ -422,17 +466,25 @@ export function ImportarProductosCSV({
           className="importar-productos-link"
           disabled={estado === 'importando'}
         >
-          Descargar template
+          Descargar plantilla Excel (.xlsx)
+        </button>
+        <button
+          type="button"
+          onClick={descargarTemplateCsv}
+          className="importar-productos-link"
+          disabled={estado === 'importando'}
+        >
+          Descargar CSV (opcional)
         </button>
 
-      <button
-        type="button"
-        className="importar-productos-boton"
-        onClick={importar}
-        disabled={estado === 'importando' || !archivo}
-      >
-        {estado === 'importando' ? 'Importando...' : 'Importar CSV'}
-      </button>
+        <button
+          type="button"
+          className="importar-productos-boton"
+          onClick={importar}
+          disabled={estado === 'importando' || !archivo}
+        >
+          {estado === 'importando' ? 'Importando...' : 'Importar'}
+        </button>
       </div>
 
       {mensaje && (

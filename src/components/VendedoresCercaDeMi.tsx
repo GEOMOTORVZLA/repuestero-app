@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
 import './VendedoresCercaDeMi.css';
+import './avisoSeleccionarEstado.css';
 import './BusquedaRepuestos.css';
+
+const PAGE_SIZE_VENDEDORES = 30;
 
 export interface TiendaCerca {
   id: string;
@@ -43,6 +46,8 @@ function distanciaKm(
 export function VendedoresCercaDeMi() {
   const [tiendas, setTiendas] = useState<TiendaCerca[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [cargandoMas, setCargandoMas] = useState(false);
+  const [hayMas, setHayMas] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [estadoFiltro, setEstadoFiltro] = useState('');
   const [ciudadFiltro, setCiudadFiltro] = useState('');
@@ -52,25 +57,71 @@ export function VendedoresCercaDeMi() {
   const [gpsObteniendo, setGpsObteniendo] = useState(false);
   const [mensaje, setMensaje] = useState('');
 
+  const construirQueryTiendas = () => {
+    let query = supabase
+      .from('tiendas')
+      .select('id, nombre, nombre_comercial, rif, estado, ciudad, latitud, longitud, telefono, direccion, metodos_pago')
+      .order('estado', { ascending: true, nullsFirst: false })
+      .order('ciudad', { ascending: true, nullsFirst: false })
+      .order('nombre_comercial', { ascending: true, nullsFirst: false })
+      .order('id', { ascending: true });
+
+    if (estadoFiltro) query = query.eq('estado', estadoFiltro);
+    if (ciudadFiltro) query = query.eq('ciudad', ciudadFiltro);
+
+    return query;
+  };
+
   const cargarTiendas = async () => {
     setCargando(true);
     setError(null);
-    const { data, err } = await supabase
-      .from('tiendas')
-      .select('id, nombre, nombre_comercial, rif, estado, ciudad, latitud, longitud, telefono, direccion, metodos_pago');
+    setHayMas(false);
+    const { data, error } = await construirQueryTiendas().range(0, PAGE_SIZE_VENDEDORES);
 
-    if (err) {
-      setError(err.message);
+    if (error) {
+      setError(
+        error.message ||
+          'No se pudo cargar vendedores. Verifica políticas RLS de SELECT en public.tiendas.'
+      );
       setTiendas([]);
+      setHayMas(false);
     } else {
-      setTiendas((data ?? []) as TiendaCerca[]);
+      const filas = ((data ?? []) as TiendaCerca[]).filter(
+        (t) => t && typeof t.id === 'string'
+      );
+      const mas = filas.length > PAGE_SIZE_VENDEDORES;
+      const primeras = mas ? filas.slice(0, PAGE_SIZE_VENDEDORES) : filas;
+      setTiendas(primeras);
+      setHayMas(mas);
     }
     setCargando(false);
   };
 
-  useEffect(() => {
-    cargarTiendas();
-  }, []);
+  const cargarMasTiendas = async () => {
+    if (cargando || cargandoMas || !hayMas) return;
+    setCargandoMas(true);
+    setError(null);
+    const offset = tiendas.length;
+    const { data, error } = await construirQueryTiendas().range(
+      offset,
+      offset + PAGE_SIZE_VENDEDORES
+    );
+
+    if (error) {
+      setError(error.message || 'No se pudo cargar más vendedores.');
+      setCargandoMas(false);
+      return;
+    }
+
+    const filas = ((data ?? []) as TiendaCerca[]).filter(
+      (t) => t && typeof t.id === 'string'
+    );
+    const mas = filas.length > PAGE_SIZE_VENDEDORES;
+    const chunk = mas ? filas.slice(0, PAGE_SIZE_VENDEDORES) : filas;
+    setTiendas((prev) => [...prev, ...chunk]);
+    setHayMas(mas);
+    setCargandoMas(false);
+  };
 
   const obtenerMiUbicacion = () => {
     setGpsError(null);
@@ -102,16 +153,10 @@ export function VendedoresCercaDeMi() {
 
   const ciudadesOpciones = estadoFiltro ? getCiudadesPorEstado(estadoFiltro) : [];
 
-  // Lista a mostrar: filtrar por estado/ciudad y ordenar por distancia si hay GPS
+  // Lista a mostrar: orden por distancia si hay GPS.
+  // El filtrado principal ya se hace en la consulta paginada.
   const listaMostrar = ((): TiendaCerca[] => {
     let list = [...tiendas];
-
-    if (estadoFiltro) {
-      list = list.filter((t) => (t.estado ?? '').trim() === estadoFiltro);
-    }
-    if (ciudadFiltro) {
-      list = list.filter((t) => (t.ciudad ?? '').trim() === ciudadFiltro);
-    }
 
     if (usandoGps && gpsCoords) {
       list = list.map((t) => ({
@@ -157,12 +202,19 @@ export function VendedoresCercaDeMi() {
 
   const ubicar = () => {
     if (!estadoFiltro.trim()) {
-      setMensaje('Selecciona al menos el estado para ver los vendedores cerca de tu zona.');
+      setMensaje('Debes seleccionar un estado');
       setUbicado(false);
+      setTiendas([]);
+      setHayMas(false);
       return;
     }
     setMensaje('');
     setUbicado(true);
+    // En móvil/calle: solicitar ubicación actual al iniciar la búsqueda por zona.
+    if (!usandoGps && !gpsObteniendo) {
+      obtenerMiUbicacion();
+    }
+    void cargarTiendas();
   };
 
   const abrirContactar = (t: TiendaCerca) => {
@@ -172,7 +224,7 @@ export function VendedoresCercaDeMi() {
 
   return (
     <section className="vendedores-cerca" id="vendedores-cerca">
-      <h2 className="vendedores-cerca-titulo">Ventas de repuestos cerca de mi zona</h2>
+      <h2 className="vendedores-cerca-titulo">VENTAS DE PRODUCTOS CERCA DE MI ZONA</h2>
       <p className="vendedores-cerca-subtitulo">
         Encuentra a nuestros vendedores de repuestos: por ciudad o por cercanía con tu ubicación.
       </p>
@@ -223,10 +275,18 @@ export function VendedoresCercaDeMi() {
         </button>
       </div>
 
-      {ubicado && (
+      {mensaje && (
+        <p className="aviso-seleccionar-estado" role="status">
+          {mensaje}
+        </p>
+      )}
+
+      {ubicado && estadoFiltro && (
         <div className="vendedores-cerca-resultados">
           <div className="vendedores-cerca-resultados-header">
-            <h3>Vendedores en {ciudadFiltro ? `${ciudadFiltro}, ` : ''}{estadoFiltro}</h3>
+            <h3>
+              {`Vendedores en ${ciudadFiltro ? `${ciudadFiltro}, ` : ''}${estadoFiltro} (${listaMostrar.length}${hayMas ? '+' : ''})`}
+            </h3>
             <div className="vendedores-cerca-gps">
               {!usandoGps ? (
                 <button
@@ -252,50 +312,58 @@ export function VendedoresCercaDeMi() {
             <p className="vendedores-cerca-error">{error}</p>
           ) : listaMostrar.length === 0 ? (
             <p className="vendedores-cerca-sin-resultados">
-              No hay vendedores registrados en la zona seleccionada. Prueba otro estado o municipio.
+              No hay vendedores con ese filtro de zona. Prueba con otro estado o municipio.
             </p>
           ) : (
-            <div className="vendedores-cerca-grid">
-              {listaMostrar.map((t) => (
-                <article key={t.id} className="vendedores-cerca-card">
-                  <div className="vendedores-cerca-card-cuerpo">
-                    <div className="vendedores-cerca-card-info">
-                      <h4 className="vendedores-cerca-card-nombre">{nombreTienda(t)}</h4>
-                      <div className="vendedores-cerca-card-meta">
-                        {(t.ciudad || t.estado) && (
-                          <span className="vendedores-cerca-card-ubicacion">
-                            {[t.ciudad, t.estado].filter(Boolean).join(', ')}
-                          </span>
-                        )}
-                        {t.distanciaKm != null && (
-                          <span className="vendedores-cerca-card-distancia">{t.distanciaKm.toFixed(1)} km</span>
-                        )}
-                        {!t.distanciaKm && (
-                          <span className="vendedores-cerca-card-subtitulo">Vendedor de repuestos</span>
-                        )}
+            <>
+              <div className="vendedores-cerca-grid">
+                {listaMostrar.map((t) => (
+                  <article key={t.id} className="vendedores-cerca-card">
+                    <div className="vendedores-cerca-card-cuerpo">
+                      <div className="vendedores-cerca-card-info">
+                        <h4 className="vendedores-cerca-card-nombre">{nombreTienda(t)}</h4>
+                        <div className="vendedores-cerca-card-meta">
+                          {(t.ciudad || t.estado) && (
+                            <span className="vendedores-cerca-card-ubicacion">
+                              {[t.ciudad, t.estado].filter(Boolean).join(', ')}
+                            </span>
+                          )}
+                          {t.distanciaKm != null && (
+                            <span className="vendedores-cerca-card-distancia">{t.distanciaKm.toFixed(1)} km</span>
+                          )}
+                          {!t.distanciaKm && (
+                            <span className="vendedores-cerca-card-subtitulo">Vendedor de repuestos</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="vendedores-cerca-card-botones">
+                        <button
+                          type="button"
+                          className="vendedores-cerca-card-btn"
+                          onClick={() => abrirContactar(t)}
+                        >
+                          Contactar vendedor
+                        </button>
                       </div>
                     </div>
-                    <div className="vendedores-cerca-card-botones">
-                      <button
-                        type="button"
-                        className="vendedores-cerca-card-btn"
-                        onClick={() => abrirContactar(t)}
-                      >
-                        Contactar vendedor
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
+                  </article>
+                ))}
+              </div>
+              {hayMas && (
+                <div className="busqueda-repuestos-cargar-mas">
+                  <button
+                    type="button"
+                    className="busqueda-repuestos-btn busqueda-repuestos-btn--cargar-mas"
+                    onClick={() => void cargarMasTiendas()}
+                    disabled={cargandoMas || cargando}
+                  >
+                    {cargandoMas ? 'Cargando…' : 'Cargar más vendedores'}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
-      )}
-
-      {mensaje && (
-        <p className="vendedores-cerca-instruccion">
-          {mensaje}
-        </p>
       )}
 
       {contactarTienda && (

@@ -23,6 +23,29 @@
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
 }
 
+.mapa-btn-ubicacion {
+  margin-top: 0.5rem;
+  width: 100%;
+  border: 1px solid #dbe2ea;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #1e3a5f;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+}
+
+.mapa-btn-ubicacion:hover {
+  background: #eef2f7;
+}
+
+.mapa-gps-error {
+  margin: 0.4rem 0 0;
+  font-size: 0.75rem;
+  color: #c53030;
+}
+
 .mapa-input {
   width: 100%;
   padding: 0.6rem 1rem;
@@ -79,4 +102,96 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+.mapa-info-window {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  max-width: 210px;
+}
+
+.mapa-info-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mapa-info-dot-vendedor {
+  background: #111111;
+}
+
+.mapa-info-dot-taller {
+  background: #1e5bff;
+}
+
+.mapa-ficha {
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+  padding: 0.75rem 1rem 0.85rem;
+}
+
+.mapa-ficha-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  width: calc(100% - 24px);
+  max-width: 440px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.22);
+  z-index: 12;
+}
+
+.mapa-ficha-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.mapa-ficha-nombre {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #1f2937;
+}
+
+.mapa-chip {
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.mapa-chip-vendedor {
+  background: #111111;
+  color: #fff;
+}
+
+.mapa-chip-taller {
+  background: #1e5bff;
+  color: #fff;
+}
+
+.mapa-ficha-detalle {
+  margin: 0.3rem 0 0;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.mapa-ficha-distancia {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+@media (max-width: 560px) {
+  .mapa-ficha-overlay {
+    max-width: calc(100% - 14px);
+    bottom: 8px;
+  }
 }

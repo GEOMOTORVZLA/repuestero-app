@@ -1,8 +1,67 @@
 .mapa-vendedor-ubicacion {
   width: 100%;
   border-radius: 6px;
+}
+
+.mapa-vendedor-mapa-wrap {
+  position: relative;
+  border-radius: 8px;
   overflow: hidden;
   border: 1px solid #e2e8f0;
+}
+
+.mapa-vendedor-ficha {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  width: min(68%, 240px);
+  padding: 0.5rem 0.7rem 0.58rem;
+  background: #fff;
+  border: 1px solid #111111;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.22);
+  z-index: 3;
+}
+
+.mapa-vendedor-ficha-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mapa-vendedor-ficha-nombre {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: #1f2937;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+
+.mapa-vendedor-chip {
+  color: #fff;
+  font-size: 0.67rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+}
+
+.mapa-vendedor-ficha-chip-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.38rem;
+}
+
+.mapa-vendedor-ficha-distancia {
+  margin: 0.26rem 0 0;
+  color: #64748b;
+  font-size: 0.73rem;
+  line-height: 1.28;
+  text-align: center;
 }
 
 .mapa-vendedor-ruta-info {
@@ -31,4 +90,11 @@
   font-size: 0.8rem;
   line-height: 1.35;
   text-align: left;
+}
+
+@media (max-width: 520px) {
+  .mapa-vendedor-ficha {
+    width: min(78%, 220px);
+    bottom: 8px;
+  }
 }

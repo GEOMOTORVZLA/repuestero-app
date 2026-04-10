@@ -158,8 +158,73 @@
   font-weight: 500;
 }
 
+.registro-repuestos-fotos-peso-ayuda {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  color: #718096;
+  line-height: 1.35;
+}
+
 .registro-repuestos-fotos input[type="file"] {
   display: block;
   margin-bottom: 0.5rem;
   font-size: 0.8rem;
+}
+
+.registro-repuestos-fotos-extra-ayuda {
+  margin: 0 0 0.65rem;
+  font-size: 0.8rem;
+  color: #718096;
+  line-height: 1.35;
+}
+
+.registro-repuestos-fotos-extra-bloque {
+  margin-top: 0.35rem;
+}
+
+.registro-repuestos-fotos-extra-fila {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.registro-repuestos-fotos-extra-fila:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.registro-repuestos-fotos-extra-etiqueta {
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: #2d3748;
+}
+
+.registro-repuestos-fotos-extra-nombre {
+  font-size: 0.78rem;
+  color: #4a5568;
+  word-break: break-all;
+}
+
+.registro-repuestos-fotos-extra-vista {
+  min-height: 2.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.registro-repuestos-fotos-extra-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.registro-repuestos-fotos-extra-sin {
+  font-size: 0.78rem;
+  color: #a0aec0;
+  font-style: italic;
 }

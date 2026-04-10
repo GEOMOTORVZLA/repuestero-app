@@ -1,4 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import type { User } from '@supabase/supabase-js';
+import { CATEGORIAS_MOTO_MAS_BUSCADAS, imagenPinCategoriaMoto } from '../data/categoriasProductoMoto';
+import { getUserAvatarUrl } from '../utils/userAvatar';
+import type { VerticalVehiculo } from '../utils/verticalVehiculo';
+import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import { BusquedaRepuestos } from './BusquedaRepuestos';
 import { VendedoresCercaDeMi } from './VendedoresCercaDeMi';
 import { ListaRepuestosPorCategoria } from './ListaRepuestosPorCategoria';
@@ -13,12 +19,28 @@ import { BusquedaTalleres } from './BusquedaTalleres';
 import './Landing.css';
 
 interface LandingProps {
-  onMostrarLogin: () => void;
-  onMostrarCrearCuenta: () => void;
+  vertical?: VerticalVehiculo;
+  /** Sin sesión: acceso a login y registro */
+  onMostrarLogin?: () => void;
+  onMostrarCrearCuenta?: () => void;
+  /** Con sesión: página principal con acceso al panel */
+  sessionUser?: User | null;
+  onIrAPanel?: () => void;
 }
 
-// ?v=2 obliga al navegador a cargar la imagen nueva (sube v=3, v=4… al cambiar el banner)
-const HERO_IMAGENES = ['/header-banner.png?v=2', '/header-banner-2.png?v=2'];
+// ?v= obliga al navegador a refrescar caché al cambiar banners (sube el número cuando cambien)
+const HERO_IMAGENES_AUTO = [
+  '/header-banner.png?v=3',
+  '/header-banner-2.png?v=3',
+  '/header-banner-3.png?v=3',
+  '/header-banner-4.png?v=3',
+];
+/** Banners solo para /motos — archivos en `public/` (sube ?v= si cambias las imágenes). */
+const HERO_IMAGENES_MOTO = [
+  '/header-banner-moto.png?v=2',
+  '/header-banner-moto-2.png?v=2',
+  '/header-banner-moto-3.png?v=2',
+];
 
 const CATEGORIAS_REPUESTOS = [
   { nombre: 'Filtros' },
@@ -35,52 +57,177 @@ const CATEGORIAS_REPUESTOS = [
   { nombre: 'Accesorios' },
 ];
 
-export function Landing({ onMostrarLogin, onMostrarCrearCuenta }: LandingProps) {
+export function Landing({
+  vertical = VERTICAL_AUTO,
+  onMostrarLogin,
+  onMostrarCrearCuenta,
+  sessionUser = null,
+  onIrAPanel,
+}: LandingProps) {
+  const esMoto = vertical === 'moto';
+  const heroSlides = useMemo(() => (esMoto ? HERO_IMAGENES_MOTO : HERO_IMAGENES_AUTO), [esMoto]);
   const [slideIndex, setSlideIndex] = useState(0);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string | null>(null);
+  /** Pantalla dedicada de resultados (después de buscar desde la landing) */
+  const [vistaBusquedaRepuestos, setVistaBusquedaRepuestos] = useState<{ activa: boolean; texto: string }>({
+    activa: false,
+    texto: '',
+  });
+  const [busquedaRepuestosMountKey, setBusquedaRepuestosMountKey] = useState(0);
+
+  const abrirPaginaBusquedaRepuestos = (texto: string) => {
+    setBusquedaRepuestosMountKey((k) => k + 1);
+    setVistaBusquedaRepuestos({ activa: true, texto });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cerrarPaginaBusquedaRepuestos = () => {
+    setVistaBusquedaRepuestos({ activa: false, texto: '' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const avatarUrl = sessionUser ? getUserAvatarUrl(sessionUser) : null;
+  const [avatarConError, setAvatarConError] = useState(false);
 
   useEffect(() => {
+    setAvatarConError(false);
+  }, [avatarUrl, sessionUser?.id]);
+
+  useEffect(() => {
+    const n = heroSlides.length;
     const id = setInterval(() => {
-      setSlideIndex((i) => (i + 1) % HERO_IMAGENES.length);
+      setSlideIndex((i) => (i + 1) % n);
     }, 5000);
     return () => clearInterval(id);
-  }, []);
+  }, [heroSlides]);
+
+  useEffect(() => {
+    setSlideIndex(0);
+    setVistaBusquedaRepuestos({ activa: false, texto: '' });
+    setCategoriaSeleccionada(null);
+    setBusquedaRepuestosMountKey((k) => k + 1);
+  }, [vertical]);
 
   return (
-    <div className="landing">
+    <div className={`landing${esMoto ? ' landing--moto' : ''}`}>
       <header className="landing-header">
-        <h1 className="landing-logo">Geomotor</h1>
-        <div className="landing-header-botones">
-          <button type="button" className="landing-btn-login" onClick={onMostrarLogin}>
-            Iniciar sesión
-          </button>
-          <button type="button" className="landing-btn-crear" onClick={onMostrarCrearCuenta}>
-            Crear cuenta
-          </button>
+        <div className="landing-header-izq">
+          {vistaBusquedaRepuestos.activa && (
+            <button
+              type="button"
+              className="landing-volver-busqueda"
+              onClick={cerrarPaginaBusquedaRepuestos}
+            >
+              ← Inicio
+            </button>
+          )}
+          <h1 className="landing-logo">Geomotor</h1>
+          <nav className="landing-vertical-nav" aria-label="Tipo de vehículo">
+            <Link
+              to="/"
+              className={`landing-vertical-nav-link${!esMoto ? ' landing-vertical-nav-link--activo' : ''}`}
+            >
+              Autos
+            </Link>
+            <Link
+              to="/motos"
+              className={`landing-vertical-nav-link${esMoto ? ' landing-vertical-nav-link--activo' : ''}`}
+            >
+              Motos
+            </Link>
+          </nav>
+        </div>
+        <div className="landing-header-derecha">
+          {sessionUser ? (
+            <div className="landing-header-sesion" role="group" aria-label="Cuenta de usuario">
+              <button
+                type="button"
+                className="landing-mi-cuenta"
+                onClick={() => onIrAPanel?.()}
+                title="Ir al panel de control"
+              >
+                <span className="landing-avatar-wrap" aria-hidden>
+                  {avatarUrl && !avatarConError ? (
+                    <img
+                      src={avatarUrl}
+                      alt=""
+                      className="landing-avatar-img"
+                      onError={() => setAvatarConError(true)}
+                    />
+                  ) : (
+                    <span className="landing-avatar-icono" aria-hidden>
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <circle cx="12" cy="8" r="4.2" />
+                        <path d="M4.2 19.2c0-3.1 3.5-5.6 7.8-5.6s7.8 2.5 7.8 5.6" />
+                      </svg>
+                    </span>
+                  )}
+                </span>
+                <span className="landing-mi-cuenta-label">Mi cuenta</span>
+              </button>
+            </div>
+          ) : (
+            <div className="landing-header-botones">
+              <button type="button" className="landing-btn-login" onClick={() => onMostrarLogin?.()}>
+                Iniciar sesión
+              </button>
+              <button
+                type="button"
+                className="landing-btn-crear"
+                onClick={() => onMostrarCrearCuenta?.()}
+              >
+                Crear cuenta
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
-      <section className="landing-hero-banner">
-        <div className="landing-hero-slides">
-          {HERO_IMAGENES.map((src, i) => (
-            <div
-              key={src}
-              className={`landing-hero-slide ${i === slideIndex ? 'activo' : ''}`}
-              style={{ backgroundImage: `url(${src})` }}
-            />
-          ))}
-        </div>
-        <div className="landing-hero-overlay" />
-      </section>
+      {!vistaBusquedaRepuestos.activa && (
+        <section className="landing-hero-banner">
+          <div className="landing-hero-slides">
+            {heroSlides.map((src, i) => (
+              <div
+                key={src}
+                className={`landing-hero-slide ${i === slideIndex ? 'activo' : ''}`}
+                style={{ backgroundImage: `url(${src})` }}
+              />
+            ))}
+          </div>
+          <div className="landing-hero-overlay" />
+        </section>
+      )}
 
-      <BusquedaRepuestos />
+      {vistaBusquedaRepuestos.activa ? (
+        <BusquedaRepuestos
+          key={`${vertical}-${busquedaRepuestosMountKey}`}
+          vertical={vertical}
+          variant="full"
+          initialTexto={vistaBusquedaRepuestos.texto}
+          onVolver={cerrarPaginaBusquedaRepuestos}
+        />
+      ) : (
+        <BusquedaRepuestos
+          vertical={vertical}
+          variant="compact"
+          onIrAResultados={({ texto }) => abrirPaginaBusquedaRepuestos(texto)}
+        />
+      )}
 
-      <VendedoresCercaDeMi />
+      {!vistaBusquedaRepuestos.activa && <VendedoresCercaDeMi />}
 
+      {!vistaBusquedaRepuestos.activa && (
       <section className="landing-categorias">
-        <h2 className="landing-seccion-titulo">Categorías más buscadas</h2>
+        <h2 className="landing-seccion-titulo">
+          {esMoto ? 'CATEGORÍAS MÁS BUSCADAS EN MOTOS' : 'CATEGORIAS MAS BUSCADAS EN AUTOMOVILES'}
+        </h2>
         <div className="landing-categorias-grid">
-          {CATEGORIAS_REPUESTOS.map((cat) => (
+          {(esMoto
+            ? CATEGORIAS_MOTO_MAS_BUSCADAS.map((nombre) => ({ nombre }))
+            : CATEGORIAS_REPUESTOS
+          ).map((cat) => {
+            const srcPinMoto = esMoto ? imagenPinCategoriaMoto(cat.nombre) : undefined;
+            return (
             <button
               key={cat.nombre}
               type="button"
@@ -88,7 +235,17 @@ export function Landing({ onMostrarLogin, onMostrarCrearCuenta }: LandingProps) 
               onClick={() => setCategoriaSeleccionada(cat.nombre)}
             >
               <div className="landing-categoria-circulo">
-                {cat.nombre === 'Filtros' ? (
+                {esMoto ? (
+                  srcPinMoto ? (
+                    <img
+                      src={encodeURI(srcPinMoto)}
+                      alt={cat.nombre}
+                      className="landing-categoria-icono landing-categoria-icono-img landing-categoria-icono-moto"
+                    />
+                  ) : (
+                    <IconoCategoria nombre={cat.nombre} className="landing-categoria-icono" />
+                  )
+                ) : cat.nombre === 'Filtros' ? (
                   <img
                     src="/categoria-filtros.png"
                     alt="Filtros"
@@ -166,18 +323,22 @@ export function Landing({ onMostrarLogin, onMostrarCrearCuenta }: LandingProps) 
               </div>
               <span className="landing-categoria-nombre">{cat.nombre}</span>
             </button>
-          ))}
+            );
+          })}
         </div>
         {categoriaSeleccionada && (
           <ListaRepuestosPorCategoria
+            vertical={vertical}
             categoria={categoriaSeleccionada}
             onCerrar={() => setCategoriaSeleccionada(null)}
           />
         )}
       </section>
+      )}
 
+      {!vistaBusquedaRepuestos.activa && (
       <section className="landing-taller">
-        <h2 className="landing-seccion-titulo">Encuentra el taller que necesitas aquí</h2>
+        <h2 className="landing-seccion-titulo">ENCUENTRA EL TALLER QUE NECESITAS AQUI</h2>
         <div className="landing-taller-contenido">
           <img src="/taller.png" alt="Taller" className="landing-taller-imagen" />
           <div className="landing-taller-texto">
@@ -188,7 +349,9 @@ export function Landing({ onMostrarLogin, onMostrarCrearCuenta }: LandingProps) 
           </div>
         </div>
       </section>
+      )}
 
+      {!vistaBusquedaRepuestos.activa && (
       <section className="landing-beneficios">
         <h2 className="landing-seccion-titulo">¿Por qué Geomotor?</h2>
         <div className="landing-grid">
@@ -236,14 +399,18 @@ export function Landing({ onMostrarLogin, onMostrarCrearCuenta }: LandingProps) 
           </div>
         </div>
       </section>
+      )}
 
+      {!vistaBusquedaRepuestos.activa && (
       <section className="landing-empresa">
         <h2 className="landing-seccion-titulo">Sobre Geomotor</h2>
         <div className="landing-empresa-contenido">
           <div className="landing-empresa-col landing-empresa-info">
             <h3>Información sobre la empresa</h3>
             <p className="landing-empresa-descripcion">
-              Geomotor es la plataforma de localización de repuestos automotrices en Venezuela. Conectamos a vendedores, compradores y talleres para facilitar la búsqueda y venta de repuestos por marca, modelo y año.
+              {esMoto
+                ? 'Geomotor es la plataforma de localización de repuestos para motos en Venezuela. Conectamos a vendedores, compradores y talleres para facilitar la búsqueda y venta por marca, modelo y año.'
+                : 'Geomotor es la plataforma de localización de repuestos automotrices en Venezuela. Conectamos a vendedores, compradores y talleres para facilitar la búsqueda y venta de repuestos por marca, modelo y año.'}
             </p>
           </div>
           <div className="landing-empresa-col landing-empresa-contacto">
@@ -283,12 +450,23 @@ export function Landing({ onMostrarLogin, onMostrarCrearCuenta }: LandingProps) 
           </div>
         </div>
       </section>
+      )}
 
       <footer className="landing-footer">
         <p>© Geomotor</p>
-        <button type="button" className="landing-footer-link" onClick={onMostrarLogin}>
-          Iniciar sesión
-        </button>
+        {vistaBusquedaRepuestos.activa ? (
+          <button type="button" className="landing-footer-link" onClick={cerrarPaginaBusquedaRepuestos}>
+            Volver al inicio
+          </button>
+        ) : sessionUser ? (
+          <button type="button" className="landing-footer-link" onClick={() => onIrAPanel?.()}>
+            Mi cuenta — Panel de control
+          </button>
+        ) : (
+          <button type="button" className="landing-footer-link" onClick={() => onMostrarLogin?.()}>
+            Iniciar sesión
+          </button>
+        )}
       </footer>
     </div>
   );

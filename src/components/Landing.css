@@ -17,6 +17,32 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
+.landing-header-izq {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.landing-volver-busqueda {
+  flex-shrink: 0;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1e3a5f;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.landing-volver-busqueda:hover {
+  background: #f1f5f9;
+  border-color: #1e3a5f;
+}
+
 .landing-logo {
   margin: 0;
   font-size: 1.5rem;
@@ -25,10 +51,140 @@
   letter-spacing: -0.02em;
 }
 
+.landing-vertical-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.35rem;
+  padding: 0.2rem;
+  background: #f1f5f9;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+}
+
+.landing-vertical-nav-link {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #64748b;
+  text-decoration: none;
+  border-radius: 999px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.landing-vertical-nav-link:hover {
+  color: #1e3a5f;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.landing-vertical-nav-link--activo {
+  color: #fff;
+  background: #1e3a5f;
+}
+
+.landing-vertical-nav-link--activo:hover {
+  color: #fff;
+  background: #163a66;
+}
+
+.landing-header-derecha {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  max-width: min(100%, 340px);
+}
+
 .landing-header-botones {
   display: flex;
   gap: 0.75rem;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Usuario con sesión: mismo bloque que login/crear cuenta */
+.landing-header-sesion {
+  display: block;
+}
+
+.landing-mi-cuenta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.7rem 0.35rem 0.35rem;
+  border: 1px solid #1e3a5f;
+  border-radius: 999px;
+  background: #fff;
+  color: #1e3a5f;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+  max-width: 100%;
+}
+
+.landing-mi-cuenta:hover {
+  background: #1e3a5f;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(30, 58, 95, 0.2);
+}
+
+.landing-mi-cuenta:hover .landing-avatar-inicial,
+.landing-mi-cuenta:hover .landing-avatar-icono {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.landing-avatar-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #e8ecf1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(30, 58, 95, 0.15);
+}
+
+.landing-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.landing-avatar-inicial {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  color: #1e3a5f;
+}
+
+.landing-avatar-icono {
+  width: 100%;
+  height: 100%;
+  color: #1e3a5f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.landing-avatar-icono svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.landing-mi-cuenta-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .landing-btn-login,
@@ -53,7 +209,8 @@
 .landing-hero-banner {
   position: relative;
   width: 100%;
-  height: 420px;
+  /* +15% adicional sobre 389px */
+  height: 447px;
   overflow: hidden;
 }
 
@@ -82,6 +239,62 @@
   inset: 0;
   background: transparent;
   z-index: 2;
+}
+
+/* Vertical moto: acento cálido y overlay sobre el mismo carrusel de banners */
+.landing--moto {
+  background: #f8f6f3;
+}
+
+.landing--moto .landing-header {
+  border-bottom: 1px solid rgba(180, 83, 9, 0.12);
+}
+
+.landing--moto .landing-logo {
+  color: #9a3412;
+}
+
+.landing--moto .landing-vertical-nav {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.landing--moto .landing-vertical-nav-link--activo {
+  background: #c2410c;
+}
+
+.landing--moto .landing-vertical-nav-link--activo:hover {
+  background: #9a3412;
+}
+
+.landing--moto .landing-hero-overlay {
+  background: linear-gradient(
+    105deg,
+    rgba(124, 45, 18, 0.35) 0%,
+    rgba(15, 23, 42, 0.15) 45%,
+    rgba(234, 88, 12, 0.2) 100%
+  );
+}
+
+.landing--moto .landing-btn-login,
+.landing--moto .landing-btn-crear {
+  border-color: #c2410c;
+  color: #9a3412;
+}
+
+.landing--moto .landing-btn-login:hover,
+.landing--moto .landing-btn-crear:hover {
+  background: #c2410c;
+  color: #fff;
+}
+
+.landing--moto .landing-mi-cuenta {
+  border-color: #c2410c;
+  color: #9a3412;
+}
+
+.landing--moto .landing-seccion-titulo {
+  color: #7c2d12;
 }
 
 .landing-hero-contenido {
@@ -148,7 +361,8 @@
 
 @media (max-width: 600px) {
   .landing-hero-banner {
-    height: 380px;
+    /* +15% adicional sobre 352px */
+    height: 405px;
   }
   .landing-hero-titulo-banner {
     font-size: 1.5rem;

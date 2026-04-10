@@ -123,6 +123,23 @@ export function IconoEmbrague({ className }: { className?: string }) {
   );
 }
 
+/** Pieza genérica (categorías moto u otras sin icono dedicado) */
+export function IconoRepuestoGenerico({ className }: { className?: string }) {
+  return (
+    <svg {...baseProps} className={className}>
+      <path
+        d="M20 40c0-8 6-14 14-14h4c2 0 4-1.5 4-3.5S40 19 38 19h-2"
+        fill="none"
+        stroke="white"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <circle cx="28" cy="22" r="5" fill="none" stroke="white" strokeWidth="2.5" />
+      <path d="M34 26l10 10M40 20l10 10" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 const iconosMap: Record<string, ComponentType<{ className?: string }>> = {
   Filtros: IconoFiltro,
   Frenos: IconoFrenos,
@@ -134,10 +151,13 @@ const iconosMap: Record<string, ComponentType<{ className?: string }>> = {
   'Aceites y lubricantes': IconoAceite,
   'Luces y faros': IconoFaros,
   Embrague: IconoEmbrague,
+  Transmisión: IconoCorreas,
+  Motor: IconoBujias,
+  'Cauchos y tripas': IconoCaucho,
+  Iluminación: IconoFaros,
 };
 
 export function IconoCategoria({ nombre, className }: { nombre: string; className?: string }) {
-  const Icon = iconosMap[nombre];
-  if (!Icon) return null;
+  const Icon = iconosMap[nombre] ?? IconoRepuestoGenerico;
   return <Icon className={className} />;
 }

@@ -1,0 +1,245 @@
+.perfil-taller {
+  padding: 0;
+}
+
+.perfil-taller-titulo {
+  margin: 0 0 0.35rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.perfil-taller-subtitulo {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: #718096;
+  line-height: 1.4;
+}
+
+.perfil-taller-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.perfil-taller-campo label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.perfil-taller-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  color: #718096;
+}
+
+.perfil-taller-check-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.perfil-taller-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: #4a5568;
+  cursor: pointer;
+}
+
+.perfil-taller-check input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: #1e3a5f;
+}
+
+.perfil-taller-mensaje {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.perfil-taller-mensaje--muted {
+  color: #718096;
+}
+
+.perfil-taller-mensaje.ok {
+  color: #276749;
+}
+
+.perfil-taller-mensaje.error {
+  color: #c53030;
+}
+
+.perfil-taller-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.perfil-taller-btn {
+  padding: 0.55rem 1.1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fff;
+  background: #1e3a5f;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.perfil-taller-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.perfil-taller-btn-sec {
+  padding: 0.55rem 1.1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #2c5282;
+  background: #fff;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.perfil-taller-btn-sec:hover:not(:disabled) {
+  background: #edf2f7;
+}
+
+.perfil-taller-moderacion {
+  margin: 0 0 1.25rem;
+  padding: 0.9rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.perfil-taller-moderacion strong {
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.perfil-taller-moderacion p {
+  margin: 0;
+}
+
+.perfil-taller-moderacion--pendiente {
+  background: #fffbeb;
+  border-color: #ecc94b;
+  color: #744210;
+}
+
+.perfil-taller-moderacion--ok {
+  background: #f0fff4;
+  border-color: #9ae6b4;
+  color: #22543d;
+}
+
+.perfil-taller-moderacion--rechazado {
+  background: #fff5f5;
+  border-color: #feb2b2;
+  color: #742a2a;
+}
+
+.perfil-taller-seccion {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.perfil-taller-seccion:last-of-type {
+  border-bottom: none;
+}
+
+.perfil-taller-seccion--lectura {
+  padding-bottom: 0;
+}
+
+.perfil-taller-seccion-titulo {
+  margin: 0 0 0.65rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #2d3748;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.perfil-taller-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.85rem 1rem;
+}
+
+.perfil-taller-campo-full {
+  grid-column: 1 / -1;
+}
+
+.perfil-taller-campo input:not([type='checkbox']):not([type='radio']),
+.perfil-taller-campo select,
+.perfil-taller-textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.9rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.perfil-taller-input-sololectura {
+  background: #f7fafc !important;
+  color: #4a5568;
+}
+
+.perfil-taller-campo input:disabled,
+.perfil-taller-campo select:disabled,
+.perfil-taller-textarea:disabled {
+  background: #f7fafc;
+  color: #4a5568;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.perfil-taller-textarea {
+  min-height: 5rem;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.perfil-taller-valor-solo {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #2d3748;
+  padding: 0.35rem 0;
+}
+
+.perfil-taller-radio-fila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+}
+
+.perfil-taller-dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 1.25rem;
+  font-size: 0.9rem;
+}
+
+.perfil-taller-dl dt {
+  margin: 0;
+  font-weight: 600;
+  color: #718096;
+}
+
+.perfil-taller-dl dd {
+  margin: 0;
+  color: #2d3748;
+}

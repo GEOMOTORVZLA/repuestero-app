@@ -39,11 +39,17 @@
     color: #4a5568;
   }
   
-  .perfil-usuario-campo input {
+  .perfil-usuario-campo input,
+  .perfil-usuario-campo select {
     padding: 0.5rem 0.7rem;
     border-radius: 6px;
     border: 1px solid #e2e8f0;
     font-size: 0.9rem;
+  }
+  
+  .perfil-usuario-campo select:disabled {
+    background: #f7fafc;
+    color: #718096;
   }
   
   .perfil-usuario-campo input:disabled {

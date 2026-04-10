@@ -1,0 +1,18 @@
+/* Mismo aviso en vendedores cercanos y búsqueda de talleres: solo texto, sin caja */
+.aviso-seleccionar-estado {
+  margin: 1.5rem 0 0;
+  padding: 0;
+  font-size: 0.95rem;
+  color: #64748b;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* Dentro de la landing (columna junto a la imagen) el <p> debe ocupar todo el ancho para que el texto se centre bien */
+.busqueda-talleres .aviso-seleccionar-estado {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+}

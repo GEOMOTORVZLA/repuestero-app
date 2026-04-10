@@ -1,8 +1,22 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { MARCAS_VEHICULOS } from '../data/marcasVehiculos';
 import { MARCAS_MODELOS, ANOS } from '../data/marcasModelos';
+import { MARCAS_MOTOS, getModelosPorMarcaMoto } from '../data/marcasMotos';
 import { CATEGORIAS_PRODUCTO } from '../data/categoriasProducto';
+import { CATEGORIAS_PRODUCTO_MOTO } from '../data/categoriasProductoMoto';
+import type { VerticalVehiculo } from '../utils/verticalVehiculo';
+import { VERTICAL_MOTO } from '../utils/verticalVehiculo';
+import {
+  MAX_BYTES_FOTO_PRODUCTO,
+  MAX_MB_FOTO_PRODUCTO,
+  urlImagenProductoVariante,
+} from '../utils/imagenProducto';
+import {
+  MAX_FOTOS_EXTRA,
+  normalizarUrlsACuatroSlots,
+  slotsArchivosExtraVacios,
+} from '../utils/productoImagenesExtra';
 import './RegistroRepuestos.css';
 
 export interface ProductoEditable {
@@ -17,7 +31,9 @@ export interface ProductoEditable {
   precio_usd: number;
   moneda: string | null;
   imagen_url?: string | null;
-  imagenes_extra?: string[] | null;
+  imagenes_extra?: (string | null)[] | string[] | null;
+  /** Si no viene de la BD, se asume automóvil */
+  vertical?: VerticalVehiculo | null;
 }
 
 interface EditarProductoProps {
@@ -27,6 +43,10 @@ interface EditarProductoProps {
 }
 
 export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoProps) {
+  const verticalProd = producto.vertical ?? 'auto';
+  const esMoto = verticalProd === VERTICAL_MOTO;
+  const categoriasOpciones = esMoto ? CATEGORIAS_PRODUCTO_MOTO : CATEGORIAS_PRODUCTO;
+  const marcasLista = esMoto ? [...MARCAS_MOTOS] : [...MARCAS_VEHICULOS];
   const [nombre, setNombre] = useState(producto.nombre);
   const [categoria, setCategoria] = useState(producto.categoria ?? '');
   const [marca, setMarca] = useState(producto.marca ?? '');
@@ -39,9 +59,20 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
   const [estado, setEstado] = useState<'idle' | 'guardando' | 'ok' | 'error'>('idle');
   const [mensaje, setMensaje] = useState('');
   const [nuevaFotoPrincipal, setNuevaFotoPrincipal] = useState<File | null>(null);
-  const [nuevasFotosExtra, setNuevasFotosExtra] = useState<File[]>([]);
+  const [nuevasFotosExtraSlots, setNuevasFotosExtraSlots] = useState<(File | null)[]>(() =>
+    slotsArchivosExtraVacios()
+  );
 
-  const modelosOpciones = marca && MARCAS_MODELOS[marca] ? MARCAS_MODELOS[marca] : [];
+  const modelosOpciones = marca
+    ? esMoto
+      ? getModelosPorMarcaMoto(marca)
+      : MARCAS_MODELOS[marca] ?? []
+    : [];
+
+  const urlsExtrasActuales = useMemo(
+    () => normalizarUrlsACuatroSlots(producto.imagenes_extra as string[] | null | undefined),
+    [producto.id, producto.imagenes_extra]
+  );
 
   const guardar = async () => {
     if (!nombre.trim()) {
@@ -56,7 +87,7 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
     }
     if (!marca) {
       setEstado('error');
-      setMensaje('Selecciona la marca del vehículo.');
+      setMensaje(esMoto ? 'Selecciona la marca de la moto.' : 'Selecciona la marca del vehículo.');
       return;
     }
     const precioNum = parseFloat(precio.trim().replace(',', '.'));
@@ -89,8 +120,6 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
 
     // Subir nuevas imágenes si el usuario seleccionó
     let imagenPrincipalUrl = producto.imagen_url ?? null;
-    let extras: string[] | null = (producto.imagenes_extra ?? null) as string[] | null;
-
     const bucket = supabase.storage.from('productos');
     const MAX_MB = 2;
 
@@ -114,26 +143,35 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       imagenPrincipalUrl = principalPublic.publicUrl;
     }
 
-    if (nuevasFotosExtra.length > 0) {
-      const extraUrls: string[] = [];
-      const archivosExtra = nuevasFotosExtra.slice(0, 4);
-      for (let i = 0; i < archivosExtra.length; i += 1) {
-        const file = archivosExtra[i];
+    const hayNuevasExtras = nuevasFotosExtraSlots.some((f) => f != null);
+    let slotsUrls = normalizarUrlsACuatroSlots(producto.imagenes_extra as string[] | null | undefined);
+
+    if (hayNuevasExtras) {
+      for (let i = 0; i < MAX_FOTOS_EXTRA; i += 1) {
+        const file = nuevasFotosExtraSlots[i];
+        if (!file) continue;
+        if (file.size > MAX_BYTES_FOTO_PRODUCTO) {
+          setEstado('error');
+          setMensaje(
+            `La foto adicional ${i + 1} no debe superar ${MAX_MB_FOTO_PRODUCTO} MB.`
+          );
+          return;
+        }
         const ext = file.name.split('.').pop() || 'jpg';
         const extraPath = `${producto.id}/extra-${i + 1}.${ext}`;
         const { error: upExtraError } = await bucket.upload(extraPath, file, { upsert: true });
         if (!upExtraError) {
           const { data: extraPublic } = bucket.getPublicUrl(extraPath);
-          extraUrls.push(extraPublic.publicUrl);
+          slotsUrls[i] = extraPublic.publicUrl;
         }
       }
-      extras = extraUrls.length ? extraUrls : null;
+      const tieneAlgunaExtra = slotsUrls.some((s) => s != null && String(s).trim() !== '');
+      payload.imagenes_extra = tieneAlgunaExtra ? slotsUrls : null;
     }
 
     if (imagenPrincipalUrl !== null) {
       payload.imagen_url = imagenPrincipalUrl;
     }
-    payload.imagenes_extra = extras;
 
     const { error } = await supabase.from('productos').update(payload).eq('id', producto.id);
 
@@ -146,8 +184,13 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
     setEstado('ok');
     setMensaje('Repuesto actualizado correctamente.');
 
+    const imagenesExtraGuardadas = hayNuevasExtras
+      ? ((payload.imagenes_extra as (string | null)[] | null) ?? producto.imagenes_extra ?? null)
+      : producto.imagenes_extra ?? null;
+
     onSaved({
       ...producto,
+      vertical: verticalProd,
       nombre: payload.nombre as string,
       categoria: (payload.categoria as string | null) ?? null,
       marca: (payload.marca as string | null) ?? null,
@@ -157,19 +200,21 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       comentarios: (payload.comentarios as string | null) ?? null,
       precio_usd: precioNum,
       moneda,
+      imagen_url: imagenPrincipalUrl,
+      imagenes_extra: imagenesExtraGuardadas,
     });
   };
 
   return (
     <div className="registro-repuestos">
-      <h2>Editar repuesto</h2>
+      <h2>{esMoto ? 'Editar repuesto (moto)' : 'Editar repuesto'}</h2>
       <select
         value={categoria}
         onChange={(e) => setCategoria(e.target.value)}
         disabled={estado === 'guardando'}
       >
         <option value="">Categoría del producto</option>
-        {CATEGORIAS_PRODUCTO.map((c) => (
+        {categoriasOpciones.map((c) => (
           <option key={c} value={c}>
             {c}
           </option>
@@ -190,9 +235,11 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
           setModelo('');
         }}
         disabled={estado === 'guardando'}
+        translate="no"
+        className="notranslate"
       >
-        <option value="">Marca del vehículo</option>
-        {MARCAS_VEHICULOS.map((m) => (
+        <option value="">{esMoto ? 'Marca de la moto' : 'Marca del vehículo'}</option>
+        {marcasLista.map((m) => (
           <option key={m} value={m}>
             {m}
           </option>
@@ -268,6 +315,9 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       </div>
       <div className="registro-repuestos-fotos">
         <label className="registro-repuestos-fotos-label">Subir foto (opcional)</label>
+        <p className="registro-repuestos-fotos-peso-ayuda">
+          Máximo {MAX_MB_FOTO_PRODUCTO} MB por imagen (JPG, PNG, WebP, etc.).
+        </p>
         <input
           type="file"
           accept="image/*"
@@ -277,19 +327,57 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
             setNuevaFotoPrincipal(file);
           }}
         />
-        <label className="registro-repuestos-fotos-label">
-          Subir fotos (hasta 4, opcionales)
-        </label>
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          disabled={estado === 'guardando'}
-          onChange={(e) => {
-            const files = Array.from(e.target.files ?? []).slice(0, 4);
-            setNuevasFotosExtra(files);
-          }}
-        />
+        <span className="registro-repuestos-fotos-label">
+          Fotos adicionales (opcionales, hasta {MAX_FOTOS_EXTRA})
+        </span>
+        <p className="registro-repuestos-fotos-extra-ayuda">
+          Cada ranura es independiente: elige una imagen por botón para reemplazar solo esa foto.
+        </p>
+        <div className="registro-repuestos-fotos-extra-bloque">
+          {Array.from({ length: MAX_FOTOS_EXTRA }, (_, idx) => {
+            const urlActual = urlsExtrasActuales[idx];
+            const archivoNuevo = nuevasFotosExtraSlots[idx];
+            return (
+              <div key={idx} className="registro-repuestos-fotos-extra-fila">
+                <label className="registro-repuestos-fotos-extra-etiqueta" htmlFor={`foto-extra-edit-${idx}`}>
+                  Foto adicional {idx + 1}
+                </label>
+                <div className="registro-repuestos-fotos-extra-vista">
+                  {archivoNuevo ? (
+                    <span className="registro-repuestos-fotos-extra-nombre">Nueva: {archivoNuevo.name}</span>
+                  ) : urlActual ? (
+                    <img
+                      className="registro-repuestos-fotos-extra-thumb"
+                      src={urlImagenProductoVariante(urlActual, 'miniatura') ?? urlActual}
+                      alt=""
+                      width={160}
+                      height={160}
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  ) : (
+                    <span className="registro-repuestos-fotos-extra-sin">Sin imagen en esta ranura</span>
+                  )}
+                </div>
+                <input
+                  id={`foto-extra-edit-${idx}`}
+                  type="file"
+                  accept="image/*"
+                  disabled={estado === 'guardando'}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    setNuevasFotosExtraSlots((prev) => {
+                      const next = [...prev];
+                      next[idx] = file;
+                      return next;
+                    });
+                    e.target.value = '';
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
       <div className="registro-repuestos-acciones">
         <button

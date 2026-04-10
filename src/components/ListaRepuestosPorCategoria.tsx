@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { CATEGORIAS_KEYWORDS } from '../data/categoriasKeywords';
+import { useAuth } from '../contexts/AuthContext';
+import {
+  registrarContactoProducto,
+  usuarioDebeRegistrarHistorialContactos,
+} from '../services/historialContactosProducto';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
+import { TarjetaProductoBusqueda } from './TarjetaProductoBusqueda';
+import type { VerticalVehiculo } from '../utils/verticalVehiculo';
+import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import './BusquedaRepuestos.css';
 
 interface TiendaContacto {
@@ -26,36 +33,38 @@ interface ProductoResultado {
   modelo: string | null;
   anio: number | null;
   imagen_url: string | null;
+  imagenes_extra: string[] | null;
   tiendas: TiendaContacto | null;
 }
 
 interface ListaRepuestosPorCategoriaProps {
   categoria: string;
+  vertical?: VerticalVehiculo;
   onCerrar: () => void;
 }
 
-function buildOrFilter(keywords: string[]): string {
-  const conditions: string[] = [];
-  for (const kw of keywords) {
-    const pattern = `%${kw}%`;
-    conditions.push(`nombre.ilike.${pattern}`);
-    conditions.push(`descripcion.ilike.${pattern}`);
-  }
-  return conditions.join(',');
-}
+const PAGE_SIZE_LISTA_CATEGORIA = 24;
 
-export function ListaRepuestosPorCategoria({ categoria, onCerrar }: ListaRepuestosPorCategoriaProps) {
+export function ListaRepuestosPorCategoria({
+  categoria,
+  vertical = VERTICAL_AUTO,
+  onCerrar,
+}: ListaRepuestosPorCategoriaProps) {
+  const { user } = useAuth();
   const [resultados, setResultados] = useState<ProductoResultado[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [hayMas, setHayMas] = useState(false);
+  const [cargandoMas, setCargandoMas] = useState(false);
+  const [productoExpandidoId, setProductoExpandidoId] = useState<string | null>(null);
   const [contactarProducto, setContactarProducto] = useState<ProductoResultado | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [mostrarRutaEnModal, setMostrarRutaEnModal] = useState(false);
 
   useEffect(() => {
-    const keywords = CATEGORIAS_KEYWORDS[categoria] ?? [categoria.toLowerCase()];
-    const buscar = async () => {
+    const primeraPagina = async () => {
       setCargando(true);
-      const orFilter = buildOrFilter(keywords);
+      setResultados([]);
+      setHayMas(false);
       const { data, error } = await supabase
         .from('productos')
         .select(`
@@ -70,22 +79,70 @@ export function ListaRepuestosPorCategoria({ categoria, onCerrar }: ListaRepuest
           modelo,
           anio,
           imagen_url,
+          imagenes_extra,
           tiendas ( nombre_comercial, nombre, rif, telefono, direccion, latitud, longitud, metodos_pago )
         `)
         .eq('activo', true)
-        .or(orFilter)
-        .order('nombre');
+        .eq('aprobacion_publica', 'aprobado')
+        .eq('vertical', vertical)
+        .eq('categoria', categoria)
+        .order('nombre')
+        .order('id')
+        .range(0, PAGE_SIZE_LISTA_CATEGORIA);
 
       if (error) {
         setResultados([]);
+        setHayMas(false);
       } else {
-        setResultados((data as unknown as ProductoResultado[]) ?? []);
+        const filas = (data as unknown as ProductoResultado[]) ?? [];
+        const mas = filas.length > PAGE_SIZE_LISTA_CATEGORIA;
+        setResultados(mas ? filas.slice(0, PAGE_SIZE_LISTA_CATEGORIA) : filas);
+        setHayMas(mas);
       }
       setCargando(false);
     };
 
-    buscar();
-  }, [categoria]);
+    void primeraPagina();
+  }, [categoria, vertical]);
+
+  const cargarMas = async () => {
+    if (!hayMas || cargandoMas || cargando) return;
+    setCargandoMas(true);
+    const offset = resultados.length;
+    const { data, error } = await supabase
+      .from('productos')
+      .select(`
+        id,
+        activo,
+        nombre,
+        descripcion,
+        comentarios,
+        precio_usd,
+        moneda,
+        marca,
+        modelo,
+        anio,
+        imagen_url,
+        imagenes_extra,
+        tiendas ( nombre_comercial, nombre, rif, telefono, direccion, latitud, longitud, metodos_pago )
+      `)
+      .eq('activo', true)
+      .eq('aprobacion_publica', 'aprobado')
+      .eq('vertical', vertical)
+      .eq('categoria', categoria)
+      .order('nombre')
+      .order('id')
+      .range(offset, offset + PAGE_SIZE_LISTA_CATEGORIA);
+
+    if (!error) {
+      const filas = (data as unknown as ProductoResultado[]) ?? [];
+      const mas = filas.length > PAGE_SIZE_LISTA_CATEGORIA;
+      const chunk = mas ? filas.slice(0, PAGE_SIZE_LISTA_CATEGORIA) : filas;
+      setResultados((prev) => [...prev, ...chunk]);
+      setHayMas(mas);
+    }
+    setCargandoMas(false);
+  };
 
   const nombreTienda = (p: ProductoResultado) => {
     const t = p.tiendas;
@@ -122,7 +179,8 @@ export function ListaRepuestosPorCategoria({ categoria, onCerrar }: ListaRepuest
     <div className="lista-repuestos-categoria">
       <div className="lista-repuestos-categoria-header">
         <h3 className="busqueda-repuestos-resultados-titulo">
-          Repuestos en {categoria} ({resultados.length})
+          Repuestos en {categoria} ({resultados.length}
+          {hayMas && !cargando ? ', hay más en el catálogo' : ''})
         </h3>
         <button
           type="button"
@@ -140,47 +198,52 @@ export function ListaRepuestosPorCategoria({ categoria, onCerrar }: ListaRepuest
           No hay repuestos registrados en esta categoría por el momento.
         </p>
       ) : (
-        <div className="busqueda-repuestos-grid">
-          {resultados.map((p) => (
-            <article key={p.id} className="busqueda-repuestos-card">
-              <div className="busqueda-repuestos-card-foto">
-                {p.imagen_url ? (
-                  <img src={p.imagen_url} alt="" />
-                ) : (
-                  <div className="busqueda-repuestos-card-foto-placeholder">Sin foto</div>
-                )}
-              </div>
-              <div className="busqueda-repuestos-card-cuerpo">
-                <div className="busqueda-repuestos-card-info">
-                  <h4 className="busqueda-repuestos-card-nombre">{p.nombre}</h4>
-                  {(p.marca || p.modelo || p.anio) && (
-                    <p className="busqueda-repuestos-card-vehiculo">
-                      {[p.marca, p.modelo, p.anio].filter(Boolean).join(' · ')}
-                    </p>
-                  )}
-                  {p.descripcion && (
-                    <p className="busqueda-repuestos-card-desc">{p.descripcion}</p>
-                  )}
-                  <p className="busqueda-repuestos-card-precio">
-                    {p.moneda === 'BS' ? 'Bs' : 'USD'} {Number(p.precio_usd).toLocaleString()}
-                  </p>
-                </div>
-                <div className="busqueda-repuestos-card-botones">
-                  <button
-                    type="button"
-                    className="busqueda-repuestos-card-btn"
-                  onClick={() => {
-                    setContactarProducto(p);
-                    setMostrarRutaEnModal(false);
-                  }}
-                  >
-                    Contactar vendedor
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
+        <>
+          <div className="busqueda-repuestos-grid">
+            {resultados.map((p) => (
+              <TarjetaProductoBusqueda
+                key={p.id}
+                producto={p}
+                expandida={productoExpandidoId === p.id}
+                onExpand={() => setProductoExpandidoId(p.id)}
+                onContraer={() => setProductoExpandidoId(null)}
+                onContactar={(prod) => {
+                  setContactarProducto(prod);
+                  setMostrarRutaEnModal(false);
+                  if (user) {
+                    void (async () => {
+                      const debe = await usuarioDebeRegistrarHistorialContactos(supabase, user);
+                      if (!debe) return;
+                      await registrarContactoProducto(
+                        supabase,
+                        user.id,
+                        {
+                          id: prod.id,
+                          nombre: prod.nombre,
+                          precio_usd: prod.precio_usd,
+                          moneda: prod.moneda,
+                        },
+                        nombreTienda(prod)
+                      );
+                    })();
+                  }
+                }}
+              />
+            ))}
+          </div>
+          {hayMas && (
+            <div className="busqueda-repuestos-cargar-mas">
+              <button
+                type="button"
+                className="busqueda-repuestos-btn busqueda-repuestos-btn--cargar-mas"
+                onClick={() => void cargarMas()}
+                disabled={cargandoMas || cargando}
+              >
+                {cargandoMas ? 'Cargando…' : 'Cargar más repuestos'}
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {contactarProducto && (
@@ -205,7 +268,9 @@ export function ListaRepuestosPorCategoria({ categoria, onCerrar }: ListaRepuest
               <div className="busqueda-repuestos-modal-datos">
                 <p className="busqueda-repuestos-modal-linea">
                   <span className="busqueda-repuestos-modal-etiqueta">Nombre comercial</span>{' '}
-                  {contactarProducto.tiendas.nombre_comercial || contactarProducto.tiendas.nombre || '—'}
+                  <span className="busqueda-repuestos-modal-valor-negrita">
+                    {contactarProducto.tiendas.nombre_comercial || contactarProducto.tiendas.nombre || '—'}
+                  </span>
                 </p>
                 {contactarProducto.tiendas.rif != null && contactarProducto.tiendas.rif !== '' && (
                   <p className="busqueda-repuestos-modal-linea">
@@ -243,12 +308,9 @@ export function ListaRepuestosPorCategoria({ categoria, onCerrar }: ListaRepuest
             <div className="busqueda-repuestos-modal-producto-box">
               <h4 className="busqueda-repuestos-modal-titulo-seccion">Producto seleccionado</h4>
               <p className="busqueda-repuestos-modal-repuesto">{contactarProducto.nombre}</p>
-              {contactarProducto.descripcion && (
-                <p className="busqueda-repuestos-modal-descripcion">{contactarProducto.descripcion}</p>
-              )}
-              {contactarProducto.comentarios && (
+              {((contactarProducto.comentarios ?? contactarProducto.descripcion) || '') && (
                 <p className="busqueda-repuestos-modal-comentarios">
-                  {contactarProducto.comentarios}
+                  {contactarProducto.comentarios ?? contactarProducto.descripcion}
                 </p>
               )}
             </div>

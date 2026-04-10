@@ -6,11 +6,14 @@ import {
   CODIGOS_AREA_FIJO,
   ESPECIALIDADES_TALLER,
 } from '../data/registroVenezuela';
-import { MARCAS_MODELOS } from '../data/marcasModelos';
+import { MARCAS_VEHICULOS } from '../data/marcasVehiculos';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import type { TipoRegistro } from './SelectorTipoRegistro';
 
-const MARCAS_TALLER = ['Multimarca', ...Object.keys(MARCAS_MODELOS).sort()];
+const MARCAS_TALLER = [
+  'Multimarca',
+  ...MARCAS_VEHICULOS.filter((m) => m !== 'Otra' && m !== 'Aplica varias marcas'),
+];
 import './FormRegistro.css';
 
 const METODOS_PAGO = ['Efectivo', 'Pagomovil', 'Transferencia', 'Zelle', 'Binance', 'Cashea'] as const;
@@ -25,14 +28,14 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
   const [tipoPersona, setTipoPersona] = useState<'natural' | 'juridico'>('natural');
   const [nombreJuridico, setNombreJuridico] = useState('');
   const [nombreComercial, setNombreComercial] = useState('');
-  const [codigoTel, setCodigoTel] = useState(CODIGOS_TELEFONO[0].codigo);
+  const [codigoTel, setCodigoTel] = useState<string>(CODIGOS_TELEFONO[0].codigo);
   const [restoTel, setRestoTel] = useState('');
   const [esFijo, setEsFijo] = useState(false);
   const [tipoRif, setTipoRif] = useState<string>(TIPOS_RIF[0]);
   const [numeroRif, setNumeroRif] = useState('');
   const [email, setEmail] = useState('');
   const [ramoEspecifico, setRamoEspecifico] = useState('');
-  const [especialidadTaller, setEspecialidadTaller] = useState(ESPECIALIDADES_TALLER[0]);
+  const [especialidadesTaller, setEspecialidadesTaller] = useState<string[]>([]);
   const [marcaTaller, setMarcaTaller] = useState(MARCAS_TALLER[0]);
   const [acercaDeTaller, setAcercaDeTaller] = useState('');
   const [estadoTaller, setEstadoTaller] = useState('');
@@ -94,6 +97,10 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
       setMensaje('Indica tu correo electrónico.');
       return;
     }
+    if (tipo === 'taller' && especialidadesTaller.length === 0) {
+      setMensaje('Selecciona al menos una especialidad del taller.');
+      return;
+    }
 
     // Preparamos el metadata del registro para poder mostrar/recuperar
     // los datos del vendedor/taller aunque Supabase requiera confirmación de email
@@ -106,14 +113,20 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
         ? `${tipoRif}${numeroRif.replace(/\D/g, '')}`.trim() || null
         : null;
 
+    const rifUsuarioOComun =
+      `${tipoRif}${numeroRif.replace(/\D/g, '')}`.trim() || null;
+
     const signupMetadata =
       tipo === 'vendedor'
         ? {
+            tipo_cuenta: 'vendedor',
             perfil_vendedor: {
               nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi tienda',
               nombre_comercial:
                 nombreComercial.trim() || nombreJuridico.trim() || 'Mi tienda',
               rif: rifCompletoMeta,
+              estado: estadoTaller.trim() || null,
+              ciudad: ciudadTaller.trim() || null,
               telefono: telefonoCompletoMeta,
               latitud: latMeta,
               longitud: lngMeta,
@@ -122,11 +135,14 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           }
         : tipo === 'taller'
           ? {
+              tipo_cuenta: 'taller',
               perfil_taller: {
                 nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi taller',
                 nombre_comercial:
                   nombreComercial.trim() || nombreJuridico.trim() || 'Mi taller',
-                especialidad: especialidadTaller,
+                tipo_persona: tipoPersona,
+                rif: rifUsuarioOComun || null,
+                especialidad: especialidadesTaller,
                 marca_vehiculo: marcaTaller || null,
                 acerca_de: acercaDeTaller.trim() || null,
                 estado: estadoTaller.trim() || null,
@@ -138,7 +154,23 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
                 metodos_pago: metodosPago.length ? metodosPago : null,
               },
             }
-          : {};
+          : tipo === 'usuario'
+            ? {
+                tipo_cuenta: 'comprador',
+                perfil_comprador: {
+                  tipo_persona: tipoPersona,
+                  nombre: nombreJuridico.trim() || null,
+                  nombre_comercial: nombreComercial.trim() || null,
+                  rif: rifUsuarioOComun,
+                estado: estadoTaller.trim() || null,
+                ciudad: ciudadTaller.trim() || null,
+                  telefono: telefonoCompletoMeta,
+                  ramo: ramoEspecifico.trim() || null,
+                  latitud: latMeta,
+                  longitud: lngMeta,
+                },
+              }
+            : {};
 
     setCargando(true);
     const { data: signUpData, error } = await supabase.auth.signUp(
@@ -179,6 +211,8 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi tienda',
           nombre_comercial: nombreComercial.trim() || nombreJuridico.trim() || 'Mi tienda',
           rif: rifCompleto,
+          estado: estadoTaller.trim() || null,
+          ciudad: ciudadTaller.trim() || null,
           telefono: telefonoCompleto,
           latitud: lat,
           longitud: lng,
@@ -194,7 +228,9 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           user_id: sessionUserId,
           nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi taller',
           nombre_comercial: nombreComercial.trim() || nombreJuridico.trim() || 'Mi taller',
-          especialidad: especialidadTaller,
+          tipo_persona: tipoPersona,
+          rif: rifUsuarioOComun || null,
+          especialidad: especialidadesTaller,
           marca_vehiculo: marcaTaller || null,
           acerca_de: acercaDeTaller.trim() || null,
           estado: estadoTaller.trim() || null,
@@ -363,18 +399,31 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
 
           {tipo === 'taller' ? (
             <>
-              <div className="form-registro-campo">
-                <label htmlFor="especialidad">Especialidad del taller</label>
-                <select
-                  id="especialidad"
-                  value={especialidadTaller}
-                  onChange={(e) => setEspecialidadTaller(e.target.value as typeof ESPECIALIDADES_TALLER[number])}
-                  disabled={cargando}
-                >
+              <div className="form-registro-campo form-registro-metodos-pago">
+                <label>Especialidades del taller</label>
+                <p className="form-registro-metodos-pago-hint">
+                  Marca todas las ramas en las que trabajas; los clientes podrán encontrarte al filtrar por cualquiera de ellas.
+                </p>
+                <div className="form-registro-metodos-pago-opciones">
                   {ESPECIALIDADES_TALLER.map((esp) => (
-                    <option key={esp} value={esp}>{esp}</option>
+                    <label key={esp} className="form-registro-metodos-pago-opcion">
+                      <input
+                        type="checkbox"
+                        value={esp}
+                        checked={especialidadesTaller.includes(esp)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setEspecialidadesTaller((prev) => [...prev, esp]);
+                          } else {
+                            setEspecialidadesTaller((prev) => prev.filter((x) => x !== esp));
+                          }
+                        }}
+                        disabled={cargando}
+                      />
+                      {esp}
+                    </label>
                   ))}
-                </select>
+                </div>
               </div>
               <div className="form-registro-campo">
                 <label htmlFor="marcaTaller">Marca de vehículos</label>
@@ -433,17 +482,57 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
               </div>
             </>
           ) : (
-            <div className="form-registro-campo">
-              <label htmlFor="ramo">Ramo específico</label>
-              <input
-                id="ramo"
-                type="text"
-                value={ramoEspecifico}
-                onChange={(e) => setRamoEspecifico(e.target.value)}
-                placeholder="Ej: Repuestos automotrices, Lubricantes"
-                disabled={cargando}
-              />
-            </div>
+            <>
+              <div className="form-registro-campo">
+                <label htmlFor="ramo">Ramo específico</label>
+                <input
+                  id="ramo"
+                  type="text"
+                  value={ramoEspecifico}
+                  onChange={(e) => setRamoEspecifico(e.target.value)}
+                  placeholder="Ej: Repuestos automotrices, Lubricantes"
+                  disabled={cargando}
+                />
+              </div>
+              <div className="form-registro-campo">
+                <label htmlFor="estadoGeneral">Estado</label>
+                <select
+                  id="estadoGeneral"
+                  value={estadoTaller}
+                  onChange={(e) => {
+                    setEstadoTaller(e.target.value);
+                    setCiudadTaller('');
+                  }}
+                  disabled={cargando}
+                >
+                  <option value="">Selecciona el estado</option>
+                  {ESTADOS_VENEZUELA.map((e) => (
+                    <option key={e} value={e}>
+                      {e}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-registro-campo">
+                <label htmlFor="ciudadGeneral">Ciudad / Municipio</label>
+                <select
+                  id="ciudadGeneral"
+                  value={ciudadTaller}
+                  onChange={(e) => setCiudadTaller(e.target.value)}
+                  disabled={cargando || !estadoTaller}
+                >
+                  <option value="">Selecciona ciudad o municipio</option>
+                  {(estadoTaller ? getCiudadesPorEstado(estadoTaller) : []).map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <p className="form-registro-hint">
+                  Estado y ciudad ayudan a ubicar vendedores, talleres y compradores por zona.
+                </p>
+              </div>
+            </>
           )}
 
           {(tipo === 'vendedor' || tipo === 'taller') && (

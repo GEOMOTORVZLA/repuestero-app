@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
+import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
+import { bannerEstadoCuentaNegocio } from '../utils/estadoCuentaVendedorTaller';
+import { EstadoCuentaNegocioBanner } from './EstadoCuentaNegocioBanner';
 import './PerfilUsuario.css';
+
+function esCuentaRegistradaComoTaller(u: User | null): boolean {
+  if (!u?.user_metadata) return false;
+  const md = u.user_metadata as Record<string, unknown>;
+  return md.tipo_cuenta === 'taller' || md.perfil_taller != null;
+}
 
 interface TiendaPerfil {
   id: string;
@@ -10,9 +20,14 @@ interface TiendaPerfil {
   rif: string | null;
   telefono?: string | null;
   telefono_whatsapp?: string | null;
+  estado?: string | null;
+  ciudad?: string | null;
   latitud?: number | null;
   longitud?: number | null;
   metodos_pago?: string[] | null;
+  bloqueado?: boolean | null;
+  aprobacion_estado?: string | null;
+  membresia_hasta?: string | null;
 }
 
 export function PerfilUsuario() {
@@ -30,12 +45,14 @@ export function PerfilUsuario() {
   const [estadoPassword, setEstadoPassword] =
     useState<'idle' | 'guardando' | 'ok' | 'error'>('idle');
   const [mensajePassword, setMensajePassword] = useState('');
+  const [errCargaTienda, setErrCargaTienda] = useState<string | null>(null);
 
   useEffect(() => {
     const cargar = async () => {
       if (!user) return;
       setCargando(true);
       setMensaje('');
+      setErrCargaTienda(null);
 
       // Leemos como arreglo para evitar problemas con maybeSingle()/limit
       const { data, error } = await supabase
@@ -45,7 +62,7 @@ export function PerfilUsuario() {
 
       if (error) {
         setTienda(null);
-        setMensaje(error.message || 'Error al cargar los datos del vendedor.');
+        setErrCargaTienda(error.message || 'Error al cargar los datos de la tienda.');
         setTiendaSnapshot(null);
         setEditando(false);
         setCargando(false);
@@ -59,6 +76,7 @@ export function PerfilUsuario() {
         // Si el registro guardó datos en `user_metadata`, los mostramos aquí.
         const md = (user as any)?.user_metadata ?? {};
         const perfilVendedor = md?.perfil_vendedor ?? null;
+        const esCuentaTaller = esCuentaRegistradaComoTaller(user);
 
         const normalizeMetodosPagoParaMostrar = (value: unknown): string[] => {
           if (!value) return [];
@@ -94,10 +112,15 @@ export function PerfilUsuario() {
             nombre_comercial: perfilVendedor.nombre_comercial ?? null,
             rif: perfilVendedor.rif ?? null,
             telefono: perfilVendedor.telefono ?? null,
+            estado: perfilVendedor.estado ?? null,
+            ciudad: perfilVendedor.ciudad ?? null,
             latitud: toNumberOrNull(perfilVendedor.latitud),
             longitud: toNumberOrNull(perfilVendedor.longitud),
             metodos_pago: normalizeMetodosPagoParaMostrar(perfilVendedor.metodos_pago),
           });
+          setMensaje('');
+        } else if (esCuentaTaller) {
+          setTienda(null);
           setMensaje('');
         } else {
           setTienda({
@@ -106,12 +129,14 @@ export function PerfilUsuario() {
             nombre_comercial: '',
             rif: '',
             telefono: null,
+            estado: null,
+            ciudad: null,
             latitud: null,
             longitud: null,
             metodos_pago: [],
           });
           setMensaje(
-            `No se encontró una tienda asociada a tu usuario (auth.uid = ${user.id}). Completa los datos y guarda.`
+            'No se encontró una tienda asociada a tu cuenta. Completa los datos y guarda.'
           );
         }
         setTiendaSnapshot(null);
@@ -169,6 +194,8 @@ export function PerfilUsuario() {
         latitud: latN,
         longitud: lngN,
         metodos_pago: normalizeMetodosPago(t.metodos_pago),
+        membresia_hasta:
+          t.membresia_hasta != null ? String(t.membresia_hasta).slice(0, 10) : null,
       });
 
       setTiendaSnapshot(null);
@@ -234,6 +261,8 @@ export function PerfilUsuario() {
       nombre_comercial: nombreComercial || null,
       rif: rif || null,
       telefono: tienda.telefono?.trim() || null,
+      estado: tienda.estado?.trim() || null,
+      ciudad: tienda.ciudad?.trim() || null,
       latitud: tienda.latitud ?? null,
       longitud: tienda.longitud ?? null,
       metodos_pago: normalizarMetodosPagoParaGuardar(tienda.metodos_pago),
@@ -309,6 +338,17 @@ export function PerfilUsuario() {
 
   return (
     <div className="perfil-usuario">
+      {tienda ? (
+        <EstadoCuentaNegocioBanner
+          etiqueta="Vendedor / tienda"
+          banner={bannerEstadoCuentaNegocio({
+            bloqueado: tienda.bloqueado,
+            aprobacion_estado: tienda.aprobacion_estado,
+            membresia_hasta: tienda.membresia_hasta ?? null,
+            sinFilaEnBd: tienda.id === 'nuevo',
+          })}
+        />
+      ) : null}
       <section className="perfil-usuario-seccion">
         <h3 className="perfil-usuario-titulo">Datos de acceso</h3>
         <div className="perfil-usuario-grid">
@@ -316,14 +356,17 @@ export function PerfilUsuario() {
             <label>Correo de acceso</label>
             <input type="email" value={user.email ?? ''} disabled />
           </div>
-          <div className="perfil-usuario-campo">
-            <label>ID de usuario (auth.uid)</label>
-            <input type="text" value={user.id} disabled />
-          </div>
         </div>
       </section>
 
-      <section className="perfil-usuario-seccion">
+      {errCargaTienda && (
+        <section className="perfil-usuario-seccion">
+          <p className="perfil-usuario-mensaje error">{errCargaTienda}</p>
+        </section>
+      )}
+
+      {!(esCuentaRegistradaComoTaller(user) && !tienda) && (
+        <section className="perfil-usuario-seccion">
         <h3 className="perfil-usuario-titulo">Resumen del registro del vendedor</h3>
         {mensaje && (
           <p
@@ -387,6 +430,47 @@ export function PerfilUsuario() {
                   }
                   disabled={!editando || estado === 'guardando'}
                 />
+              </div>
+              <div className="perfil-usuario-campo">
+                <label>Estado</label>
+                <select
+                  value={tienda.estado ?? ''}
+                  onChange={(e) =>
+                    setTienda({
+                      ...tienda,
+                      estado: e.target.value || null,
+                      ciudad: '',
+                    })
+                  }
+                  disabled={!editando || estado === 'guardando'}
+                >
+                  <option value="">Selecciona el estado</option>
+                  {ESTADOS_VENEZUELA.map((e) => (
+                    <option key={e} value={e}>
+                      {e}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="perfil-usuario-campo">
+                <label>Ciudad / Municipio</label>
+                <select
+                  value={tienda.ciudad ?? ''}
+                  onChange={(e) =>
+                    setTienda({
+                      ...tienda,
+                      ciudad: e.target.value || null,
+                    })
+                  }
+                  disabled={!editando || estado === 'guardando' || !tienda.estado}
+                >
+                  <option value="">Selecciona ciudad o municipio</option>
+                  {(tienda.estado ? getCiudadesPorEstado(tienda.estado) : []).map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="perfil-usuario-campo">
                 <label>Latitud</label>
@@ -493,7 +577,8 @@ export function PerfilUsuario() {
             </p>
           </>
         )}
-      </section>
+        </section>
+      )}
 
       <section className="perfil-usuario-seccion">
         <h3 className="perfil-usuario-titulo">Cambiar contraseña</h3>

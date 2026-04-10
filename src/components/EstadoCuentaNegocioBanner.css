@@ -1,0 +1,83 @@
+.estado-cuenta-negocio {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 2px solid #cbd5e1;
+  background: #f8fafc;
+}
+
+.estado-cuenta-negocio-etiqueta {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.estado-cuenta-negocio-titulo {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+}
+
+.estado-cuenta-negocio-alerta {
+  margin: 0.55rem 0 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.estado-cuenta-negocio-resumen {
+  margin: 0.45rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #334155;
+  line-height: 1.4;
+}
+
+.estado-cuenta-negocio--pausada {
+  border-color: #dc2626;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+.estado-cuenta-negocio--pausada .estado-cuenta-negocio-titulo {
+  color: #991b1b;
+}
+
+.estado-cuenta-negocio--revision {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.estado-cuenta-negocio--revision .estado-cuenta-negocio-titulo {
+  color: #1d4ed8;
+}
+
+.estado-cuenta-negocio--rechazada {
+  border-color: #ea580c;
+  background: #fff7ed;
+  color: #7c2d12;
+}
+
+.estado-cuenta-negocio--rechazada .estado-cuenta-negocio-titulo {
+  color: #c2410c;
+}
+
+.estado-cuenta-negocio--activa {
+  border-color: #16a34a;
+  background: #f0fdf4;
+  color: #14532d;
+}
+
+.estado-cuenta-negocio--activa .estado-cuenta-negocio-titulo {
+  color: #15803d;
+}
+
+.estado-cuenta-negocio--activa .estado-cuenta-negocio-alerta {
+  color: #b45309;
+}

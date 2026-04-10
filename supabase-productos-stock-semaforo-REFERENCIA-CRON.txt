@@ -1,0 +1,51 @@
+================================================================================
+REFERENCIA: Cron de pausa por stock vencido (Geomotor / Marketplace repuestos)
+================================================================================
+Si cambias algo en Supabase, actualiza TAMBIEN esta nota para el equipo.
+
+---------------------------------------------------------------------------
+1) Ubicacion en Supabase
+---------------------------------------------------------------------------
+Dashboard -> Integrations -> Cron -> Jobs
+(o Database -> Extensions si habilitaste pg_cron a mano)
+
+---------------------------------------------------------------------------
+2) Valores estandar usados en el repo (ajusta si los tuyos son distintos)
+---------------------------------------------------------------------------
+
+Nombre del job (cron.job.jobname):
+  pausar_productos_stock_vencido_diario
+
+Schedule (5 campos cron; la hora suele ser UTC en el servidor):
+  15 2 * * *
+  Significado habitual: cada dia a las 02:15 UTC.
+  Venezuela (Caracas, UTC-4): aprox. 22:15 del dia anterior en reloj local.
+
+Comando SQL que ejecuta el job:
+  select public.pausar_productos_stock_vencido();
+
+---------------------------------------------------------------------------
+3) Archivos SQL relacionados en este proyecto
+---------------------------------------------------------------------------
+
+Aplicar esquema + funcion + trigger (si aun no esta aplicado):
+  supabase-productos-stock-semaforo-paso1.sql
+
+Registrar job por SQL (alternativa al Dashboard; requiere pg_cron):
+  supabase-productos-stock-semaforo-paso2-cron.sql
+
+Verificar columnas, funcion, trigger, datos:
+  supabase-productos-stock-semaforo-verificar-CORTO.sql
+
+Verificar Cron: jobs, historial, funcion:
+  supabase-productos-stock-semaforo-verificar-CRON.sql
+
+---------------------------------------------------------------------------
+4) Prueba manual de la funcion (SQL Editor, rol postgres)
+---------------------------------------------------------------------------
+  select public.pausar_productos_stock_vencido();
+Devuelve cuantos productos pauso en esa corrida.
+
+================================================================================
+Ultima actualizacion de esta referencia: 2026-03-30
+================================================================================
