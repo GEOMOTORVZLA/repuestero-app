@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
+import { TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS } from '../constants/googleMapsNavUi';
+import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
 import './VendedoresCercaDeMi.css';
 import './avisoSeleccionarEstado.css';
 import './BusquedaRepuestos.css';
@@ -185,11 +187,9 @@ export function VendedoresCercaDeMi() {
   };
 
   const [contactarTienda, setContactarTienda] = useState<TiendaCerca | null>(null);
-  const [mostrarRutaEnModal, setMostrarRutaEnModal] = useState(false);
   const [ubicado, setUbicado] = useState(false);
   const cerrarContactar = () => {
     setContactarTienda(null);
-    setMostrarRutaEnModal(false);
   };
 
   useEffect(() => {
@@ -199,7 +199,6 @@ export function VendedoresCercaDeMi() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setContactarTienda(null);
-        setMostrarRutaEnModal(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -235,15 +234,6 @@ export function VendedoresCercaDeMi() {
     setUbicado(false);
   };
 
-  const linkRutaGoogleMaps = (t: TiendaCerca) => {
-    const dest = `${t.latitud},${t.longitud}`;
-    if (gpsCoords) {
-      const origin = `${gpsCoords.lat},${gpsCoords.lng}`;
-      return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}&travelmode=driving`;
-    }
-    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=driving`;
-  };
-
   const ubicar = () => {
     if (!estadoFiltro.trim()) {
       setMensaje('Debes seleccionar un estado');
@@ -263,7 +253,6 @@ export function VendedoresCercaDeMi() {
 
   const abrirContactar = (t: TiendaCerca) => {
     setContactarTienda(t);
-    setMostrarRutaEnModal(false);
   };
 
   return (
@@ -500,7 +489,6 @@ export function VendedoresCercaDeMi() {
               nombreVendedor={nombreTienda(contactarTienda)}
               userLat={gpsCoords?.lat}
               userLng={gpsCoords?.lng}
-              mostrarRutaDesdeUsuario={mostrarRutaEnModal}
             />
             <div className="busqueda-repuestos-modal-botones">
               {contactarTienda.telefono && linkWhatsApp(contactarTienda) ? (
@@ -517,29 +505,15 @@ export function VendedoresCercaDeMi() {
               )}
               {contactarTienda.latitud != null && contactarTienda.longitud != null && (
                 <div className="vendedores-cerca-modal-ruta">
-                  <p className="vendedores-cerca-modal-ruta-hint">
-                    Usa <strong>Ver ruta en vivo</strong> cuando ya estés listo para ir a la tienda.
-                  </p>
-                  <button
-                    type="button"
-                    className="vendedores-cerca-modal-ruta-btn"
-                    onClick={() => setMostrarRutaEnModal(true)}
-                    disabled={!gpsCoords}
-                  >
-                    Ver ruta en vivo en el mapa
-                  </button>
-                  {!gpsCoords && (
-                    <p className="vendedores-cerca-modal-ruta-hint">
-                      Activa primero la opción de ordenar por cercanía para usar tu ubicación.
-                    </p>
-                  )}
                   <a
-                    href={linkRutaGoogleMaps(contactarTienda)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href={urlGoogleMapsDirSoloDestino(contactarTienda.latitud, contactarTienda.longitud)}
                     className="vendedores-cerca-modal-ruta-btn"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      abrirNavegacionGoogleMapsDesdeAqui(contactarTienda.latitud, contactarTienda.longitud);
+                    }}
                   >
-                    Abrir en Google Maps para navegar
+                    {TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS}
                   </a>
                 </div>
               )}

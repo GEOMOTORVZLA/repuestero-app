@@ -85,7 +85,7 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
                 loading="lazy"
                 decoding="async"
                 fetchPriority="low"
-                sizes="(max-width: 640px) 36vw, 200px"
+                sizes="(max-width: 640px) 88px, 200px"
               />
             ) : (
               <div className="busqueda-repuestos-card-foto-placeholder">Sin foto</div>

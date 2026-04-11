@@ -12,6 +12,8 @@ import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
 import { TarjetaProductoBusqueda } from './TarjetaProductoBusqueda';
+import { TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS } from '../constants/googleMapsNavUi';
+import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
 import './BusquedaRepuestos.css';
 
 /** Distancia en km entre dos puntos (Haversine) */
@@ -397,11 +399,8 @@ export function BusquedaRepuestos({
   const [contactarProducto, setContactarProducto] = useState<ProductoResultado | null>(null);
   const [ubicacionProducto, setUbicacionProducto] = useState<ProductoResultado | null>(null);
   const [preguntandoUbicacion, setPreguntandoUbicacion] = useState<ProductoResultado | null>(null);
-  const [mostrarRutaEnModal, setMostrarRutaEnModal] = useState(false);
-
   const abrirContactar = (p: ProductoResultado) => {
     setContactarProducto(p);
-    setMostrarRutaEnModal(false);
     if (user) {
       void (async () => {
         const debe = await usuarioDebeRegistrarHistorialContactos(supabase, user);
@@ -422,7 +421,6 @@ export function BusquedaRepuestos({
   };
   const cerrarContactar = () => {
     setContactarProducto(null);
-    setMostrarRutaEnModal(false);
   };
 
   useEffect(() => {
@@ -432,7 +430,6 @@ export function BusquedaRepuestos({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setContactarProducto(null);
-        setMostrarRutaEnModal(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -479,21 +476,6 @@ export function BusquedaRepuestos({
     const num = telefono.replace(/\D/g, '');
     const full = num.startsWith('58') ? num : `58${num}`;
     return `https://wa.me/${full}`;
-  };
-
-  const linkRutaGoogleMaps = (p: ProductoResultado) => {
-    const t = p.tiendas;
-    if (!t || t.latitud == null || t.longitud == null) return null;
-    const dest = `${t.latitud},${t.longitud}`;
-    if (userLocation) {
-      const origin = `${userLocation.lat},${userLocation.lng}`;
-      return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
-        origin
-      )}&destination=${encodeURIComponent(dest)}&travelmode=driving`;
-    }
-    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-      dest
-    )}&travelmode=driving`;
   };
 
   const lanzarBusquedaDesdeCompacto = () => {
@@ -876,7 +858,6 @@ export function BusquedaRepuestos({
                   nombreVendedor={nombreTienda(contactarProducto)}
                   userLat={userLocation?.lat}
                   userLng={userLocation?.lng}
-                  mostrarRutaDesdeUsuario={mostrarRutaEnModal}
                 />
               </>
             )}
@@ -896,32 +877,22 @@ export function BusquedaRepuestos({
             </div>
             {contactarProducto.tiendas?.latitud != null && contactarProducto.tiendas?.longitud != null && (
               <div className="vendedores-cerca-modal-ruta">
-                <p className="vendedores-cerca-modal-ruta-hint">
-                  Usa <strong>Ver ruta en vivo</strong> cuando ya estés listo para ir a la tienda.
-                </p>
-                <button
-                  type="button"
+                <a
+                  href={urlGoogleMapsDirSoloDestino(
+                    contactarProducto.tiendas.latitud,
+                    contactarProducto.tiendas.longitud
+                  )}
                   className="vendedores-cerca-modal-ruta-btn"
-                  onClick={() => setMostrarRutaEnModal(true)}
-                  disabled={!userLocation}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    abrirNavegacionGoogleMapsDesdeAqui(
+                      contactarProducto.tiendas!.latitud!,
+                      contactarProducto.tiendas!.longitud!
+                    );
+                  }}
                 >
-                  Ver ruta en vivo en el mapa
-                </button>
-                {!userLocation && (
-                  <p className="vendedores-cerca-modal-ruta-hint">
-                    Primero permite usar tu ubicación cuando la app te lo pida.
-                  </p>
-                )}
-                {linkRutaGoogleMaps(contactarProducto) && (
-                  <a
-                    href={linkRutaGoogleMaps(contactarProducto)!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="vendedores-cerca-modal-ruta-btn"
-                  >
-                    Abrir en Google Maps para navegar
-                  </a>
-                )}
+                  {TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS}
+                </a>
               </div>
             )}
             <button type="button" className="busqueda-repuestos-modal-cerrar" onClick={cerrarContactar}>

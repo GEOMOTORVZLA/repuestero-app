@@ -4,6 +4,8 @@ import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezue
 import { ESPECIALIDADES_TALLER } from '../data/registroVenezuela';
 import { normalizeEspecialidadesTallerDb } from '../utils/tallerEspecialidades';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
+import { TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS } from '../constants/googleMapsNavUi';
+import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
 import './avisoSeleccionarEstado.css';
 import './BusquedaRepuestos.css';
 import './VendedoresCercaDeMi.css';
@@ -41,9 +43,6 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
   const [buscado, setBuscado] = useState(false);
   const [avisoSeleccionarEstado, setAvisoSeleccionarEstado] = useState(false);
   const [contactarTaller, setContactarTaller] = useState<Taller | null>(null);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [mostrarRutaEnModal, setMostrarRutaEnModal] = useState(false);
-
   const ciudadesOpciones = estado ? getCiudadesPorEstado(estado) : [];
 
   const buscar = async () => {
@@ -95,11 +94,9 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
 
   const abrirDetalleTaller = (t: Taller) => {
     setContactarTaller(t);
-    setMostrarRutaEnModal(false);
   };
   const cerrarContactar = () => {
     setContactarTaller(null);
-    setMostrarRutaEnModal(false);
   };
 
   useEffect(() => {
@@ -109,7 +106,6 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setContactarTaller(null);
-        setMostrarRutaEnModal(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -147,20 +143,6 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
 
   const tieneUbicacion = (t: Taller) =>
     t.latitud != null && t.longitud != null;
-
-  const linkRutaGoogleMaps = (t: Taller) => {
-    if (t.latitud == null || t.longitud == null) return null;
-    const dest = `${t.latitud},${t.longitud}`;
-    if (userLocation) {
-      const origin = `${userLocation.lat},${userLocation.lng}`;
-      return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
-        origin
-      )}&destination=${encodeURIComponent(dest)}&travelmode=driving`;
-    }
-    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-      dest
-    )}&travelmode=driving`;
-  };
 
   return (
     <div className="busqueda-talleres">
@@ -436,9 +418,6 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
                   lng={contactarTaller.longitud!}
                   nombreVendedor={nombreTaller(contactarTaller)}
                   tipoPunto="taller"
-                  userLat={userLocation?.lat}
-                  userLng={userLocation?.lng}
-                  mostrarRutaDesdeUsuario={mostrarRutaEnModal}
                 />
               </>
             )}
@@ -459,48 +438,16 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
             </div>
             {tieneUbicacion(contactarTaller) && (
               <div className="vendedores-cerca-modal-ruta">
-                <p className="vendedores-cerca-modal-ruta-hint">
-                  Usa <strong>Ver ruta en vivo</strong> cuando ya estés listo para ir al taller.
-                </p>
-                <button
-                  type="button"
+                <a
+                  href={urlGoogleMapsDirSoloDestino(contactarTaller.latitud!, contactarTaller.longitud!)}
                   className="vendedores-cerca-modal-ruta-btn"
-                  onClick={() => {
-                    if (userLocation) {
-                      setMostrarRutaEnModal(true);
-                      return;
-                    }
-                    if (!navigator.geolocation) return;
-                    navigator.geolocation.getCurrentPosition(
-                      (pos) => {
-                        setUserLocation({
-                          lat: pos.coords.latitude,
-                          lng: pos.coords.longitude,
-                        });
-                        setMostrarRutaEnModal(true);
-                      },
-                      () => {},
-                      { enableHighAccuracy: true, timeout: 10000 }
-                    );
+                  onClick={(e) => {
+                    e.preventDefault();
+                    abrirNavegacionGoogleMapsDesdeAqui(contactarTaller.latitud!, contactarTaller.longitud!);
                   }}
                 >
-                  Ver ruta en vivo en el mapa
-                </button>
-                {!userLocation && (
-                  <p className="vendedores-cerca-modal-ruta-hint">
-                    Al pulsar, el navegador te pedirá permiso para usar tu ubicación y trazar la ruta.
-                  </p>
-                )}
-                {linkRutaGoogleMaps(contactarTaller) && (
-                  <a
-                    href={linkRutaGoogleMaps(contactarTaller)!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="vendedores-cerca-modal-ruta-btn"
-                  >
-                    Abrir en Google Maps para navegar
-                  </a>
-                )}
+                  {TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS}
+                </a>
               </div>
             )}
             <button type="button" className="busqueda-repuestos-modal-cerrar" onClick={cerrarContactar}>

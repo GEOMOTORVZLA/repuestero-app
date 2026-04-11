@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { useLoadScript, GoogleMap, Marker, DirectionsService, DirectionsRenderer } from '@react-google-maps/api';
+import { useRef, useEffect, useCallback } from 'react';
+import { useLoadScript, GoogleMap, Marker } from '@react-google-maps/api';
 import './MapaVendedorUbicacion.css';
 
 const LIBRARIES = ['places'] as const;
@@ -12,7 +12,6 @@ interface MapVendedorUbicacionProps {
   tipoPunto?: 'tienda' | 'taller';
   userLat?: number;
   userLng?: number;
-  mostrarRutaDesdeUsuario?: boolean;
 }
 
 function distanciaKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -48,7 +47,6 @@ export function MapVendedorUbicacion({
   tipoPunto = 'tienda',
   userLat,
   userLng,
-  mostrarRutaDesdeUsuario,
 }: MapVendedorUbicacionProps) {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   const { isLoaded, loadError } = useLoadScript({
@@ -56,10 +54,6 @@ export function MapVendedorUbicacion({
     libraries: [...LIBRARIES],
   });
 
-  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
-  const [rutaInfo, setRutaInfo] = useState<{ duracion?: string; distancia?: string } | null>(null);
-  const [directionsError, setDirectionsError] = useState<string | null>(null);
-  const directionsRequested = useRef(false);
   const mapRef = useRef<google.maps.Map | null>(null);
 
   const redimensionarMapa = useCallback(
@@ -75,10 +69,6 @@ export function MapVendedorUbicacion({
     [lat, lng]
   );
 
-  useEffect(() => {
-    directionsRequested.current = false;
-  }, [lat, lng, userLat, userLng, mostrarRutaDesdeUsuario]);
-
   /** Dentro de modales con overflow/flex el mapa suele medir 0×0 hasta forzar resize */
   useEffect(() => {
     const map = mapRef.current;
@@ -92,8 +82,6 @@ export function MapVendedorUbicacion({
   if (!isLoaded) return <p className="mapa-vendedor-cargando">Cargando mapa…</p>;
 
   const center = { lat, lng };
-  const shouldRequestDirections =
-    mostrarRutaDesdeUsuario && userLat != null && userLng != null && !directions && !directionsError;
   const distanciaRectaKm =
     userLat != null && userLng != null ? distanciaKm(userLat, userLng, lat, lng).toFixed(1) : null;
   const colorPunto = tipoPunto === 'taller' ? '#1e5bff' : '#111111';
@@ -101,92 +89,54 @@ export function MapVendedorUbicacion({
 
   return (
     <div className="mapa-vendedor-ubicacion">
-      <div className="mapa-vendedor-mapa-wrap">
-        <GoogleMap
-          mapContainerStyle={containerStyle}
-          center={center}
-          zoom={15}
-          options={{ zoomControl: true, mapTypeControl: true, fullscreenControl: true }}
-          onLoad={(map) => {
-            mapRef.current = map;
-            redimensionarMapa(map);
-          }}
-          onUnmount={() => {
-            mapRef.current = null;
-          }}
-        >
-          <Marker
-            position={center}
-            title={nombreVendedor}
-            icon={{
-              url: markerPinSvg(colorPunto),
-              scaledSize: new google.maps.Size(34, 46),
-              anchor: new google.maps.Point(17, 44),
+      <div className="mapa-vendedor-bloque">
+        <div className="mapa-vendedor-mapa-canvas">
+          <GoogleMap
+            mapContainerStyle={containerStyle}
+            center={center}
+            zoom={15}
+            options={{ zoomControl: true, mapTypeControl: true, fullscreenControl: true }}
+            onLoad={(map) => {
+              mapRef.current = map;
+              redimensionarMapa(map);
             }}
-          />
-          {userLat != null && userLng != null && (
+            onUnmount={() => {
+              mapRef.current = null;
+            }}
+          >
             <Marker
-              position={{ lat: userLat, lng: userLng }}
-              title="Tu ubicación"
+              position={center}
+              title={nombreVendedor}
               icon={{
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: 7,
-                fillColor: '#16a34a',
-                fillOpacity: 1,
-                strokeColor: '#ffffff',
-                strokeWeight: 2,
+                url: markerPinSvg(colorPunto),
+                scaledSize: new google.maps.Size(34, 46),
+                anchor: new google.maps.Point(17, 44),
               }}
             />
-          )}
-          {shouldRequestDirections && (
-            <DirectionsService
-              options={{
-                origin: { lat: userLat!, lng: userLng! },
-                destination: { lat, lng },
-                travelMode: google.maps.TravelMode.DRIVING,
-              }}
-              callback={(result, status) => {
-                if (directionsRequested.current) return;
-                directionsRequested.current = true;
-                if (status === google.maps.DirectionsStatus.OK && result) {
-                  setDirections(result);
-                  const leg = result.routes[0]?.legs[0];
-                  if (leg) {
-                    setRutaInfo({
-                      duracion: leg.duration?.text,
-                      distancia: leg.distance?.text,
-                    });
-                  }
-                } else {
-                  setDirectionsError(
-                    status === 'REQUEST_DENIED'
-                      ? 'La API key no tiene permiso para rutas. En Google Cloud → Credentials → tu API key → Restricciones de API, agrega "Directions API" y "Maps JavaScript API".'
-                      : 'No se pudo calcular la ruta.'
-                  );
-                }
-              }}
-            />
-          )}
-        {directions && (
-          <DirectionsRenderer
-            directions={directions}
-            options={{
-              suppressMarkers: true,
-            }}
-          />
-        )}
-        </GoogleMap>
-
-        <div className="mapa-vendedor-ficha">
+            {userLat != null && userLng != null && (
+              <Marker
+                position={{ lat: userLat, lng: userLng }}
+                title="Tu ubicación"
+                icon={{
+                  path: google.maps.SymbolPath.CIRCLE,
+                  scale: 7,
+                  fillColor: '#16a34a',
+                  fillOpacity: 1,
+                  strokeColor: '#ffffff',
+                  strokeWeight: 2,
+                }}
+              />
+            )}
+          </GoogleMap>
+        </div>
+        <div className="mapa-vendedor-ficha" aria-label="Resumen en el mapa">
           <div className="mapa-vendedor-ficha-row">
             <p className="mapa-vendedor-ficha-nombre">{nombreVendedor}</p>
           </div>
           <p className="mapa-vendedor-ficha-distancia">
-            {rutaInfo?.distancia
-              ? `Distancia desde tu ubicación: ${rutaInfo.distancia}`
-              : distanciaRectaKm
-                ? `Distancia aproximada: ${distanciaRectaKm} km`
-                : 'Permite tu ubicación para ver la distancia en km.'}
+            {distanciaRectaKm
+              ? `Distancia aproximada: ${distanciaRectaKm} km`
+              : 'Permite tu ubicación para ver la distancia en km.'}
           </p>
           <div className="mapa-vendedor-ficha-chip-row">
             <span className="mapa-vendedor-chip" style={{ backgroundColor: colorPunto }}>
@@ -195,24 +145,6 @@ export function MapVendedorUbicacion({
           </div>
         </div>
       </div>
-      {mostrarRutaDesdeUsuario && directionsError && (
-        <p className="mapa-vendedor-error mapa-vendedor-ruta-error">{directionsError}</p>
-      )}
-      {mostrarRutaDesdeUsuario && rutaInfo && !directionsError && (
-        <div className="mapa-vendedor-ruta-info">
-          {rutaInfo.duracion && (
-            <span>
-              Tiempo estimado: <strong>{rutaInfo.duracion}</strong>
-            </span>
-          )}
-          {rutaInfo.distancia && (
-            <span>
-              {' '}
-              ({rutaInfo.distancia})
-            </span>
-          )}
-        </div>
-      )}
     </div>
   );
 }

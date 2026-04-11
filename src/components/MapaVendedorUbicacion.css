@@ -3,25 +3,47 @@
   border-radius: 6px;
 }
 
-.mapa-vendedor-mapa-wrap {
-  position: relative;
-  border-radius: 8px;
-  overflow: hidden;
+/* Mapa arriba; la ficha va debajo con margen, sin tapar el mapa */
+.mapa-vendedor-bloque {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  /* visible: la sombra de la ficha no se recorta */
+  overflow: visible;
+  background: #f1f5f9;
+}
+
+.mapa-vendedor-mapa-canvas {
+  width: 100%;
+  height: 280px;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  background: #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  border-radius: 8px 8px 0 0;
 }
 
 .mapa-vendedor-ficha {
-  position: absolute;
-  left: 50%;
-  bottom: 10px;
-  transform: translateX(-50%);
-  width: min(68%, 240px);
-  padding: 0.5rem 0.7rem 0.58rem;
+  /* Siempre en flujo bajo el mapa (nunca absolute) */
+  position: static !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  top: auto !important;
+  transform: none !important;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  margin: 0.5rem 0.7rem 0.65rem;
+  width: auto !important;
+  max-width: none !important;
+  padding: 0.55rem 0.7rem 0.6rem;
   background: #fff;
   border: 1px solid #111111;
   border-radius: 12px;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.22);
-  z-index: 3;
 }
 
 .mapa-vendedor-ficha-row {
@@ -36,10 +58,11 @@
   font-weight: 800;
   color: #1f2937;
   max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
   text-align: center;
+  line-height: 1.25;
+  word-break: break-word;
 }
 
 .mapa-vendedor-chip {
@@ -64,12 +87,6 @@
   text-align: center;
 }
 
-.mapa-vendedor-ruta-info {
-  margin-top: 0.4rem;
-  font-size: 0.85rem;
-  color: #4a5568;
-}
-
 .mapa-vendedor-error,
 .mapa-vendedor-cargando {
   margin: 0;
@@ -83,18 +100,4 @@
 
 .mapa-vendedor-error {
   color: #c53030;
-}
-
-.mapa-vendedor-ruta-error {
-  margin-top: 0.5rem;
-  font-size: 0.8rem;
-  line-height: 1.35;
-  text-align: left;
-}
-
-@media (max-width: 520px) {
-  .mapa-vendedor-ficha {
-    width: min(78%, 220px);
-    bottom: 8px;
-  }
 }
