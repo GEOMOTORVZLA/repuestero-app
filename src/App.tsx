@@ -8,6 +8,7 @@ import type { TipoRegistro } from './components/SelectorTipoRegistro';
 import { FormRegistro } from './components/FormRegistro';
 import { Dashboard } from './components/Dashboard';
 import { verticalDesdePathname, rutaInicioVertical } from './utils/verticalVehiculo';
+import { leerYConsumirMensajeAuthFlash } from './services/ensureNegocioTrasRegistro';
 import './App.css';
 
 function AppShell() {
@@ -19,10 +20,21 @@ function AppShell() {
   const [mostrarAuth, setMostrarAuth] = useState(false);
   const [crearCuentaTipo, setCrearCuentaTipo] = useState<null | 'selector' | TipoRegistro>(null);
   const [mostrarPanel, setMostrarPanel] = useState(false);
+  const [authMensajeInicial, setAuthMensajeInicial] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) setMostrarPanel(false);
   }, [user]);
+
+  useEffect(() => {
+    if (loading || user) return;
+    const flash = leerYConsumirMensajeAuthFlash();
+    if (flash) {
+      setAuthMensajeInicial(flash);
+      setMostrarAuth(true);
+      setCrearCuentaTipo(null);
+    }
+  }, [loading, user]);
 
   const irAlInicioVertical = () => {
     navigate(rutaInicioVertical(vertical));
@@ -83,9 +95,11 @@ function AppShell() {
       return (
         <div className="app">
           <Auth
+            mensajeInicialError={authMensajeInicial}
             onVolver={() => {
               setMostrarAuth(false);
               setCrearCuentaTipo(null);
+              setAuthMensajeInicial(null);
             }}
             onIrARegistro={() => setCrearCuentaTipo('selector')}
           />
@@ -95,8 +109,12 @@ function AppShell() {
     return (
       <Landing
         vertical={vertical}
-        onMostrarLogin={() => setMostrarAuth(true)}
+        onMostrarLogin={() => {
+          setAuthMensajeInicial(null);
+          setMostrarAuth(true);
+        }}
         onMostrarCrearCuenta={() => {
+          setAuthMensajeInicial(null);
           setMostrarAuth(true);
           setCrearCuentaTipo('selector');
         }}

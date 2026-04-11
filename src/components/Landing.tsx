@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
 import { CATEGORIAS_MOTO_MAS_BUSCADAS, imagenPinCategoriaMoto } from '../data/categoriasProductoMoto';
@@ -81,10 +81,14 @@ export function Landing({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const cerrarPaginaBusquedaRepuestos = () => {
+  const cerrarPaginaBusquedaRepuestos = useCallback(() => {
     setVistaBusquedaRepuestos({ activa: false, texto: '' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, []);
+
+  const cerrarOverlayCategoria = useCallback(() => {
+    setCategoriaSeleccionada(null);
+  }, []);
 
   const avatarUrl = sessionUser ? getUserAvatarUrl(sessionUser) : null;
   const [avatarConError, setAvatarConError] = useState(false);
@@ -108,19 +112,41 @@ export function Landing({
     setBusquedaRepuestosMountKey((k) => k + 1);
   }, [vertical]);
 
+  const overlayLandingActivo =
+    vistaBusquedaRepuestos.activa || Boolean(categoriaSeleccionada);
+
+  useEffect(() => {
+    if (!overlayLandingActivo) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (categoriaSeleccionada) {
+        setCategoriaSeleccionada(null);
+        return;
+      }
+      if (vistaBusquedaRepuestos.activa) cerrarPaginaBusquedaRepuestos();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [
+    overlayLandingActivo,
+    categoriaSeleccionada,
+    vistaBusquedaRepuestos.activa,
+    cerrarPaginaBusquedaRepuestos,
+  ]);
+
   return (
     <div className={`landing${esMoto ? ' landing--moto' : ''}`}>
-      <header className="landing-header">
+      <header
+        className="landing-header"
+        aria-hidden={overlayLandingActivo}
+        inert={overlayLandingActivo ? true : undefined}
+      >
         <div className="landing-header-izq">
-          {vistaBusquedaRepuestos.activa && (
-            <button
-              type="button"
-              className="landing-volver-busqueda"
-              onClick={cerrarPaginaBusquedaRepuestos}
-            >
-              ← Inicio
-            </button>
-          )}
           <h1 className="landing-logo">Geomotor</h1>
           <nav className="landing-vertical-nav" aria-label="Tipo de vehículo">
             <Link
@@ -183,30 +209,20 @@ export function Landing({
         </div>
       </header>
 
-      {!vistaBusquedaRepuestos.activa && (
-        <section className="landing-hero-banner">
-          <div className="landing-hero-slides">
-            {heroSlides.map((src, i) => (
-              <div
-                key={src}
-                className={`landing-hero-slide ${i === slideIndex ? 'activo' : ''}`}
-                style={{ backgroundImage: `url(${src})` }}
-              />
-            ))}
-          </div>
-          <div className="landing-hero-overlay" />
-        </section>
-      )}
+      <section className="landing-hero-banner">
+        <div className="landing-hero-slides">
+          {heroSlides.map((src, i) => (
+            <div
+              key={src}
+              className={`landing-hero-slide ${i === slideIndex ? 'activo' : ''}`}
+              style={{ backgroundImage: `url(${src})` }}
+            />
+          ))}
+        </div>
+        <div className="landing-hero-overlay" />
+      </section>
 
-      {vistaBusquedaRepuestos.activa ? (
-        <BusquedaRepuestos
-          key={`${vertical}-${busquedaRepuestosMountKey}`}
-          vertical={vertical}
-          variant="full"
-          initialTexto={vistaBusquedaRepuestos.texto}
-          onVolver={cerrarPaginaBusquedaRepuestos}
-        />
-      ) : (
+      {!vistaBusquedaRepuestos.activa && (
         <BusquedaRepuestos
           vertical={vertical}
           variant="compact"
@@ -214,9 +230,8 @@ export function Landing({
         />
       )}
 
-      {!vistaBusquedaRepuestos.activa && <VendedoresCercaDeMi />}
+      <VendedoresCercaDeMi />
 
-      {!vistaBusquedaRepuestos.activa && (
       <section className="landing-categorias">
         <h2 className="landing-seccion-titulo">
           {esMoto ? 'CATEGORÍAS MÁS BUSCADAS EN MOTOS' : 'CATEGORIAS MAS BUSCADAS EN AUTOMOVILES'}
@@ -326,17 +341,8 @@ export function Landing({
             );
           })}
         </div>
-        {categoriaSeleccionada && (
-          <ListaRepuestosPorCategoria
-            vertical={vertical}
-            categoria={categoriaSeleccionada}
-            onCerrar={() => setCategoriaSeleccionada(null)}
-          />
-        )}
       </section>
-      )}
 
-      {!vistaBusquedaRepuestos.activa && (
       <section className="landing-taller">
         <h2 className="landing-seccion-titulo">ENCUENTRA EL TALLER QUE NECESITAS AQUI</h2>
         <div className="landing-taller-contenido">
@@ -349,9 +355,7 @@ export function Landing({
           </div>
         </div>
       </section>
-      )}
 
-      {!vistaBusquedaRepuestos.activa && (
       <section className="landing-beneficios">
         <h2 className="landing-seccion-titulo">¿Por qué Geomotor?</h2>
         <div className="landing-grid">
@@ -399,18 +403,16 @@ export function Landing({
           </div>
         </div>
       </section>
-      )}
 
-      {!vistaBusquedaRepuestos.activa && (
       <section className="landing-empresa">
         <h2 className="landing-seccion-titulo">Sobre Geomotor</h2>
         <div className="landing-empresa-contenido">
           <div className="landing-empresa-col landing-empresa-info">
             <h3>Información sobre la empresa</h3>
             <p className="landing-empresa-descripcion">
-              {esMoto
-                ? 'Geomotor es la plataforma de localización de repuestos para motos en Venezuela. Conectamos a vendedores, compradores y talleres para facilitar la búsqueda y venta por marca, modelo y año.'
-                : 'Geomotor es la plataforma de localización de repuestos automotrices en Venezuela. Conectamos a vendedores, compradores y talleres para facilitar la búsqueda y venta de repuestos por marca, modelo y año.'}
+              Geomotor es la plataforma de localización de repuestos automotrices en Venezuela usando como base un
+              servicio de GPS. Conectamos a vendedores, compradores y talleres en sus ubicaciones exactas para facilitar
+              la búsqueda y venta de repuestos y artículos para autos y motos.
             </p>
           </div>
           <div className="landing-empresa-col landing-empresa-contacto">
@@ -418,15 +420,15 @@ export function Landing({
             <div className="landing-empresa-datos">
               <div className="landing-empresa-item">
                 <span className="landing-empresa-label">Teléfono:</span>
-                <a href="tel:+584121234567">+58 412 123 4567</a>
+                <a href="tel:+584241978797">+58 0424-1978797</a>
               </div>
               <div className="landing-empresa-item">
                 <span className="landing-empresa-label">WhatsApp:</span>
-                <a href="https://wa.me/584121234567" target="_blank" rel="noopener noreferrer">+58 412 123 4567</a>
+                <a href="https://wa.me/584241978797" target="_blank" rel="noopener noreferrer">+58 0424-1978797</a>
               </div>
               <div className="landing-empresa-item">
                 <span className="landing-empresa-label">Email:</span>
-                <a href="mailto:contacto@geomotor.com">contacto@geomotor.com</a>
+                <a href="mailto:geomotorvzla@gmail.com">geomotorvzla@gmail.com</a>
               </div>
               <div className="landing-empresa-item">
                 <span className="landing-empresa-label">Dirección:</span>
@@ -437,36 +439,83 @@ export function Landing({
           <div className="landing-empresa-col landing-empresa-redes">
             <h3>Redes sociales</h3>
             <div className="landing-empresa-redes-links">
-              <a href="https://instagram.com/geomotor" target="_blank" rel="noopener noreferrer" className="landing-empresa-red" aria-label="Instagram">
-                Instagram
+              <a href="https://www.instagram.com/geomotorvzla/" target="_blank" rel="noopener noreferrer" className="landing-empresa-red" aria-label="Instagram @geomotorvzla">
+                Instagram @geomotorvzla
               </a>
-              <a href="https://facebook.com/geomotor" target="_blank" rel="noopener noreferrer" className="landing-empresa-red" aria-label="Facebook">
-                Facebook
+              <a href="https://www.facebook.com/geomotorvzla" target="_blank" rel="noopener noreferrer" className="landing-empresa-red" aria-label="Facebook Geomotor Vzla">
+                Facebook Geomotor Vzla
               </a>
-              <a href="https://twitter.com/geomotor" target="_blank" rel="noopener noreferrer" className="landing-empresa-red" aria-label="Twitter/X">
-                Twitter / X
+              <a href="https://www.tiktok.com/@geomotorvzla" target="_blank" rel="noopener noreferrer" className="landing-empresa-red" aria-label="TikTok Geomotor Venezuela">
+                TikTok Geomotor Venezuela
               </a>
             </div>
           </div>
         </div>
       </section>
+
+      {categoriaSeleccionada && (
+        <div
+          className="resultados-busqueda-pagina-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Repuestos en ${categoriaSeleccionada}`}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) cerrarOverlayCategoria();
+          }}
+        >
+          <div
+            className="resultados-busqueda-pagina-panel"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="resultados-busqueda-pagina-panel-scroll">
+              <ListaRepuestosPorCategoria
+                key={categoriaSeleccionada}
+                vertical={vertical}
+                categoria={categoriaSeleccionada}
+                onCerrar={cerrarOverlayCategoria}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
-      <footer className="landing-footer">
-        <p>© Geomotor</p>
-        {vistaBusquedaRepuestos.activa ? (
-          <button type="button" className="landing-footer-link" onClick={cerrarPaginaBusquedaRepuestos}>
-            Volver al inicio
-          </button>
-        ) : sessionUser ? (
-          <button type="button" className="landing-footer-link" onClick={() => onIrAPanel?.()}>
-            Mi cuenta — Panel de control
-          </button>
-        ) : (
-          <button type="button" className="landing-footer-link" onClick={() => onMostrarLogin?.()}>
-            Iniciar sesión
-          </button>
-        )}
+      {vistaBusquedaRepuestos.activa && (
+        <div
+          className="resultados-busqueda-pagina-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Búsqueda de repuestos"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) cerrarPaginaBusquedaRepuestos();
+          }}
+        >
+          <div
+            className="resultados-busqueda-pagina-panel resultados-busqueda-pagina-panel--amplia"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <BusquedaRepuestos
+              key={`${vertical}-${busquedaRepuestosMountKey}`}
+              vertical={vertical}
+              variant="full"
+              initialTexto={vistaBusquedaRepuestos.texto}
+              onVolver={cerrarPaginaBusquedaRepuestos}
+            />
+          </div>
+        </div>
+      )}
+
+      <footer
+        className="landing-footer"
+        aria-hidden={overlayLandingActivo}
+        inert={overlayLandingActivo ? true : undefined}
+      >
+        <p className="landing-footer-marca">
+          Geomotor
+          <sup className="landing-footer-tm" aria-label="marca comercial">
+            ™
+          </sup>{' '}
+          2026
+        </p>
       </footer>
     </div>
   );

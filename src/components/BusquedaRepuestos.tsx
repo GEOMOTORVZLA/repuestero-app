@@ -425,6 +425,23 @@ export function BusquedaRepuestos({
     setMostrarRutaEnModal(false);
   };
 
+  useEffect(() => {
+    if (!contactarProducto) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setContactarProducto(null);
+        setMostrarRutaEnModal(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [contactarProducto]);
+
   const tieneUbicacion = (p: ProductoResultado) => {
     const t = p.tiendas;
     return t && t.latitud != null && t.longitud != null;
@@ -785,9 +802,31 @@ export function BusquedaRepuestos({
       )}
 
       {!esCompacto && contactarProducto && (
-        <div className="busqueda-repuestos-modal-overlay" onClick={cerrarContactar} role="dialog" aria-modal="true" aria-labelledby="modal-contactar-titulo">
-          <div className={`busqueda-repuestos-modal ${tieneUbicacion(contactarProducto) ? 'busqueda-repuestos-modal-con-mapa' : ''}`} onClick={(e) => e.stopPropagation()}>
-            <h3 id="modal-contactar-titulo" className="busqueda-repuestos-modal-titulo-seccion">Datos del vendedor</h3>
+        <div
+          className="busqueda-repuestos-modal-overlay busqueda-repuestos-modal-overlay--detalle"
+          onClick={cerrarContactar}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-contactar-titulo"
+        >
+          <div
+            className={`busqueda-repuestos-modal busqueda-repuestos-modal--panel ${tieneUbicacion(contactarProducto) ? 'busqueda-repuestos-modal-con-mapa' : ''}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="busqueda-repuestos-modal-header-bar">
+              <h3 id="modal-contactar-titulo" className="busqueda-repuestos-modal-header-titulo">
+                Datos del vendedor
+              </h3>
+              <button
+                type="button"
+                className="busqueda-repuestos-modal-cerrar-x"
+                onClick={cerrarContactar}
+                aria-label="Cerrar ventana"
+              >
+                ×
+              </button>
+            </div>
+            <div className="busqueda-repuestos-modal-body-scroll">
             {contactarProducto.tiendas && (
               <div className="busqueda-repuestos-modal-datos">
                 <p className="busqueda-repuestos-modal-linea">
@@ -888,6 +927,7 @@ export function BusquedaRepuestos({
             <button type="button" className="busqueda-repuestos-modal-cerrar" onClick={cerrarContactar}>
               Cerrar
             </button>
+            </div>
           </div>
         </div>
       )}

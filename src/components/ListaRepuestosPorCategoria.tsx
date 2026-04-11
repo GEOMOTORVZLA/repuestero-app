@@ -105,6 +105,23 @@ export function ListaRepuestosPorCategoria({
     void primeraPagina();
   }, [categoria, vertical]);
 
+  useEffect(() => {
+    if (!contactarProducto) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setContactarProducto(null);
+        setMostrarRutaEnModal(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [contactarProducto]);
+
   const cargarMas = async () => {
     if (!hayMas || cargandoMas || cargando) return;
     setCargandoMas(true);
@@ -173,6 +190,11 @@ export function ListaRepuestosPorCategoria({
     return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
       dest
     )}&travelmode=driving`;
+  };
+
+  const cerrarModalContactar = () => {
+    setContactarProducto(null);
+    setMostrarRutaEnModal(false);
   };
 
   return (
@@ -248,22 +270,30 @@ export function ListaRepuestosPorCategoria({
 
       {contactarProducto && (
         <div
-          className="busqueda-repuestos-modal-overlay"
-          onClick={() => {
-            setContactarProducto(null);
-            setMostrarRutaEnModal(false);
-          }}
+          className="busqueda-repuestos-modal-overlay busqueda-repuestos-modal-overlay--detalle"
+          onClick={cerrarModalContactar}
           role="dialog"
           aria-modal="true"
           aria-labelledby="modal-contactar-cat-titulo"
         >
           <div
-            className={`busqueda-repuestos-modal ${tieneUbicacion(contactarProducto) ? 'busqueda-repuestos-modal-con-mapa' : ''}`}
+            className={`busqueda-repuestos-modal busqueda-repuestos-modal--panel ${tieneUbicacion(contactarProducto) ? 'busqueda-repuestos-modal-con-mapa' : ''}`}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 id="modal-contactar-cat-titulo" className="busqueda-repuestos-modal-titulo-seccion">
-              Datos del vendedor
-            </h3>
+            <div className="busqueda-repuestos-modal-header-bar">
+              <h3 id="modal-contactar-cat-titulo" className="busqueda-repuestos-modal-header-titulo">
+                Datos del vendedor
+              </h3>
+              <button
+                type="button"
+                className="busqueda-repuestos-modal-cerrar-x"
+                onClick={cerrarModalContactar}
+                aria-label="Cerrar ventana"
+              >
+                ×
+              </button>
+            </div>
+            <div className="busqueda-repuestos-modal-body-scroll">
             {contactarProducto.tiendas && (
               <div className="busqueda-repuestos-modal-datos">
                 <p className="busqueda-repuestos-modal-linea">
@@ -381,16 +411,10 @@ export function ListaRepuestosPorCategoria({
                   )}
                 </div>
               )}
-            <button
-              type="button"
-              className="busqueda-repuestos-modal-cerrar"
-              onClick={() => {
-                setContactarProducto(null);
-                setMostrarRutaEnModal(false);
-              }}
-            >
+            <button type="button" className="busqueda-repuestos-modal-cerrar" onClick={cerrarModalContactar}>
               Cerrar
             </button>
+            </div>
           </div>
         </div>
       )}

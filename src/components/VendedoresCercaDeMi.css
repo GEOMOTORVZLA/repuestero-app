@@ -113,6 +113,17 @@
   margin-left: 0;
 }
 
+.vendedores-cerca-resultados--en-overlay {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.vendedores-cerca-resultados-header--en-overlay {
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
 .vendedores-cerca-btn-gps,
 .vendedores-cerca-btn-quitar-gps {
   padding: 0.6rem 1rem;

@@ -196,7 +196,11 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
     const sessionUserId = signUpData?.session?.user?.id ?? null;
     if (!sessionUserId) {
       setCargando(false);
-      setMensaje('Cuenta creada. Confirma tu correo y luego inicia sesión para completar tu registro.');
+      setMensaje(
+        tipo === 'vendedor' || tipo === 'taller'
+          ? 'Cuenta creada. Confirma tu correo y entra con tu usuario y clave: tu negocio quedará registrado automáticamente con los mismos datos que ya ingresaste (no hace falta volver a llenar el perfil).'
+          : 'Cuenta creada. Confirma tu correo y luego inicia sesión.'
+      );
       return;
     }
 

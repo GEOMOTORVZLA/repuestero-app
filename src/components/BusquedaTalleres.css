@@ -90,6 +90,10 @@
   margin-top: 1.5rem;
 }
 
+.busqueda-talleres-resultados--en-overlay {
+  margin-top: 0;
+}
+
 /* Misma grilla vertical que vendedores */
 .busqueda-talleres-grid {
   display: flex;

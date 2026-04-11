@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import { ESPECIALIDADES_TALLER } from '../data/registroVenezuela';
@@ -41,6 +41,8 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
   const [buscado, setBuscado] = useState(false);
   const [avisoSeleccionarEstado, setAvisoSeleccionarEstado] = useState(false);
   const [contactarTaller, setContactarTaller] = useState<Taller | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [mostrarRutaEnModal, setMostrarRutaEnModal] = useState(false);
 
   const ciudadesOpciones = estado ? getCiudadesPorEstado(estado) : [];
 
@@ -93,10 +95,55 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
 
   const abrirDetalleTaller = (t: Taller) => {
     setContactarTaller(t);
+    setMostrarRutaEnModal(false);
   };
   const cerrarContactar = () => {
     setContactarTaller(null);
+    setMostrarRutaEnModal(false);
   };
+
+  useEffect(() => {
+    if (!contactarTaller) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setContactarTaller(null);
+        setMostrarRutaEnModal(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [contactarTaller]);
+
+  const cerrarPanelResultadosTalleres = useCallback(() => {
+    setBuscado(false);
+    setTalleres([]);
+    setAvisoSeleccionarEstado(false);
+  }, []);
+
+  useEffect(() => {
+    if (!buscado) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [buscado]);
+
+  useEffect(() => {
+    if (!buscado) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (contactarTaller) return;
+      cerrarPanelResultadosTalleres();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [buscado, contactarTaller, cerrarPanelResultadosTalleres]);
 
   const tieneUbicacion = (t: Taller) =>
     t.latitud != null && t.longitud != null;
@@ -104,6 +151,12 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
   const linkRutaGoogleMaps = (t: Taller) => {
     if (t.latitud == null || t.longitud == null) return null;
     const dest = `${t.latitud},${t.longitud}`;
+    if (userLocation) {
+      const origin = `${userLocation.lat},${userLocation.lng}`;
+      return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
+        origin
+      )}&destination=${encodeURIComponent(dest)}&travelmode=driving`;
+    }
     return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
       dest
     )}&travelmode=driving`;
@@ -178,79 +231,122 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
         </button>
       </div>
 
-      {cargando ? (
-        <p className="busqueda-talleres-mensaje">Buscando talleres…</p>
-      ) : buscado && avisoSeleccionarEstado ? (
-        <p className="aviso-seleccionar-estado" role="status">
-          Debes seleccionar un estado
-        </p>
-      ) : buscado && talleres.length === 0 ? (
-        <p className="busqueda-talleres-sin-resultados">
-          No hay talleres con estos filtros: revisa <strong>estado</strong> y <strong>ciudad</strong> (deben
-          coincidir con el registro). En la web solo se listan talleres <strong>aprobados</strong> y con{' '}
-          <strong>membresía vigente</strong>. Si ya aprobaste uno en admin y no aparece, en Supabase ejecuta
-          una vez <code className="busqueda-talleres-sin-resultados-code">supabase-talleres-membresia-inicial.sql</code>{' '}
-          (o vuelve a pulsar &quot;Aprobar&quot; tras desplegar el SQL actualizado del repositorio).
-        </p>
-      ) : buscado && talleres.length > 0 ? (
-        <div className="busqueda-talleres-resultados">
-            <div className="busqueda-talleres-grid">
-            {talleres.map((t) => {
-              const espList = normalizeEspecialidadesTallerDb(t.especialidad);
-              const labelCard = `Ver datos de ${nombreTaller(t)}`;
-              return (
-                <article key={t.id} className="vendedores-cerca-card">
-                  <button
-                    type="button"
-                    className="busqueda-talleres-card-resumen"
-                    onClick={() => abrirDetalleTaller(t)}
-                    aria-label={labelCard}
-                  >
-                    <div className="vendedores-cerca-card-cuerpo busqueda-talleres-card-cuerpo-solo">
-                      <div className="vendedores-cerca-card-info">
-                        <h4 className="vendedores-cerca-card-nombre">{nombreTaller(t)}</h4>
-                        <div className="vendedores-cerca-card-meta">
-                          {(t.ciudad || t.estado) && (
-                            <span className="vendedores-cerca-card-ubicacion">
-                              {[t.ciudad, t.estado].filter(Boolean).join(', ')}
-                            </span>
-                          )}
-                          <span className="vendedores-cerca-card-subtitulo">Taller</span>
-                        </div>
-                        {espList.length > 0 && (
-                          <div className="busqueda-talleres-card-chips-row" aria-label="Especialidades">
-                            {espList.map((esp) => (
-                              <span key={esp} className="busqueda-talleres-chip">
-                                {esp}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                </article>
-              );
-            })}
+      {buscado && (
+        <div
+          className="resultados-busqueda-pagina-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="busqueda-talleres-overlay-titulo"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) cerrarPanelResultadosTalleres();
+          }}
+        >
+          <div
+            className="resultados-busqueda-pagina-panel"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="resultados-busqueda-pagina-panel-header">
+              <h3 id="busqueda-talleres-overlay-titulo">Talleres</h3>
+              <button
+                type="button"
+                className="resultados-busqueda-pagina-panel-cerrar"
+                onClick={cerrarPanelResultadosTalleres}
+              >
+                Cerrar
+              </button>
+            </div>
+            <div className="resultados-busqueda-pagina-panel-scroll">
+              {cargando ? (
+                <p className="busqueda-talleres-mensaje">Buscando talleres…</p>
+              ) : avisoSeleccionarEstado ? (
+                <p className="aviso-seleccionar-estado" role="status">
+                  Debes seleccionar un estado
+                </p>
+              ) : talleres.length === 0 ? (
+                <p className="busqueda-talleres-sin-resultados">
+                  No hay talleres con estos filtros: revisa <strong>estado</strong> y <strong>ciudad</strong>{' '}
+                  (deben coincidir con el registro). En la web solo se listan talleres{' '}
+                  <strong>aprobados</strong> y con <strong>membresía vigente</strong>. Si ya aprobaste uno en
+                  admin y no aparece, en Supabase ejecuta una vez{' '}
+                  <code className="busqueda-talleres-sin-resultados-code">
+                    supabase-talleres-membresia-inicial.sql
+                  </code>{' '}
+                  (o vuelve a pulsar &quot;Aprobar&quot; tras desplegar el SQL actualizado del repositorio).
+                </p>
+              ) : (
+                <div className="busqueda-talleres-resultados busqueda-talleres-resultados--en-overlay">
+                  <div className="busqueda-talleres-grid">
+                    {talleres.map((t) => {
+                      const espList = normalizeEspecialidadesTallerDb(t.especialidad);
+                      const labelCard = `Ver datos de ${nombreTaller(t)}`;
+                      return (
+                        <article key={t.id} className="vendedores-cerca-card">
+                          <button
+                            type="button"
+                            className="busqueda-talleres-card-resumen"
+                            onClick={() => abrirDetalleTaller(t)}
+                            aria-label={labelCard}
+                          >
+                            <div className="vendedores-cerca-card-cuerpo busqueda-talleres-card-cuerpo-solo">
+                              <div className="vendedores-cerca-card-info">
+                                <h4 className="vendedores-cerca-card-nombre">{nombreTaller(t)}</h4>
+                                <div className="vendedores-cerca-card-meta">
+                                  {(t.ciudad || t.estado) && (
+                                    <span className="vendedores-cerca-card-ubicacion">
+                                      {[t.ciudad, t.estado].filter(Boolean).join(', ')}
+                                    </span>
+                                  )}
+                                  <span className="vendedores-cerca-card-subtitulo">Taller</span>
+                                </div>
+                                {espList.length > 0 && (
+                                  <div className="busqueda-talleres-card-chips-row" aria-label="Especialidades">
+                                    {espList.map((esp) => (
+                                      <span key={esp} className="busqueda-talleres-chip">
+                                        {esp}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      ) : null}
+      )}
 
       {contactarTaller && (
         <div
-          className="busqueda-repuestos-modal-overlay"
+          className="busqueda-repuestos-modal-overlay busqueda-repuestos-modal-overlay--detalle"
           onClick={cerrarContactar}
           role="dialog"
           aria-modal="true"
           aria-labelledby="modal-taller-titulo"
         >
           <div
-            className="busqueda-repuestos-modal vendedores-cerca-modal-contactar"
+            className="busqueda-repuestos-modal vendedores-cerca-modal-contactar busqueda-repuestos-modal--panel"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 id="modal-taller-titulo" className="busqueda-repuestos-modal-titulo-seccion">
-              Datos del taller
-            </h3>
+            <div className="busqueda-repuestos-modal-header-bar">
+              <h3 id="modal-taller-titulo" className="busqueda-repuestos-modal-header-titulo">
+                Datos del taller
+              </h3>
+              <button
+                type="button"
+                className="busqueda-repuestos-modal-cerrar-x"
+                onClick={cerrarContactar}
+                aria-label="Cerrar ventana"
+              >
+                ×
+              </button>
+            </div>
+            <div className="busqueda-repuestos-modal-body-scroll">
             <div className="busqueda-repuestos-modal-producto-box">
               <div className="busqueda-repuestos-modal-datos">
                 <p className="busqueda-repuestos-modal-linea">
@@ -340,6 +436,9 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
                   lng={contactarTaller.longitud!}
                   nombreVendedor={nombreTaller(contactarTaller)}
                   tipoPunto="taller"
+                  userLat={userLocation?.lat}
+                  userLng={userLocation?.lng}
+                  mostrarRutaDesdeUsuario={mostrarRutaEnModal}
                 />
               </>
             )}
@@ -357,8 +456,42 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
               ) : (
                 <p className="busqueda-repuestos-modal-sin-contacto">Sin teléfono registrado.</p>
               )}
-              {tieneUbicacion(contactarTaller) && linkRutaGoogleMaps(contactarTaller) && (
-                <div className="vendedores-cerca-modal-ruta">
+            </div>
+            {tieneUbicacion(contactarTaller) && (
+              <div className="vendedores-cerca-modal-ruta">
+                <p className="vendedores-cerca-modal-ruta-hint">
+                  Usa <strong>Ver ruta en vivo</strong> cuando ya estés listo para ir al taller.
+                </p>
+                <button
+                  type="button"
+                  className="vendedores-cerca-modal-ruta-btn"
+                  onClick={() => {
+                    if (userLocation) {
+                      setMostrarRutaEnModal(true);
+                      return;
+                    }
+                    if (!navigator.geolocation) return;
+                    navigator.geolocation.getCurrentPosition(
+                      (pos) => {
+                        setUserLocation({
+                          lat: pos.coords.latitude,
+                          lng: pos.coords.longitude,
+                        });
+                        setMostrarRutaEnModal(true);
+                      },
+                      () => {},
+                      { enableHighAccuracy: true, timeout: 10000 }
+                    );
+                  }}
+                >
+                  Ver ruta en vivo en el mapa
+                </button>
+                {!userLocation && (
+                  <p className="vendedores-cerca-modal-ruta-hint">
+                    Al pulsar, el navegador te pedirá permiso para usar tu ubicación y trazar la ruta.
+                  </p>
+                )}
+                {linkRutaGoogleMaps(contactarTaller) && (
                   <a
                     href={linkRutaGoogleMaps(contactarTaller)!}
                     target="_blank"
@@ -367,11 +500,12 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
                   >
                     Abrir en Google Maps para navegar
                   </a>
-                </div>
-              )}
-              <button type="button" className="busqueda-repuestos-modal-cerrar" onClick={cerrarContactar}>
-                Cerrar
-              </button>
+                )}
+              </div>
+            )}
+            <button type="button" className="busqueda-repuestos-modal-cerrar" onClick={cerrarContactar}>
+              Cerrar
+            </button>
             </div>
           </div>
         </div>

@@ -3,7 +3,7 @@ import type { User } from '@supabase/supabase-js';
 export type TipoPanel = 'comprador' | 'vendedor_taller';
 
 /**
- * Comprador: registro como usuario, o sin tipo explícito (p. ej. solo Google/correo).
+ * Comprador: registro como usuario, o sin tipo explícito (p. ej. cuenta de correo sin formulario de tipo).
  * Vendedor/taller: metadata de registro o cuentas antiguas con perfil de tienda/taller.
  */
 export function getTipoPanelUsuario(user: User | null | undefined): TipoPanel {

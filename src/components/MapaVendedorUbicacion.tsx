@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useLoadScript, GoogleMap, Marker, DirectionsService, DirectionsRenderer } from '@react-google-maps/api';
 import './MapaVendedorUbicacion.css';
 
@@ -60,10 +60,32 @@ export function MapVendedorUbicacion({
   const [rutaInfo, setRutaInfo] = useState<{ duracion?: string; distancia?: string } | null>(null);
   const [directionsError, setDirectionsError] = useState<string | null>(null);
   const directionsRequested = useRef(false);
+  const mapRef = useRef<google.maps.Map | null>(null);
+
+  const redimensionarMapa = useCallback(
+    (map: google.maps.Map) => {
+      const c = { lat, lng };
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          google.maps.event.trigger(map, 'resize');
+          map.setCenter(c);
+        });
+      });
+    },
+    [lat, lng]
+  );
 
   useEffect(() => {
     directionsRequested.current = false;
   }, [lat, lng, userLat, userLng, mostrarRutaDesdeUsuario]);
+
+  /** Dentro de modales con overflow/flex el mapa suele medir 0×0 hasta forzar resize */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !isLoaded) return;
+    const t = window.setTimeout(() => redimensionarMapa(map), 50);
+    return () => clearTimeout(t);
+  }, [isLoaded, lat, lng, redimensionarMapa]);
 
   if (!apiKey) return <p className="mapa-vendedor-error">Falta la clave de API de Google Maps.</p>;
   if (loadError) return <p className="mapa-vendedor-error">No se pudo cargar el mapa.</p>;
@@ -85,6 +107,13 @@ export function MapVendedorUbicacion({
           center={center}
           zoom={15}
           options={{ zoomControl: true, mapTypeControl: true, fullscreenControl: true }}
+          onLoad={(map) => {
+            mapRef.current = map;
+            redimensionarMapa(map);
+          }}
+          onUnmount={() => {
+            mapRef.current = null;
+          }}
         >
           <Marker
             position={center}

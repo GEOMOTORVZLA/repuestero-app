@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
@@ -191,6 +191,50 @@ export function VendedoresCercaDeMi() {
     setContactarTienda(null);
     setMostrarRutaEnModal(false);
   };
+
+  useEffect(() => {
+    if (!contactarTienda) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setContactarTienda(null);
+        setMostrarRutaEnModal(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [contactarTienda]);
+
+  const overlayVendedoresActivo = ubicado && Boolean(estadoFiltro.trim());
+
+  useEffect(() => {
+    if (!overlayVendedoresActivo) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [overlayVendedoresActivo]);
+
+  useEffect(() => {
+    if (!overlayVendedoresActivo) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (contactarTienda) return;
+      setUbicado(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [overlayVendedoresActivo, contactarTienda]);
+
+  const cerrarOverlayVendedores = () => {
+    setUbicado(false);
+  };
+
   const linkRutaGoogleMaps = (t: TiendaCerca) => {
     const dest = `${t.latitud},${t.longitud}`;
     if (gpsCoords) {
@@ -282,94 +326,148 @@ export function VendedoresCercaDeMi() {
       )}
 
       {ubicado && estadoFiltro && (
-        <div className="vendedores-cerca-resultados">
-          <div className="vendedores-cerca-resultados-header">
-            <h3>
-              {`Vendedores en ${ciudadFiltro ? `${ciudadFiltro}, ` : ''}${estadoFiltro} (${listaMostrar.length}${hayMas ? '+' : ''})`}
-            </h3>
-            <div className="vendedores-cerca-gps">
-              {!usandoGps ? (
-                <button
-                  type="button"
-                  className="vendedores-cerca-btn-gps"
-                  onClick={obtenerMiUbicacion}
-                  disabled={gpsObteniendo}
-                >
-                  {gpsObteniendo ? 'Obteniendo…' : '📍 Ordenar por cercanía'}
-                </button>
-              ) : (
-                <button type="button" className="vendedores-cerca-btn-quitar-gps" onClick={quitarGps}>
-                  Quitar orden por cercanía
-                </button>
-              )}
+        <div
+          className="resultados-busqueda-pagina-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="vendedores-cerca-overlay-titulo"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) cerrarOverlayVendedores();
+          }}
+        >
+          <div
+            className="resultados-busqueda-pagina-panel"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="resultados-busqueda-pagina-panel-header">
+              <h3 id="vendedores-cerca-overlay-titulo">
+                {`Vendedores en ${ciudadFiltro ? `${ciudadFiltro}, ` : ''}${estadoFiltro} (${listaMostrar.length}${hayMas ? '+' : ''})`}
+              </h3>
+              <button
+                type="button"
+                className="resultados-busqueda-pagina-panel-cerrar"
+                onClick={cerrarOverlayVendedores}
+              >
+                Volver
+              </button>
             </div>
-          </div>
-          {gpsError && <p className="vendedores-cerca-gps-error">{gpsError}</p>}
-          {usandoGps && <p className="vendedores-cerca-gps-ok">Listado ordenado del más cercano al más lejano según tu ubicación.</p>}
-          {cargando ? (
-            <p className="vendedores-cerca-cargando">Cargando vendedores…</p>
-          ) : error ? (
-            <p className="vendedores-cerca-error">{error}</p>
-          ) : listaMostrar.length === 0 ? (
-            <p className="vendedores-cerca-sin-resultados">
-              No hay vendedores con ese filtro de zona. Prueba con otro estado o municipio.
-            </p>
-          ) : (
-            <>
-              <div className="vendedores-cerca-grid">
-                {listaMostrar.map((t) => (
-                  <article key={t.id} className="vendedores-cerca-card">
-                    <div className="vendedores-cerca-card-cuerpo">
-                      <div className="vendedores-cerca-card-info">
-                        <h4 className="vendedores-cerca-card-nombre">{nombreTienda(t)}</h4>
-                        <div className="vendedores-cerca-card-meta">
-                          {(t.ciudad || t.estado) && (
-                            <span className="vendedores-cerca-card-ubicacion">
-                              {[t.ciudad, t.estado].filter(Boolean).join(', ')}
-                            </span>
-                          )}
-                          {t.distanciaKm != null && (
-                            <span className="vendedores-cerca-card-distancia">{t.distanciaKm.toFixed(1)} km</span>
-                          )}
-                          {!t.distanciaKm && (
-                            <span className="vendedores-cerca-card-subtitulo">Vendedor de repuestos</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="vendedores-cerca-card-botones">
+            <div className="resultados-busqueda-pagina-panel-scroll">
+              <div className="vendedores-cerca-resultados vendedores-cerca-resultados--en-overlay">
+                <div className="vendedores-cerca-resultados-header vendedores-cerca-resultados-header--en-overlay">
+                  <div className="vendedores-cerca-gps">
+                    {!usandoGps ? (
+                      <button
+                        type="button"
+                        className="vendedores-cerca-btn-gps"
+                        onClick={obtenerMiUbicacion}
+                        disabled={gpsObteniendo}
+                      >
+                        {gpsObteniendo ? 'Obteniendo…' : '📍 Ordenar por cercanía'}
+                      </button>
+                    ) : (
+                      <button type="button" className="vendedores-cerca-btn-quitar-gps" onClick={quitarGps}>
+                        Quitar orden por cercanía
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {gpsError && <p className="vendedores-cerca-gps-error">{gpsError}</p>}
+                {usandoGps && (
+                  <p className="vendedores-cerca-gps-ok">
+                    Listado ordenado del más cercano al más lejano según tu ubicación.
+                  </p>
+                )}
+                {cargando ? (
+                  <p className="vendedores-cerca-cargando">Cargando vendedores…</p>
+                ) : error ? (
+                  <p className="vendedores-cerca-error">{error}</p>
+                ) : listaMostrar.length === 0 ? (
+                  <p className="vendedores-cerca-sin-resultados">
+                    No hay vendedores con ese filtro de zona. Prueba con otro estado o municipio.
+                  </p>
+                ) : (
+                  <>
+                    <div className="vendedores-cerca-grid">
+                      {listaMostrar.map((t) => (
+                        <article key={t.id} className="vendedores-cerca-card">
+                          <div className="vendedores-cerca-card-cuerpo">
+                            <div className="vendedores-cerca-card-info">
+                              <h4 className="vendedores-cerca-card-nombre">{nombreTienda(t)}</h4>
+                              <div className="vendedores-cerca-card-meta">
+                                {(t.ciudad || t.estado) && (
+                                  <span className="vendedores-cerca-card-ubicacion">
+                                    {[t.ciudad, t.estado].filter(Boolean).join(', ')}
+                                  </span>
+                                )}
+                                {t.distanciaKm != null && (
+                                  <span className="vendedores-cerca-card-distancia">
+                                    {t.distanciaKm.toFixed(1)} km
+                                  </span>
+                                )}
+                                {!t.distanciaKm && (
+                                  <span className="vendedores-cerca-card-subtitulo">Vendedor de repuestos</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="vendedores-cerca-card-botones">
+                              <button
+                                type="button"
+                                className="vendedores-cerca-card-btn"
+                                onClick={() => abrirContactar(t)}
+                              >
+                                Contactar vendedor
+                              </button>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                    {hayMas && (
+                      <div className="busqueda-repuestos-cargar-mas">
                         <button
                           type="button"
-                          className="vendedores-cerca-card-btn"
-                          onClick={() => abrirContactar(t)}
+                          className="busqueda-repuestos-btn busqueda-repuestos-btn--cargar-mas"
+                          onClick={() => void cargarMasTiendas()}
+                          disabled={cargandoMas || cargando}
                         >
-                          Contactar vendedor
+                          {cargandoMas ? 'Cargando…' : 'Cargar más vendedores'}
                         </button>
                       </div>
-                    </div>
-                  </article>
-                ))}
+                    )}
+                  </>
+                )}
               </div>
-              {hayMas && (
-                <div className="busqueda-repuestos-cargar-mas">
-                  <button
-                    type="button"
-                    className="busqueda-repuestos-btn busqueda-repuestos-btn--cargar-mas"
-                    onClick={() => void cargarMasTiendas()}
-                    disabled={cargandoMas || cargando}
-                  >
-                    {cargandoMas ? 'Cargando…' : 'Cargar más vendedores'}
-                  </button>
-                </div>
-              )}
-            </>
-          )}
+            </div>
+          </div>
         </div>
       )}
 
       {contactarTienda && (
-        <div className="busqueda-repuestos-modal-overlay" onClick={cerrarContactar} role="dialog" aria-modal="true" aria-labelledby="modal-contactar-vendedor-titulo">
-          <div className="busqueda-repuestos-modal vendedores-cerca-modal-contactar" onClick={(e) => e.stopPropagation()}>
-            <h3 id="modal-contactar-vendedor-titulo" className="busqueda-repuestos-modal-titulo-seccion">Datos del vendedor</h3>
+        <div
+          className="busqueda-repuestos-modal-overlay busqueda-repuestos-modal-overlay--detalle"
+          onClick={cerrarContactar}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-contactar-vendedor-titulo"
+        >
+          <div
+            className="busqueda-repuestos-modal vendedores-cerca-modal-contactar busqueda-repuestos-modal--panel"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="busqueda-repuestos-modal-header-bar">
+              <h3 id="modal-contactar-vendedor-titulo" className="busqueda-repuestos-modal-header-titulo">
+                Datos del vendedor
+              </h3>
+              <button
+                type="button"
+                className="busqueda-repuestos-modal-cerrar-x"
+                onClick={cerrarContactar}
+                aria-label="Cerrar ventana"
+              >
+                ×
+              </button>
+            </div>
+            <div className="busqueda-repuestos-modal-body-scroll">
             <div className="busqueda-repuestos-modal-datos">
               <p className="busqueda-repuestos-modal-linea"><span className="busqueda-repuestos-modal-etiqueta">Nombre comercial</span> {nombreTienda(contactarTienda)}</p>
               {contactarTienda.rif != null && contactarTienda.rif !== '' && (
@@ -448,6 +546,7 @@ export function VendedoresCercaDeMi() {
               <button type="button" className="busqueda-repuestos-modal-cerrar" onClick={cerrarContactar}>
                 Cerrar
               </button>
+            </div>
             </div>
           </div>
         </div>
