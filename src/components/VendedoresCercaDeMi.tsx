@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
-import { TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS } from '../constants/googleMapsNavUi';
+import {
+  MENSAJE_AVISO_NAVEGACION_MAPS_TIENDA,
+  TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS,
+} from '../constants/googleMapsNavUi';
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
 import './VendedoresCercaDeMi.css';
 import './avisoSeleccionarEstado.css';
@@ -505,6 +508,9 @@ export function VendedoresCercaDeMi() {
               )}
               {contactarTienda.latitud != null && contactarTienda.longitud != null && (
                 <div className="vendedores-cerca-modal-ruta">
+                  <p className="maps-nav-aviso-confirmacion" role="note">
+                    {MENSAJE_AVISO_NAVEGACION_MAPS_TIENDA}
+                  </p>
                   <a
                     href={urlGoogleMapsDirSoloDestino(contactarTienda.latitud, contactarTienda.longitud)}
                     className="vendedores-cerca-modal-ruta-btn"

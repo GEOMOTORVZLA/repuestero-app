@@ -4,7 +4,10 @@ import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezue
 import { ESPECIALIDADES_TALLER } from '../data/registroVenezuela';
 import { normalizeEspecialidadesTallerDb } from '../utils/tallerEspecialidades';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
-import { TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS } from '../constants/googleMapsNavUi';
+import {
+  MENSAJE_AVISO_NAVEGACION_MAPS_TALLER,
+  TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS,
+} from '../constants/googleMapsNavUi';
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
 import './avisoSeleccionarEstado.css';
 import './BusquedaRepuestos.css';
@@ -438,6 +441,9 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
             </div>
             {tieneUbicacion(contactarTaller) && (
               <div className="vendedores-cerca-modal-ruta">
+                <p className="maps-nav-aviso-confirmacion" role="note">
+                  {MENSAJE_AVISO_NAVEGACION_MAPS_TALLER}
+                </p>
                 <a
                   href={urlGoogleMapsDirSoloDestino(contactarTaller.latitud!, contactarTaller.longitud!)}
                   className="vendedores-cerca-modal-ruta-btn"

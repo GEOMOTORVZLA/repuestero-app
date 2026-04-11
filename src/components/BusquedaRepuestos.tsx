@@ -12,7 +12,10 @@ import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
 import { TarjetaProductoBusqueda } from './TarjetaProductoBusqueda';
-import { TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS } from '../constants/googleMapsNavUi';
+import {
+  MENSAJE_AVISO_NAVEGACION_MAPS_TIENDA,
+  TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS,
+} from '../constants/googleMapsNavUi';
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
 import './BusquedaRepuestos.css';
 
@@ -877,6 +880,9 @@ export function BusquedaRepuestos({
             </div>
             {contactarProducto.tiendas?.latitud != null && contactarProducto.tiendas?.longitud != null && (
               <div className="vendedores-cerca-modal-ruta">
+                <p className="maps-nav-aviso-confirmacion" role="note">
+                  {MENSAJE_AVISO_NAVEGACION_MAPS_TIENDA}
+                </p>
                 <a
                   href={urlGoogleMapsDirSoloDestino(
                     contactarProducto.tiendas.latitud,
