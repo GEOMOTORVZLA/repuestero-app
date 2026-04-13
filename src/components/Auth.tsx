@@ -32,24 +32,30 @@ export function Auth({ onVolver, onIrARegistro, mensajeInicialError }: AuthProps
     setMensajeEsError(false);
     setCargando(true);
 
-    const { error } = modo === 'login'
-      ? await signIn(email, password)
-      : await signUp(email, password);
+    try {
+      const { error } = modo === 'login'
+        ? await signIn(email, password)
+        : await signUp(email, password);
 
-    if (error) {
-      const msg = error.toLowerCase().includes('rate limit')
-        ? 'Se enviaron demasiados correos en poco tiempo. Espera unos minutos e intenta de nuevo.'
-        : error;
+      if (error) {
+        const msg = error.toLowerCase().includes('rate limit')
+          ? 'Se enviaron demasiados correos en poco tiempo. Espera unos minutos e intenta de nuevo.'
+          : error;
+        setMensaje(msg);
+        setMensajeEsError(true);
+        return;
+      }
+
+      if (modo === 'registro') {
+        setMensaje('Cuenta creada. Revisa tu correo para confirmar, o inicia sesión si ya está activa.');
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No se pudo conectar. Revisa la red e intenta de nuevo.';
       setMensaje(msg);
       setMensajeEsError(true);
+    } finally {
       setCargando(false);
-      return;
     }
-
-    if (modo === 'registro') {
-      setMensaje('Cuenta creada. Revisa tu correo para confirmar, o inicia sesión si ya está activa.');
-    }
-    setCargando(false);
   };
 
   return (
