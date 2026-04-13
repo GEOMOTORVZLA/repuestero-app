@@ -1,9 +1,6 @@
 import { Link } from 'react-router-dom';
 import './PoliticaDivulgacionDatos.css';
 
-const raw = import.meta.env.VITE_POLITICA_DIVULGACION_DOC_URL;
-const DOC_URL = typeof raw === 'string' ? raw.trim() : '';
-
 export function PoliticaDivulgacionDatos() {
   return (
     <div className="politica-divulgacion">
@@ -77,17 +74,7 @@ export function PoliticaDivulgacionDatos() {
           </p>
 
           <aside className="politica-divulgacion-nota">
-            <strong>Nota:</strong> conserva una copia de este documento para tu archivo. Si publicas el mismo
-            texto en Google Docs u otro enlace, puedes definir la variable de entorno{' '}
-            <code>VITE_POLITICA_DIVULGACION_DOC_URL</code> para mostrar un acceso directo aquí abajo.
-            {DOC_URL ? (
-              <>
-                {' '}
-                <a href={DOC_URL} target="_blank" rel="noopener noreferrer" className="politica-divulgacion-doc-externo">
-                  Abrir documento en enlace externo
-                </a>
-              </>
-            ) : null}
+            <strong>Nota:</strong> conserva una copia de este documento para tu archivo.
           </aside>
         </div>
       </article>
