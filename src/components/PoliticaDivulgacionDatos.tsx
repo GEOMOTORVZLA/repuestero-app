@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { POLITICA_DIVULGACION_VERSION } from '../constants/politicaDivulgacionDatos';
 import './PoliticaDivulgacionDatos.css';
 
 const raw = import.meta.env.VITE_POLITICA_DIVULGACION_DOC_URL;
@@ -12,9 +11,7 @@ export function PoliticaDivulgacionDatos() {
         <Link to="/" className="politica-divulgacion-volver">
           Volver al inicio
         </Link>
-        <p className="politica-divulgacion-meta">
-          GEOMOTOR · Términos y datos · Versión {POLITICA_DIVULGACION_VERSION}
-        </p>
+        <p className="politica-divulgacion-meta">GEOMOTOR · Términos y datos</p>
       </header>
 
       <article className="politica-divulgacion-doc">

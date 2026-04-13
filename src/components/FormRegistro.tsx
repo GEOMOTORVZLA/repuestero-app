@@ -784,8 +784,8 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
                     className="form-registro-politica-link"
                   >
                     Términos y Condiciones y la Divulgación de Datos de Contacto
-                  </Link>{' '}
-                  (versión {POLITICA_DIVULGACION_VERSION}). Declaro haber leído el documento y autorizo la
+                  </Link>
+                  . Declaro haber leído el documento y autorizo la
                   publicación de mis datos e inventario según lo indicado allí.
                 </span>
               </label>
