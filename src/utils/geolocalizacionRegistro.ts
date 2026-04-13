@@ -176,26 +176,63 @@ export type ResultadoGeocodificacionRegistro = {
   direccionFormateada: string | null;
 };
 
+export type GeocodificacionInversaResult =
+  | { ok: true; data: ResultadoGeocodificacionRegistro | null }
+  | { ok: false; fase: 'maps' | 'geocode'; codigo: string };
+
+/** Texto para el usuario cuando falla carga de Maps o Geocoder (sin lanzar excepcion). */
+export function mensajeUsuarioGeocodificacion(res: GeocodificacionInversaResult): string {
+  if (res.ok) return '';
+  if (res.fase === 'maps') {
+    return 'No se pudo cargar Google Maps. Revisa VITE_GOOGLE_MAPS_API_KEY en Vercel y haz Redeploy sin cache.';
+  }
+  const c = res.codigo;
+  if (c === 'REQUEST_DENIED') {
+    return 'Google rechazó la petición: en Google Cloud, la clave debe permitir tu dominio (referentes HTTP, ej. https://tu-app.vercel.app/*) y tener habilitada Maps JavaScript API.';
+  }
+  if (c === 'OVER_QUERY_LIMIT' || c === 'OVER_DAILY_LIMIT') {
+    return 'Cuota de Google Maps agotada; completa estado y ciudad a mano o reintenta más tarde.';
+  }
+  if (c === 'INVALID_REQUEST') {
+    return 'No se pudo interpretar la direccion en Google; completa estado y ciudad manualmente.';
+  }
+  return `Google no devolvió la direccion (codigo: ${c}). Revisa la clave y restricciones, o elige estado y ciudad a mano.`;
+}
+
 /** Geocodificacion inversa con Maps JavaScript API (evita CORS del endpoint JSON). */
 export async function geocodificacionInversaParaRegistro(
   apiKey: string,
   lat: number,
   lng: number
-): Promise<ResultadoGeocodificacionRegistro | null> {
-  await asegurarGoogleMapsJs(apiKey);
+): Promise<GeocodificacionInversaResult> {
+  try {
+    await asegurarGoogleMapsJs(apiKey);
+  } catch {
+    return { ok: false, fase: 'maps', codigo: 'LOAD_ERROR' };
+  }
+
   const geocoder = new google.maps.Geocoder();
 
-  const resultado = await new Promise<google.maps.GeocoderResult | null>((resolve, reject) => {
-    geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-      if (status === 'OK' && results?.[0]) resolve(results[0]);
-      else if (status === 'ZERO_RESULTS') resolve(null);
-      else reject(new Error(String(status)));
+  const { result, status } = await new Promise<{
+    result: google.maps.GeocoderResult | null;
+    status: google.maps.GeocoderStatus;
+  }>((resolve) => {
+    geocoder.geocode({ location: { lat, lng } }, (results, st) => {
+      if (st === 'OK' && results?.[0]) resolve({ result: results[0], status: st });
+      else if (st === 'ZERO_RESULTS') resolve({ result: null, status: st });
+      else resolve({ result: null, status: st });
     });
   });
 
-  if (!resultado) return null;
+  if (status !== 'OK' && status !== 'ZERO_RESULTS') {
+    return { ok: false, fase: 'geocode', codigo: String(status) };
+  }
 
-  const comps = resultado.address_components;
+  if (!result) {
+    return { ok: true, data: null };
+  }
+
+  const comps = result.address_components;
   const admin1 = componentePorTipo(comps, ['administrative_area_level_1']);
   const locality = componentePorTipo(comps, ['locality']);
   const admin2 = componentePorTipo(comps, ['administrative_area_level_2']);
@@ -208,8 +245,11 @@ export async function geocodificacionInversaParaRegistro(
     : null;
 
   return {
-    estado,
-    ciudad,
-    direccionFormateada: resultado.formatted_address ?? null,
+    ok: true,
+    data: {
+      estado,
+      ciudad,
+      direccionFormateada: result.formatted_address ?? null,
+    },
   };
 }

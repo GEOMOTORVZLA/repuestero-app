@@ -11,6 +11,7 @@ import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezue
 import type { TipoRegistro } from './SelectorTipoRegistro';
 import {
   geocodificacionInversaParaRegistro,
+  mensajeUsuarioGeocodificacion,
   solicitarPosicionGpsPrecisa,
 } from '../utils/geolocalizacionRegistro';
 import { RegistroUbicacionMapa } from './RegistroUbicacionMapa';
@@ -85,27 +86,29 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
       const precisionM =
         typeof pos.coords.accuracy === 'number' ? Math.round(pos.coords.accuracy) : null;
       let texto = `Ubicación GPS (${precisionM != null ? `±${precisionM} m` : 'precisión desconocida'}): ${lat.toFixed(5)}, ${lng.toFixed(5)}.`;
+      if (precisionM != null && precisionM > 800) {
+        texto +=
+          ' La precisión del GPS es baja: si puedes, sal al exterior o acércate a una ventana y vuelve a pulsar Obtener ubicación actual para afinar el punto.';
+      }
 
       const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
       if (apiKey && (tipo === 'vendedor' || tipo === 'taller' || tipo === 'usuario')) {
-        try {
-          const geo = await geocodificacionInversaParaRegistro(apiKey, lat, lng);
-          if (geo?.estado) {
-            setEstadoTaller(geo.estado);
-            setCiudadTaller(geo.ciudad ?? '');
-            if (geo.direccionFormateada) {
-              texto += ` Dirección (Google): ${geo.direccionFormateada}.`;
-            }
-            texto += geo.ciudad
-              ? ' Estado y ciudad/municipio se rellenaron según esa dirección (revísalos).'
-              : ' Estado rellenado; elige ciudad/municipio en la lista si hace falta.';
-          } else {
-            texto +=
-              ' No se pudo enlazar la dirección con estado/ciudad de Venezuela; complétalos a mano.';
+        const geoRes = await geocodificacionInversaParaRegistro(apiKey, lat, lng);
+        if (!geoRes.ok) {
+          texto += ` ${mensajeUsuarioGeocodificacion(geoRes)}`;
+        } else if (geoRes.data?.estado) {
+          const geo = geoRes.data;
+          setEstadoTaller(geo.estado ?? '');
+          setCiudadTaller(geo.ciudad ?? '');
+          if (geo.direccionFormateada) {
+            texto += ` Dirección (Google): ${geo.direccionFormateada}.`;
           }
-        } catch {
+          texto += geo.ciudad
+            ? ' Estado y ciudad/municipio se rellenaron según esa dirección (revísalos).'
+            : ' Estado rellenado; elige ciudad/municipio en la lista si hace falta.';
+        } else {
           texto +=
-            ' Coordenadas listas; no se obtuvo la dirección con Google (revisa la clave de Maps o elige estado/ciudad manualmente).';
+            ' No se pudo enlazar la dirección con estado/ciudad de Venezuela; complétalos a mano.';
         }
       } else if (!apiKey && (tipo === 'vendedor' || tipo === 'taller')) {
         texto +=

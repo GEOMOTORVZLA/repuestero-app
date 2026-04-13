@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import {
   geocodificacionInversaParaRegistro,
+  mensajeUsuarioGeocodificacion,
   solicitarPosicionGpsPrecisa,
 } from '../utils/geolocalizacionRegistro';
 import { RegistroUbicacionMapa } from './RegistroUbicacionMapa';
@@ -55,20 +56,19 @@ export function RegistroTienda() {
       let msg = `Ubicaci?n GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
       const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
       if (apiKey) {
-        try {
-          const geo = await geocodificacionInversaParaRegistro(apiKey, lat, lng);
-          if (geo?.estado) {
-            setEstadoUbicacion(geo.estado);
-            setCiudad(geo.ciudad ?? '');
-            if (geo.direccionFormateada) {
-              msg += `. ${geo.direccionFormateada}`;
-            }
-            msg += geo.ciudad
-              ? ' Estado y ciudad actualizados seg?n Google (rev?salos).'
-              : ' Estado actualizado; elige ciudad/municipio si no coincide.';
+        const geoRes = await geocodificacionInversaParaRegistro(apiKey, lat, lng);
+        if (!geoRes.ok) {
+          msg += `. ${mensajeUsuarioGeocodificacion(geoRes)}`;
+        } else if (geoRes.data?.estado) {
+          const geo = geoRes.data;
+          setEstadoUbicacion(geo.estado ?? '');
+          setCiudad(geo.ciudad ?? '');
+          if (geo.direccionFormateada) {
+            msg += `. ${geo.direccionFormateada}`;
           }
-        } catch {
-          msg += '. No se pudo leer la direcci?n con Google.';
+          msg += geo.ciudad
+            ? ' Estado y ciudad actualizados seg?n Google (rev?salos).'
+            : ' Estado actualizado; elige ciudad/municipio si no coincide.';
         }
       } else {
         msg += '. Configura VITE_GOOGLE_MAPS_API_KEY para rellenar estado y ciudad autom?ticamente.';
