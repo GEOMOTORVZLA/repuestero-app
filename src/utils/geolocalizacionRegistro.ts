@@ -188,13 +188,23 @@ export function mensajeUsuarioGeocodificacion(res: GeocodificacionInversaResult)
   }
   const c = res.codigo;
   if (c === 'REQUEST_DENIED') {
-    return 'Google rechazó la petición: en Google Cloud, la clave debe permitir tu dominio (referentes HTTP, ej. https://tu-app.vercel.app/*) y tener habilitada Maps JavaScript API.';
+    const ref =
+      typeof window !== 'undefined' && window.location?.origin
+        ? `${window.location.origin}/*`
+        : 'https://tu-proyecto.vercel.app/*';
+    return (
+      `Google rechazó la petición (dominio no autorizado para esta clave). ` +
+      `En Google Cloud → APIs y servicios → Credenciales → abre esta API key → Restricciones de aplicación → ` +
+      `«Sitios web» y añade el referente: ${ref} ` +
+      `(con https y /* al final). En «Restricciones de API» incluye al menos Maps JavaScript API. ` +
+      `Si la clave estaba limitada por direcciones IP, cámbiala a referentes web: las peticiones salen del navegador, no de los servidores de Vercel.`
+    );
   }
   if (c === 'OVER_QUERY_LIMIT' || c === 'OVER_DAILY_LIMIT') {
     return 'Cuota de Google Maps agotada; completa estado y ciudad a mano o reintenta más tarde.';
   }
   if (c === 'INVALID_REQUEST') {
-    return 'No se pudo interpretar la direccion en Google; completa estado y ciudad manualmente.';
+    return 'No se pudo interpretar la dirección en Google; completa estado y ciudad manualmente.';
   }
   return `Google no devolvió la direccion (codigo: ${c}). Revisa la clave y restricciones, o elige estado y ciudad a mano.`;
 }
