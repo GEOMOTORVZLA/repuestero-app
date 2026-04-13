@@ -53,6 +53,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
   const [longitudGps, setLongitudGps] = useState('');
   const [gpsDetectando, setGpsDetectando] = useState(false);
   const [gpsMensaje, setGpsMensaje] = useState('');
+  const [gpsMensajeExito, setGpsMensajeExito] = useState(false);
   const [mensaje, setMensaje] = useState('');
   const [cargando, setCargando] = useState(false);
   const [metodosPago, setMetodosPago] = useState<string[]>([]);
@@ -71,10 +72,12 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
 
   const detectarUbicacion = useCallback(async () => {
     if (!navigator.geolocation) {
+      setGpsMensajeExito(false);
       setGpsMensaje('Tu navegador no soporta geolocalización. Puedes escribir las coordenadas manualmente.');
       return;
     }
     setGpsMensaje('');
+    setGpsMensajeExito(false);
     setGpsDetectando(true);
     try {
       const pos = await solicitarPosicionGpsPrecisa();
@@ -85,38 +88,51 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
 
       const precisionM =
         typeof pos.coords.accuracy === 'number' ? Math.round(pos.coords.accuracy) : null;
-      let texto = `Ubicación GPS (${precisionM != null ? `±${precisionM} m` : 'precisión desconocida'}): ${lat.toFixed(5)}, ${lng.toFixed(5)}.`;
-      if (precisionM != null && precisionM > 800) {
-        texto +=
-          ' La precisión del GPS es baja: si puedes, sal al exterior o acércate a una ventana y vuelve a pulsar Obtener ubicación actual para afinar el punto.';
-      }
+      const precisionLabel = precisionM != null ? `±${precisionM} m` : 'precisión desconocida';
+      const baseGps = `Ubicación GPS (${precisionLabel}): ${lat.toFixed(5)}, ${lng.toFixed(5)}.`;
+      const avisoGpsImpreciso =
+        precisionM != null && precisionM > 800
+          ? ' La precisión del GPS es baja: si puedes, sal al exterior o acércate a una ventana y vuelve a pulsar Obtener ubicación actual para afinar el punto.'
+          : '';
 
       const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
+      let texto: string;
+      let geoExito = false;
+
       if (apiKey && (tipo === 'vendedor' || tipo === 'taller' || tipo === 'usuario')) {
         const geoRes = await geocodificacionInversaParaRegistro(apiKey, lat, lng);
         if (!geoRes.ok) {
-          texto += ` ${mensajeUsuarioGeocodificacion(geoRes)}`;
+          texto = `${baseGps}${avisoGpsImpreciso} ${mensajeUsuarioGeocodificacion(geoRes)}`;
         } else if (geoRes.data?.estado) {
+          geoExito = true;
           const geo = geoRes.data;
           setEstadoTaller(geo.estado ?? '');
           setCiudadTaller(geo.ciudad ?? '');
+          const coordsActuales = `Coordenadas actuales: ${lat.toFixed(5)}, ${lng.toFixed(5)} (${precisionLabel}).`;
+          texto = geo.ciudad
+            ? 'Listo: Google encontró una dirección en la zona y rellenó estado y ciudad/municipio (revísalos).'
+            : 'Listo: Google encontró una dirección en la zona y rellenó el estado (revísalos). Elige ciudad/municipio en la lista si hace falta.';
           if (geo.direccionFormateada) {
-            texto += ` Dirección (Google): ${geo.direccionFormateada}.`;
+            texto += ` Dirección: ${geo.direccionFormateada}.`;
           }
-          texto += geo.ciudad
-            ? ' Estado y ciudad/municipio se rellenaron según esa dirección (revísalos).'
-            : ' Estado rellenado; elige ciudad/municipio en la lista si hace falta.';
+          texto += ` ${coordsActuales}`;
+          if (precisionM != null && precisionM > 800) {
+            texto +=
+              ' Con poca señal el resultado suele ser un código Plus (letras y números cortos) y no una calle exacta; puedes arrastrar el pin en el mapa o reintentar al aire libre.';
+          }
         } else {
-          texto +=
-            ' No se pudo enlazar la dirección con estado/ciudad de Venezuela; complétalos a mano.';
+          texto = `${baseGps}${avisoGpsImpreciso} No se pudo enlazar la dirección con estado/ciudad de Venezuela; complétalos a mano.`;
         }
       } else if (!apiKey && (tipo === 'vendedor' || tipo === 'taller')) {
-        texto +=
-          ' Configura VITE_GOOGLE_MAPS_API_KEY para rellenar automáticamente estado y ciudad con Google.';
+        texto = `${baseGps}${avisoGpsImpreciso} Configura VITE_GOOGLE_MAPS_API_KEY para rellenar automáticamente estado y ciudad con Google.`;
+      } else {
+        texto = `${baseGps}${avisoGpsImpreciso}`;
       }
 
-      setGpsMensaje(texto);
+      setGpsMensajeExito(geoExito);
+      setGpsMensaje(texto.trim());
     } catch {
+      setGpsMensajeExito(false);
       setGpsMensaje(
         'No se pudo obtener la ubicación. Permite el acceso al GPS, espera unos segundos (mejor al aire libre) o escribe las coordenadas manualmente.'
       );
@@ -676,7 +692,11 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
               />
             )}
             {!gpsDetectando && gpsMensaje ? (
-              <p className="form-registro-gps-mensaje">{gpsMensaje}</p>
+              <p
+                className={`form-registro-gps-mensaje${gpsMensajeExito ? ' form-registro-gps-mensaje--exito' : ''}`}
+              >
+                {gpsMensaje}
+              </p>
             ) : null}
           </div>
 
