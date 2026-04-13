@@ -776,18 +776,17 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
                   disabled={cargando}
                 />
                 <span className="form-registro-politica-texto">
-                  Declaro haber leído y acepto la{' '}
+                  Acepto los{' '}
                   <Link
                     to={rutaPoliticaDivulgacion}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="form-registro-politica-link"
                   >
-                    Política de divulgación de datos
+                    Términos y Condiciones y la Divulgación de Datos de Contacto
                   </Link>{' '}
-                  (versión {POLITICA_DIVULGACION_VERSION}), y autorizo que la información comercial y de
-                  contacto que ingreso en Geomotor pueda mostrarse a los usuarios de la plataforma según lo
-                  descrito en dicho documento.
+                  (versión {POLITICA_DIVULGACION_VERSION}). Declaro haber leído el documento y autorizo la
+                  publicación de mis datos e inventario según lo indicado allí.
                 </span>
               </label>
               <p className="form-registro-politica-ayuda">

@@ -13,72 +13,81 @@ export function PoliticaDivulgacionDatos() {
           Volver al inicio
         </Link>
         <p className="politica-divulgacion-meta">
-          Geomotor - Politica de divulgacion de datos - Version {POLITICA_DIVULGACION_VERSION}
+          GEOMOTOR · Términos y datos · Versión {POLITICA_DIVULGACION_VERSION}
         </p>
       </header>
 
       <article className="politica-divulgacion-doc">
         <div className="politica-divulgacion-hoja">
           <h1 className="politica-divulgacion-titulo">
-            Politica de divulgacion y tratamiento de datos comerciales
+            Términos y condiciones de uso y autorización para el tratamiento de datos personales
           </h1>
           <p className="politica-divulgacion-subtitulo">
-            Documento informativo para vendedores y talleres que se registran en Geomotor.
-            Al marcar la casilla de aceptacion en el registro, confirmas que has leido y comprendido lo siguiente.
+            El presente documento establece los términos bajo los cuales GEOMOTOR (en adelante, &quot;La
+            Plataforma&quot;) recolecta, almacena y utiliza la información de los usuarios que se registran
+            como vendedores o comercios.
           </p>
 
-          <h2 className="politica-divulgacion-h2">1. Finalidad</h2>
+          <h2 className="politica-divulgacion-h2">1. Objeto</h2>
           <p className="politica-divulgacion-p">
-            Geomotor conecta compradores con vendedores de repuestos y con talleres. Para ello es necesario
-            mostrar a los usuarios informacion comercial y de contacto asociada a tu negocio.
+            Al marcar la casilla de aceptación, el Usuario otorga su consentimiento expreso, libre, informado
+            y específico para que sus datos de contacto y la información de su inventario sean publicados en
+            el portal web y aplicaciones de La Plataforma.
           </p>
 
-          <h2 className="politica-divulgacion-h2">2. Datos que pueden mostrarse publicamente</h2>
-          <p className="politica-divulgacion-p">Segun lo que ingreses, podran verse, entre otros:</p>
+          <h2 className="politica-divulgacion-h2">2. Datos objeto de divulgación</h2>
+          <p className="politica-divulgacion-p">
+            La Plataforma publicará, con el fin de facilitar la conexión entre vendedores y compradores, los
+            siguientes datos:
+          </p>
           <ul className="politica-divulgacion-lista">
-            <li>Nombre comercial y datos identificativos (por ejemplo, razon social o RIF).</li>
-            <li>Telefono y, si lo indicas, correo u otros medios de contacto autorizados.</li>
-            <li>Estado, ciudad o municipio y, si aplica, direccion u orientacion de ubicacion.</li>
-            <li>Coordenadas o mapa cuando actives la ubicacion para busquedas por zona.</li>
-            <li>Informacion de catalogo que publiques como vendedor.</li>
-            <li>Especialidad, marca atendida y descripcion del taller.</li>
-            <li>Formas de pago que indiques como aceptadas.</li>
+            <li>Nombre del establecimiento o razón social.</li>
+            <li>Ubicación geográfica exacta (geolocalización).</li>
+            <li>Números de contacto telefónico y enlaces directos a servicios de mensajería (WhatsApp).</li>
+            <li>Imágenes y precios de los productos cargados por el Usuario.</li>
           </ul>
 
-          <h2 className="politica-divulgacion-h2">3. Alcance de la divulgacion</h2>
+          <h2 className="politica-divulgacion-h2">3. Finalidad</h2>
           <p className="politica-divulgacion-p">
-            La informacion podra ser consultada por visitantes y usuarios registrados en busquedas, listados,
-            fichas de contacto y mapas. El servicio tiene como fin facilitar el contacto comercial entre partes.
+            La finalidad de la divulgación de estos datos es permitir que potenciales compradores localicen el
+            repuesto deseado y se comuniquen directamente con el Usuario para concretar la transacción
+            comercial.
           </p>
 
-          <h2 className="politica-divulgacion-h2">4. Tu responsabilidad</h2>
+          <h2 className="politica-divulgacion-h2">4. Responsabilidad del usuario</h2>
           <p className="politica-divulgacion-p">
-            Te comprometes a proporcionar datos veraces y actualizados, y a no incluir informacion de terceros
-            sin autorizacion. Geomotor puede moderar o restringir perfiles que incumplan normas de uso o
-            requisitos de aprobacion.
+            El Usuario garantiza que la información suministrada es veraz y que cuenta con las facultades
+            legales para comercializar los productos ofrecidos. El Usuario entiende que La Plataforma actúa
+            únicamente como un conector logístico y tecnológico, y no es responsable de la calidad, garantía o
+            entrega de los productos vendidos.
           </p>
 
-          <h2 className="politica-divulgacion-h2">5. Conservacion y revisiones</h2>
+          <h2 className="politica-divulgacion-h2">5. Derechos del titular (ARCO)</h2>
           <p className="politica-divulgacion-p">
-            Los datos se conservaran mientras mantengas una cuenta activa o segun lo requiera la operacion del
-            servicio y la normativa aplicable. Esta politica puede actualizarse; si hay cambios sustanciales,
-            se podra solicitar una nueva aceptacion o notificacion por los medios disponibles.
+            El Usuario podrá en cualquier momento solicitar la actualización, corrección o supresión de sus
+            datos de contacto de la vista pública, enviando una solicitud a través de los canales oficiales de
+            soporte de GEOMOTOR o dando de baja su suscripción mensual.
           </p>
 
-          <h2 className="politica-divulgacion-h2">6. Aceptacion</h2>
+          <h2 className="politica-divulgacion-h2">6. Aceptación</h2>
           <p className="politica-divulgacion-p">
-            Al registrarte como vendedor o taller y marcar la casilla correspondiente, declaras haber leido
-            esta politica y aceptas la divulgacion de los datos comerciales descritos en el marco de Geomotor.
+            Al marcar el checkbox de &quot;Acepto los Términos y Condiciones y la Divulgación de Datos de
+            Contacto&quot;, el Usuario declara haber leído y aceptado en su totalidad el presente documento.
+          </p>
+
+          <p className="politica-divulgacion-p politica-divulgacion-cierre">
+            <strong>GEOMOTOR</strong> — Conectando el mercado automotriz de Venezuela.
           </p>
 
           <aside className="politica-divulgacion-nota">
-            <strong>Nota:</strong> conviene que un asesor legal adapte este texto. Puedes sustituir estos
-            parrafos por el documento definitivo (por ejemplo el generado en Gemini).
+            <strong>Nota:</strong> conserva una copia de este documento para tu archivo. Si publicas el mismo
+            texto en Google Docs u otro enlace, puedes definir la variable de entorno{' '}
+            <code>VITE_POLITICA_DIVULGACION_DOC_URL</code> para mostrar un acceso directo aquí abajo.
             {DOC_URL ? (
               <>
                 {' '}
                 <a href={DOC_URL} target="_blank" rel="noopener noreferrer" className="politica-divulgacion-doc-externo">
-                  Abrir borrador en documento externo
+                  Abrir documento en enlace externo
                 </a>
               </>
             ) : null}
