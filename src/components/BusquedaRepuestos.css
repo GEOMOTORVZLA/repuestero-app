@@ -170,11 +170,13 @@
 
 .busqueda-repuestos-titulo--landing {
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: clamp(1rem, 2.5vw, 1.25rem);
-  margin: 0 0 1rem;
+  letter-spacing: -0.01em;
+  font-size: var(--seccion-titulo-size, 1.4rem);
+  font-weight: var(--seccion-titulo-weight, 600);
+  color: var(--seccion-titulo-color, #2d3748);
+  margin: 0 0 0.5rem;
   padding: 0 0.75rem;
-  line-height: 1.35;
+  line-height: 1.25;
 }
 
 .busqueda-repuestos-texto-fila {

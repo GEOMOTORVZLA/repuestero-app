@@ -595,7 +595,9 @@ export function BusquedaRepuestos({
       {esCompacto ? (
         <>
           <h2 id="busqueda-landing-titulo" className="busqueda-repuestos-titulo busqueda-repuestos-titulo--landing">
-            {esMoto ? 'Busca el repuesto para tu moto' : 'Busca el producto que necesitas'}
+            {esMoto
+              ? 'BUSCA EL REPUESTO PARA TU MOTO'
+              : 'BUSCA EL REPUESTO O PRODUCTO QUE NECESITAS'}
           </h2>
           <div className="busqueda-repuestos-form busqueda-repuestos-form--solo-texto">
             <div className="busqueda-repuestos-texto-bloque busqueda-repuestos-texto-bloque--compact">
