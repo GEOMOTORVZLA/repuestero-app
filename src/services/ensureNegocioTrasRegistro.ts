@@ -14,6 +14,9 @@ type PerfilVendedorMeta = {
   latitud?: number;
   longitud?: number;
   metodos_pago?: string[] | null;
+  politica_divulgacion_aceptada?: boolean;
+  politica_divulgacion_version?: string | null;
+  politica_divulgacion_aceptada_en?: string | null;
 };
 
 type PerfilTallerMeta = {
@@ -31,6 +34,9 @@ type PerfilTallerMeta = {
   latitud?: number;
   longitud?: number;
   metodos_pago?: string[] | null;
+  politica_divulgacion_aceptada?: boolean;
+  politica_divulgacion_version?: string | null;
+  politica_divulgacion_aceptada_en?: string | null;
 };
 
 function especialidadTallerDesdeMeta(p: PerfilTallerMeta): string[] {
@@ -86,6 +92,15 @@ async function runEnsureNegocio(user: User): Promise<void> {
         latitud: typeof perfil.latitud === 'number' ? perfil.latitud : 0,
         longitud: typeof perfil.longitud === 'number' ? perfil.longitud : 0,
         metodos_pago: perfil.metodos_pago?.length ? perfil.metodos_pago : null,
+        politica_divulgacion_aceptada: perfil.politica_divulgacion_aceptada === true,
+        politica_divulgacion_version:
+          typeof perfil.politica_divulgacion_version === 'string'
+            ? perfil.politica_divulgacion_version
+            : null,
+        politica_divulgacion_aceptada_en:
+          typeof perfil.politica_divulgacion_aceptada_en === 'string'
+            ? perfil.politica_divulgacion_aceptada_en
+            : null,
       });
       if (error) console.error('[ensureNegocioTrasRegistro] tiendas:', error.message);
       return;
@@ -133,6 +148,15 @@ async function runEnsureNegocio(user: User): Promise<void> {
         latitud: typeof perfil.latitud === 'number' ? perfil.latitud : 0,
         longitud: typeof perfil.longitud === 'number' ? perfil.longitud : 0,
         metodos_pago: perfil.metodos_pago?.length ? perfil.metodos_pago : null,
+        politica_divulgacion_aceptada: perfil.politica_divulgacion_aceptada === true,
+        politica_divulgacion_version:
+          typeof perfil.politica_divulgacion_version === 'string'
+            ? perfil.politica_divulgacion_version
+            : null,
+        politica_divulgacion_aceptada_en:
+          typeof perfil.politica_divulgacion_aceptada_en === 'string'
+            ? perfil.politica_divulgacion_aceptada_en
+            : null,
       });
       if (error) console.error('[ensureNegocioTrasRegistro] talleres:', error.message);
     }

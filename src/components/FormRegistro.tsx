@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import {
   TIPOS_RIF,
@@ -15,6 +16,10 @@ import {
   solicitarPosicionGpsPrecisa,
 } from '../utils/geolocalizacionRegistro';
 import { RegistroUbicacionMapa } from './RegistroUbicacionMapa';
+import {
+  POLITICA_DIVULGACION_VERSION,
+  RUTA_POLITICA_DIVULGACION_DATOS,
+} from '../constants/politicaDivulgacionDatos';
 
 const MARCAS_TALLER = [
   'Multimarca',
@@ -31,6 +36,11 @@ interface FormRegistroProps {
 }
 
 export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
+  const location = useLocation();
+  const rutaPoliticaDivulgacion = location.pathname.startsWith('/motos')
+    ? '/motos/legal/politica-divulgacion-datos'
+    : RUTA_POLITICA_DIVULGACION_DATOS;
+
   const [tipoPersona, setTipoPersona] = useState<'natural' | 'juridico'>('natural');
   const [nombreJuridico, setNombreJuridico] = useState('');
   const [nombreComercial, setNombreComercial] = useState('');
@@ -57,6 +67,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
   const [mensaje, setMensaje] = useState('');
   const [cargando, setCargando] = useState(false);
   const [metodosPago, setMetodosPago] = useState<string[]>([]);
+  const [aceptaPoliticaDivulgacion, setAceptaPoliticaDivulgacion] = useState(false);
 
   const titulo =
     tipo === 'vendedor'
@@ -160,6 +171,19 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
       setMensaje('Selecciona al menos una especialidad del taller.');
       return;
     }
+    if ((tipo === 'vendedor' || tipo === 'taller') && !aceptaPoliticaDivulgacion) {
+      setMensaje('Debes leer y aceptar la Política de divulgación de datos para completar el registro.');
+      return;
+    }
+
+    const politicaAceptacion =
+      tipo === 'vendedor' || tipo === 'taller'
+        ? {
+            politica_divulgacion_aceptada: true as const,
+            politica_divulgacion_version: POLITICA_DIVULGACION_VERSION,
+            politica_divulgacion_aceptada_en: new Date().toISOString(),
+          }
+        : null;
 
     // Preparamos el metadata del registro para poder mostrar/recuperar
     // los datos del vendedor/taller aunque Supabase requiera confirmación de email
@@ -190,6 +214,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
               latitud: latMeta,
               longitud: lngMeta,
               metodos_pago: metodosPago.length ? metodosPago : null,
+              ...politicaAceptacion,
             },
           }
         : tipo === 'taller'
@@ -211,6 +236,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
                 latitud: latMeta,
                 longitud: lngMeta,
                 metodos_pago: metodosPago.length ? metodosPago : null,
+                ...politicaAceptacion,
               },
             }
           : tipo === 'usuario'
@@ -280,6 +306,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           latitud: lat,
           longitud: lng,
           metodos_pago: metodosPago.length ? metodosPago : null,
+          ...(politicaAceptacion ?? {}),
         });
         if (insertError) {
           setCargando(false);
@@ -303,6 +330,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           latitud: lat,
           longitud: lng,
           metodos_pago: metodosPago.length ? metodosPago : null,
+          ...(politicaAceptacion ?? {}),
         });
         if (insertError) {
           setCargando(false);
@@ -736,6 +764,37 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
               disabled={cargando}
             />
           </div>
+
+          {(tipo === 'vendedor' || tipo === 'taller') && (
+            <div className="form-registro-campo form-registro-politica">
+              <label className="form-registro-politica-label" htmlFor="acepta-politica-divulgacion">
+                <input
+                  id="acepta-politica-divulgacion"
+                  type="checkbox"
+                  checked={aceptaPoliticaDivulgacion}
+                  onChange={(e) => setAceptaPoliticaDivulgacion(e.target.checked)}
+                  disabled={cargando}
+                />
+                <span className="form-registro-politica-texto">
+                  Declaro haber leído y acepto la{' '}
+                  <Link
+                    to={rutaPoliticaDivulgacion}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="form-registro-politica-link"
+                  >
+                    Política de divulgación de datos
+                  </Link>{' '}
+                  (versión {POLITICA_DIVULGACION_VERSION}), y autorizo que la información comercial y de
+                  contacto que ingreso en Geomotor pueda mostrarse a los usuarios de la plataforma según lo
+                  descrito en dicho documento.
+                </span>
+              </label>
+              <p className="form-registro-politica-ayuda">
+                Puedes abrir el documento en una pestaña nueva para leerlo con calma en el móvil.
+              </p>
+            </div>
+          )}
 
           {mensaje && (
             <p className={`form-registro-mensaje ${mensaje.includes('no coinciden') || mensaje.includes('Error') ? 'error' : ''}`}>
