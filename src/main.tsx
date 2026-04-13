@@ -30,5 +30,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
     </div>
   );
 } else {
-  void import('./main-app');
+  void import('./main-app').catch((err: unknown) => {
+    console.error('No se pudo cargar la aplicación:', err);
+    const root = document.getElementById('root');
+    if (!root) return;
+    const detail = err instanceof Error ? err.message : String(err);
+    root.innerHTML = `
+      <div style="font-family: system-ui, sans-serif; padding: 1.5rem; max-width: 36rem; margin: 2rem auto; line-height: 1.5;">
+        <h1 style="font-size: 1.25rem;">Error al cargar la aplicación</h1>
+        <p>No se pudo descargar o ejecutar el código principal. Comprueba la red (F12 → Red), desactiva bloqueadores o prueba otra red.</p>
+        <p style="color: #64748b; font-size: 0.875rem; word-break: break-all;">${detail.replace(/</g, '&lt;')}</p>
+      </div>`;
+  });
 }
