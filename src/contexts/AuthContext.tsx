@@ -44,14 +44,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!cancelled) setUser(u);
     };
 
+    /**
+     * Antes: setLoading(false) iba en .finally() después de aplicarSesion (ensureNegocio + Supabase).
+     * Si la red bloqueaba o Supabase tardaba, loading nunca terminaba → pantalla "Cargando..." infinita (Chrome).
+     * Ahora: quitamos el bloqueo en cuanto getSession responde y refinamos usuario en segundo plano.
+     */
+    let sessionRespondio = false;
+    const watchdogMs = 12000;
+    const watchdog = window.setTimeout(() => {
+      if (!cancelled && !sessionRespondio) {
+        setLoading(false);
+      }
+    }, watchdogMs);
+
     supabase.auth
       .getSession()
-      .then(({ data: { session } }) => aplicarSesion(session))
-      .catch(() => {
-        if (!cancelled) setUser(null);
+      .then(async ({ data: { session } }) => {
+        if (cancelled) return;
+        sessionRespondio = true;
+        window.clearTimeout(watchdog);
+        const raw = session?.user ?? null;
+        if (raw) setUser(raw);
+        else setUser(null);
+        setLoading(false);
+        try {
+          await aplicarSesion(session);
+        } catch (e) {
+          console.error('[Auth] Error al sincronizar sesión con el negocio:', e);
+        }
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+      .catch(() => {
+        if (!cancelled) {
+          sessionRespondio = true;
+          window.clearTimeout(watchdog);
+          setUser(null);
+          setLoading(false);
+        }
       });
 
     const {
