@@ -8,6 +8,7 @@ import { MARCAS_MOTOS } from '../data/marcasMotos';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import * as XLSX from 'xlsx';
+import { normalizarMonedaImport } from '../utils/monedaProducto';
 import './ImportarProductosCSV.css';
 
 type Moneda = 'BS' | 'USD';
@@ -109,13 +110,6 @@ function parseXLSXToRows(arrayBuffer: ArrayBuffer): string[][] {
     .filter((r) => r.some((c) => c !== ''));
 
   return rows;
-}
-
-function asMoneda(value: string): Moneda | null {
-  const v = value.trim().toUpperCase();
-  if (v === 'BS') return 'BS';
-  if (v === 'USD') return 'USD';
-  return null;
 }
 
 function normalizeOptionalText(value: string): string | null {
@@ -297,7 +291,7 @@ export function ImportarProductosCSV({
       const precioRaw = get(row, 'precio');
       const monedaRaw = get(row, 'moneda');
 
-      const moneda = asMoneda(monedaRaw);
+      const moneda = normalizarMonedaImport(monedaRaw);
       if (!nombre) {
         erroresFila.push(`Fila ${rowNumber}: falta "nombre".`);
         continue;
@@ -329,7 +323,9 @@ export function ImportarProductosCSV({
         continue;
       }
       if (!moneda) {
-        erroresFila.push(`Fila ${rowNumber}: "moneda" debe ser BS o USD (${monedaRaw || 'vacío'}).`);
+        erroresFila.push(
+          `Fila ${rowNumber}: "moneda" no reconocida (${monedaRaw || 'vacío'}). Usa BS o USD (Excel: "Dólares estadounidenses" también se acepta).`
+        );
         continue;
       }
 

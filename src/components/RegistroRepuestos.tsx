@@ -406,7 +406,7 @@ export function RegistroRepuestos({
               onChange={() => setMoneda('USD')}
               disabled={estado === 'registrando'}
             />
-            Dólares (USD)
+            USD
           </label>
         </div>
         <input

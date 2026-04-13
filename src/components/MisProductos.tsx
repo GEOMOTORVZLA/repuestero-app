@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import './MisProductos.css';
 import { EditarProducto, type ProductoEditable } from './EditarProducto';
 import { urlImagenProductoVariante } from '../utils/imagenProducto';
+import { etiquetaMoneda } from '../utils/monedaProducto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 
 interface ProductoPanel {
@@ -265,7 +266,7 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
               </p>
               <p className="mis-productos-detalle-linea">
                 <strong>Precio:</strong>{' '}
-                {productoDetalle.moneda === 'BS' ? 'Bs' : 'USD'}{' '}
+                {etiquetaMoneda(productoDetalle.moneda)}{' '}
                 {Number(productoDetalle.precio_usd).toLocaleString(undefined, {
                   minimumFractionDigits: 0,
                   maximumFractionDigits: 2,
@@ -419,7 +420,7 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
                         ·
                       </span>
                       <span className="mis-productos-card-precio">
-                        {p.moneda === 'BS' ? 'Bs' : 'USD'}{' '}
+                        {etiquetaMoneda(p.moneda)}{' '}
                         {Number(p.precio_usd).toLocaleString(undefined, {
                           minimumFractionDigits: 0,
                           maximumFractionDigits: 2,

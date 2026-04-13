@@ -17,6 +17,7 @@ import {
   normalizarUrlsACuatroSlots,
   slotsArchivosExtraVacios,
 } from '../utils/productoImagenesExtra';
+import { esMonedaBolivar } from '../utils/monedaProducto';
 import './RegistroRepuestos.css';
 
 export interface ProductoEditable {
@@ -55,7 +56,7 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
   // usamos un solo campo de texto; si no hay comentarios aún, usamos la descripción previa
   const [comentarios, setComentarios] = useState(producto.comentarios ?? producto.descripcion ?? '');
   const [precio, setPrecio] = useState(String(producto.precio_usd));
-  const [moneda, setMoneda] = useState<'BS' | 'USD'>(producto.moneda === 'USD' ? 'USD' : 'BS');
+  const [moneda, setMoneda] = useState<'BS' | 'USD'>(esMonedaBolivar(producto.moneda) ? 'BS' : 'USD');
   const [estado, setEstado] = useState<'idle' | 'guardando' | 'ok' | 'error'>('idle');
   const [mensaje, setMensaje] = useState('');
   const [nuevaFotoPrincipal, setNuevaFotoPrincipal] = useState<File | null>(null);
@@ -302,7 +303,7 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
               onChange={() => setMoneda('USD')}
               disabled={estado === 'guardando'}
             />
-            Dólares (USD)
+            USD
           </label>
         </div>
         <input

@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import { urlImagenProductoVariante } from '../utils/imagenProducto';
 import { urlsFotosProducto } from '../utils/productoImagenesExtra';
 import { etiquetaEspecialidadesTaller } from '../utils/tallerEspecialidades';
+import { etiquetaMoneda } from '../utils/monedaProducto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import './Dashboard.css';
 
@@ -786,7 +787,11 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             <td>{p.categoria || '—'}</td>
                             <td>{p.vertical === 'moto' ? 'Moto' : 'Auto'}</td>
                             <td>{[p.marca, p.modelo, p.anio].filter(Boolean).join(' · ') || '—'}</td>
-                            <td>{p.precio_usd != null ? `${p.moneda === 'BS' ? 'Bs' : 'USD'} ${Number(p.precio_usd).toLocaleString()}` : '—'}</td>
+                            <td>
+                              {p.precio_usd != null
+                                ? `${etiquetaMoneda(p.moneda)} ${Number(p.precio_usd).toLocaleString()}`
+                                : '—'}
+                            </td>
                             <td>
                               <span
                                 className={`dashboard-admin-status ${

@@ -1,5 +1,6 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { getTipoPanelUsuario } from '../utils/cuentaTipo';
+import { esMonedaBolivar, etiquetaMoneda } from '../utils/monedaProducto';
 
 const MAX_CONTACTOS = 5;
 
@@ -42,8 +43,9 @@ export async function registrarContactoProducto(
   producto: ProductoParaHistorial,
   tiendaNombre: string
 ): Promise<{ error: string | null }> {
-  const moneda = producto.moneda === 'BS' ? 'Bs' : 'USD';
-  const precio_texto = `${moneda} ${Number(producto.precio_usd).toLocaleString()}`;
+  const simbolo = etiquetaMoneda(producto.moneda);
+  const precio_texto = `${simbolo} ${Number(producto.precio_usd).toLocaleString()}`;
+  const monedaNorm = esMonedaBolivar(producto.moneda) ? 'BS' : 'USD';
 
   const { error: insErr } = await supabase.from('historial_contactos_producto').insert({
     user_id: userId,
@@ -51,7 +53,7 @@ export async function registrarContactoProducto(
     producto_nombre: producto.nombre,
     tienda_nombre: tiendaNombre,
     precio_texto,
-    moneda: producto.moneda,
+    moneda: monedaNorm,
   });
 
   if (insErr) {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { urlImagenProductoVariante } from '../utils/imagenProducto';
+import { etiquetaMoneda } from '../utils/monedaProducto';
 import { urlsFotosProducto } from '../utils/productoImagenesExtra';
 import './BusquedaRepuestos.css';
 
@@ -58,7 +59,7 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
       )}
       {p.descripcion && <p className="busqueda-repuestos-card-desc">{p.descripcion}</p>}
       <p className="busqueda-repuestos-card-precio">
-        {p.moneda === 'BS' ? 'Bs' : 'USD'} {Number(p.precio_usd).toLocaleString()}
+        {etiquetaMoneda(p.moneda)} {Number(p.precio_usd).toLocaleString()}
       </p>
     </div>
   );
@@ -118,7 +119,7 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
                 {p.nombre}
               </h4>
               <p className="busqueda-repuestos-card-precio busqueda-repuestos-card-precio--inline">
-                {p.moneda === 'BS' ? 'Bs' : 'USD'} {Number(p.precio_usd).toLocaleString()}
+                {etiquetaMoneda(p.moneda)} {Number(p.precio_usd).toLocaleString()}
               </p>
             </div>
             <button
