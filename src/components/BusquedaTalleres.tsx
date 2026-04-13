@@ -265,7 +265,7 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
                       const espList = normalizeEspecialidadesTallerDb(t.especialidad);
                       const labelCard = `Ver datos de ${nombreTaller(t)}`;
                       return (
-                        <article key={t.id} className="vendedores-cerca-card">
+                        <article key={t.id} className="vendedores-cerca-card busqueda-talleres-card">
                           <button
                             type="button"
                             className="busqueda-talleres-card-resumen"
@@ -284,12 +284,13 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
                                   <span className="vendedores-cerca-card-subtitulo">Taller</span>
                                 </div>
                                 {espList.length > 0 && (
-                                  <div className="busqueda-talleres-card-chips-row" aria-label="Especialidades">
-                                    {espList.map((esp) => (
-                                      <span key={esp} className="busqueda-talleres-chip">
-                                        {esp}
-                                      </span>
-                                    ))}
+                                  <div className="busqueda-talleres-card-especialidades">
+                                    <span className="busqueda-talleres-card-especialidades-label">
+                                      Especialidades
+                                    </span>
+                                    <p className="busqueda-talleres-card-especialidades-texto">
+                                      {espList.join(' · ')}
+                                    </p>
                                   </div>
                                 )}
                               </div>
