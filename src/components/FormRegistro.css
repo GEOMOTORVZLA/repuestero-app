@@ -18,6 +18,10 @@
   position: relative;
 }
 
+.form-registro-card--con-mapa {
+  max-width: min(100%, 560px);
+}
+
 .form-registro-volver {
   background: none;
   border: none;
@@ -258,6 +262,12 @@
   margin-top: 0.4rem;
   font-size: 0.8rem;
   color: #2b6cb0;
+}
+
+.form-registro-gps-mensaje--cargando {
+  color: #2c5282;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .form-registro-metodos-pago {

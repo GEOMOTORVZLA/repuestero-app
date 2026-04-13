@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import {
   TIPOS_RIF,
@@ -9,6 +9,11 @@ import {
 import { MARCAS_VEHICULOS } from '../data/marcasVehiculos';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import type { TipoRegistro } from './SelectorTipoRegistro';
+import {
+  geocodificacionInversaParaRegistro,
+  solicitarPosicionGpsPrecisa,
+} from '../utils/geolocalizacionRegistro';
+import { RegistroUbicacionMapa } from './RegistroUbicacionMapa';
 
 const MARCAS_TALLER = [
   'Multimarca',
@@ -58,29 +63,64 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
         ? 'Registro de Usuario'
         : 'Registro de Taller';
 
-  const detectarUbicacion = () => {
-    setGpsMensaje('');
+  const actualizarPosicionDesdeMapa = useCallback((lat: number, lng: number) => {
+    setLatitudGps(lat.toFixed(6));
+    setLongitudGps(lng.toFixed(6));
+  }, []);
+
+  const detectarUbicacion = useCallback(async () => {
     if (!navigator.geolocation) {
       setGpsMensaje('Tu navegador no soporta geolocalización. Puedes escribir las coordenadas manualmente.');
       return;
     }
+    setGpsMensaje('');
     setGpsDetectando(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLatitudGps(pos.coords.latitude.toFixed(6));
-        setLongitudGps(pos.coords.longitude.toFixed(6));
-        setGpsDetectando(false);
-        setGpsMensaje(
-          `Ubicación detectada: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`
-        );
-      },
-      () => {
-        setGpsDetectando(false);
-        setGpsMensaje('No se pudo obtener la ubicación. Puedes escribir las coordenadas manualmente.');
-      },
-      { enableHighAccuracy: true }
-    );
-  };
+    try {
+      const pos = await solicitarPosicionGpsPrecisa();
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      setLatitudGps(lat.toFixed(6));
+      setLongitudGps(lng.toFixed(6));
+
+      const precisionM =
+        typeof pos.coords.accuracy === 'number' ? Math.round(pos.coords.accuracy) : null;
+      let texto = `Ubicación GPS (${precisionM != null ? `±${precisionM} m` : 'precisión desconocida'}): ${lat.toFixed(5)}, ${lng.toFixed(5)}.`;
+
+      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
+      if (apiKey && (tipo === 'vendedor' || tipo === 'taller' || tipo === 'usuario')) {
+        try {
+          const geo = await geocodificacionInversaParaRegistro(apiKey, lat, lng);
+          if (geo?.estado) {
+            setEstadoTaller(geo.estado);
+            setCiudadTaller(geo.ciudad ?? '');
+            if (geo.direccionFormateada) {
+              texto += ` Dirección (Google): ${geo.direccionFormateada}.`;
+            }
+            texto += geo.ciudad
+              ? ' Estado y ciudad/municipio se rellenaron según esa dirección (revísalos).'
+              : ' Estado rellenado; elige ciudad/municipio en la lista si hace falta.';
+          } else {
+            texto +=
+              ' No se pudo enlazar la dirección con estado/ciudad de Venezuela; complétalos a mano.';
+          }
+        } catch {
+          texto +=
+            ' Coordenadas listas; no se obtuvo la dirección con Google (revisa la clave de Maps o elige estado/ciudad manualmente).';
+        }
+      } else if (!apiKey && (tipo === 'vendedor' || tipo === 'taller')) {
+        texto +=
+          ' Configura VITE_GOOGLE_MAPS_API_KEY para rellenar automáticamente estado y ciudad con Google.';
+      }
+
+      setGpsMensaje(texto);
+    } catch {
+      setGpsMensaje(
+        'No se pudo obtener la ubicación. Permite el acceso al GPS, espera unos segundos (mejor al aire libre) o escribe las coordenadas manualmente.'
+      );
+    } finally {
+      setGpsDetectando(false);
+    }
+  }, [tipo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,7 +308,9 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
 
   return (
     <div className="form-registro">
-      <div className="form-registro-card">
+      <div
+        className={`form-registro-card${tipo === 'vendedor' || tipo === 'taller' ? ' form-registro-card--con-mapa' : ''}`}
+      >
         <button type="button" className="form-registro-volver" onClick={onVolver}>
           ← Volver
         </button>
@@ -571,18 +613,37 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           <div className="form-registro-campo form-registro-gps">
             <label>Ubicación por coordenadas (GPS)</label>
             <p className="form-registro-gps-hint">
-              Este dato es importante para la geolocalización de tu cuenta dentro de la plataforma.
+              {tipo === 'vendedor' || tipo === 'taller' ? (
+                <>
+                  Pulsa <strong>Obtener ubicación actual</strong> para el GPS en tiempo real; tómate tu tiempo y verifica
+                  que la ubicación que estás colocando es la que coincide con tu local, esta información es{' '}
+                  <strong>IMPORTANTE</strong> para que luego el sistema pueda ubicarte eficientemente cuando los usuarios
+                  lo requieran. El mapa de abajo muestra el punto: puedes arrastrar el marcador o tocar el mapa para
+                  ajustar; latitud y longitud se sincronizan. Con Google Maps también rellenamos estado y ciudad al usar
+                  el botón.
+                </>
+              ) : (
+                <>
+                  Usa el botón para tomar el punto GPS en el momento. Con la clave de Google Maps, también rellenamos
+                  estado y ciudad según la dirección detectada.
+                </>
+              )}
             </p>
             <div className="form-registro-gps-controles">
               <button
                 type="button"
-                onClick={detectarUbicacion}
+                onClick={() => void detectarUbicacion()}
                 disabled={cargando || gpsDetectando}
                 className="form-registro-gps-boton"
               >
-                {gpsDetectando ? 'Detectando ubicación…' : 'Usar mi ubicación actual'}
+                {gpsDetectando ? 'Obteniendo ubicación…' : 'Obtener ubicación actual'}
               </button>
             </div>
+            {gpsDetectando && (
+              <p className="form-registro-gps-mensaje form-registro-gps-mensaje--cargando" role="status" aria-live="polite">
+                Estamos obteniendo tu ubicación actual, espera unos segundos por favor.
+              </p>
+            )}
             <div className="form-registro-gps-inputs">
               <input
                 type="text"
@@ -590,6 +651,8 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
                 value={latitudGps}
                 onChange={(e) => setLatitudGps(e.target.value)}
                 disabled={cargando}
+                inputMode="decimal"
+                autoComplete="off"
               />
               <input
                 type="text"
@@ -597,9 +660,21 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
                 value={longitudGps}
                 onChange={(e) => setLongitudGps(e.target.value)}
                 disabled={cargando}
+                inputMode="decimal"
+                autoComplete="off"
               />
             </div>
-            {gpsMensaje && <p className="form-registro-gps-mensaje">{gpsMensaje}</p>}
+            {(tipo === 'vendedor' || tipo === 'taller') && (
+              <RegistroUbicacionMapa
+                latitudStr={latitudGps}
+                longitudStr={longitudGps}
+                onPositionChange={actualizarPosicionDesdeMapa}
+                disabled={cargando}
+              />
+            )}
+            {!gpsDetectando && gpsMensaje ? (
+              <p className="form-registro-gps-mensaje">{gpsMensaje}</p>
+            ) : null}
           </div>
 
           <div className="form-registro-campo">

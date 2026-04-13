@@ -5,7 +5,7 @@
   /* Tipografía y hero: base móvil; sube en breakpoints */
   --seccion-titulo-size: 1.05rem;
   --seccion-titulo-mb: 1.15rem;
-  --landing-hero-height: clamp(150px, 30vh, 210px);
+  --landing-hero-height: clamp(128px, 26vh, 185px);
   --landing-hero-title-size: 1.08rem;
   --landing-hero-sub-size: 0.76rem;
   --landing-hero-contenido-pad: 0.65rem 0.85rem;
@@ -17,7 +17,7 @@
 
 @media (min-width: 480px) {
   .landing {
-    --landing-hero-height: clamp(180px, 34vh, 260px);
+    --landing-hero-height: clamp(158px, 30vh, 235px);
     --landing-hero-title-size: 1.22rem;
     --landing-hero-sub-size: 0.82rem;
     --seccion-titulo-size: 1.12rem;
@@ -27,7 +27,7 @@
 
 @media (min-width: 640px) {
   .landing {
-    --landing-hero-height: clamp(220px, 38vh, 320px);
+    --landing-hero-height: clamp(195px, 34vh, 290px);
     --landing-hero-title-size: 1.45rem;
     --landing-hero-sub-size: 0.92rem;
     --landing-hero-contenido-pad: 1rem 1.25rem;

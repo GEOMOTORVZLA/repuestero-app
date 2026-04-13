@@ -2,6 +2,11 @@ import { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
+import {
+  geocodificacionInversaParaRegistro,
+  solicitarPosicionGpsPrecisa,
+} from '../utils/geolocalizacionRegistro';
+import { RegistroUbicacionMapa } from './RegistroUbicacionMapa';
 import './RegistroTienda.css';
 
 const METODOS_PAGO = ['Efectivo', 'Pagomovil', 'Transferencia', 'Zelle', 'Binance', 'Cashea'] as const;
@@ -21,31 +26,61 @@ export function RegistroTienda() {
   const [mensaje, setMensaje] = useState('');
   const [metodosPago, setMetodosPago] = useState<MetodoPago[]>([]);
 
-  const detectarUbicacion = () => {
+  const actualizarPosicionDesdeMapa = (lat: number, lng: number) => {
+    setLatitud(lat);
+    setLongitud(lng);
+    setLatManual(lat.toFixed(6));
+    setLongManual(lng.toFixed(6));
+  };
+
+  const detectarUbicacion = async () => {
     setEstado('detectando');
-    setMensaje('Solicitando permiso de ubicación...');
+    setMensaje('Estamos obteniendo tu ubicaci?n actual, espera unos segundos por favor.');
 
     if (!navigator.geolocation) {
       setEstado('error');
-      setMensaje('Tu navegador no soporta geolocalización. Usa los campos manuales abajo.');
+      setMensaje('Tu navegador no soporta geolocalizaci?n. Usa los campos manuales abajo.');
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLatitud(pos.coords.latitude);
-        setLongitud(pos.coords.longitude);
-        setLatManual(pos.coords.latitude.toString());
-        setLongManual(pos.coords.longitude.toString());
-        setEstado('idle');
-        setMensaje(`Ubicación detectada: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
-      },
-      () => {
-        setEstado('idle');
-        setMensaje('No se pudo obtener la ubicación. Ingresa latitud y longitud manualmente.');
-      },
-      { enableHighAccuracy: true }
-    );
+    try {
+      const pos = await solicitarPosicionGpsPrecisa();
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      setLatitud(lat);
+      setLongitud(lng);
+      setLatManual(lat.toFixed(6));
+      setLongManual(lng.toFixed(6));
+
+      let msg = `Ubicaci?n GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
+      if (apiKey) {
+        try {
+          const geo = await geocodificacionInversaParaRegistro(apiKey, lat, lng);
+          if (geo?.estado) {
+            setEstadoUbicacion(geo.estado);
+            setCiudad(geo.ciudad ?? '');
+            if (geo.direccionFormateada) {
+              msg += `. ${geo.direccionFormateada}`;
+            }
+            msg += geo.ciudad
+              ? ' Estado y ciudad actualizados seg?n Google (rev?salos).'
+              : ' Estado actualizado; elige ciudad/municipio si no coincide.';
+          }
+        } catch {
+          msg += '. No se pudo leer la direcci?n con Google.';
+        }
+      } else {
+        msg += '. Configura VITE_GOOGLE_MAPS_API_KEY para rellenar estado y ciudad autom?ticamente.';
+      }
+      setEstado('idle');
+      setMensaje(msg);
+    } catch {
+      setEstado('idle');
+      setMensaje(
+        'No se pudo obtener la ubicaci?n. Permite el GPS, espera unos segundos o ingresa latitud y longitud manualmente.'
+      );
+    }
   };
 
   const tieneCoordenadas = (): boolean => {
@@ -89,7 +124,7 @@ export function RegistroTienda() {
     const coords = obtenerCoordenadas();
     if (!coords) {
       setEstado('error');
-      setMensaje('Ingresa latitud y longitud. Puedes detectarlas automáticamente o escribirlas manualmente.');
+      setMensaje('Ingresa latitud y longitud. Puedes detectarlas autom?ticamente o escribirlas manualmente.');
       return;
     }
 
@@ -115,7 +150,7 @@ export function RegistroTienda() {
     }
 
     setEstado('ok');
-    setMensaje('¡Tienda registrada correctamente!');
+    setMensaje('?Tienda registrada correctamente!');
     setNombre('');
     setRif('');
     setEstadoUbicacion('');
@@ -160,7 +195,9 @@ export function RegistroTienda() {
         >
           <option value="">Selecciona estado</option>
           {ESTADOS_VENEZUELA.map((e) => (
-            <option key={e} value={e}>{e}</option>
+            <option key={e} value={e}>
+              {e}
+            </option>
           ))}
         </select>
         <label>Ciudad / Municipio</label>
@@ -171,24 +208,28 @@ export function RegistroTienda() {
         >
           <option value="">Selecciona ciudad</option>
           {ciudadesDisponibles.map((c) => (
-            <option key={c} value={c}>{c}</option>
+            <option key={c} value={c}>
+              {c}
+            </option>
           ))}
         </select>
       </div>
 
       <div className="coordenadas">
-        <label>Ubicación</label>
+        <label>Ubicaci?n (GPS)</label>
         <div className="botones">
           <button
             type="button"
-            onClick={detectarUbicacion}
+            onClick={() => void detectarUbicacion()}
             disabled={estado === 'detectando' || estado === 'registrando'}
           >
-            {estado === 'detectando' ? 'Detectando...' : 'Detectar Ubicación'}
+            {estado === 'detectando' ? 'Obteniendo ubicaci?n?' : 'Obtener ubicaci?n actual'}
           </button>
         </div>
         <p className="hint">
-          O escribe manualmente latitud y longitud (ej: en Google Maps, clic derecho en el mapa → copiar coordenadas)
+          El mapa muestra el punto de tu tienda: arrastra el marcador o toca el mapa para ajustar; las coordenadas se
+          actualizan solas. El bot?n usa GPS en vivo (sin cach?) y, con Google, rellena estado y ciudad. Tambi?n puedes
+          escribir latitud y longitud a mano.
         </p>
         <div className="campos-coords">
           <input
@@ -197,6 +238,8 @@ export function RegistroTienda() {
             value={latManual}
             onChange={(e) => setLatManual(e.target.value)}
             disabled={estado === 'registrando'}
+            inputMode="decimal"
+            autoComplete="off"
           />
           <input
             type="text"
@@ -204,14 +247,22 @@ export function RegistroTienda() {
             value={longManual}
             onChange={(e) => setLongManual(e.target.value)}
             disabled={estado === 'registrando'}
+            inputMode="decimal"
+            autoComplete="off"
           />
         </div>
+        <RegistroUbicacionMapa
+          latitudStr={latManual}
+          longitudStr={longManual}
+          onPositionChange={actualizarPosicionDesdeMapa}
+          disabled={estado === 'registrando'}
+        />
       </div>
 
       <div className="registro-tienda-metodos-pago">
         <label>Formas de pago que aceptas</label>
         <p className="registro-tienda-metodos-pago-hint">
-          Selecciona cómo pueden pagarte los clientes. Esta información se mostrará al contactar al vendedor.
+          Selecciona c?mo pueden pagarte los clientes. Esta informaci?n se mostrar? al contactar al vendedor.
         </p>
         <div className="registro-tienda-metodos-pago-opciones">
           {METODOS_PAGO.map((metodo) => (

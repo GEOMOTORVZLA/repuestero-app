@@ -1,0 +1,36 @@
+.registro-ubicacion-mapa {
+  margin-top: 0.65rem;
+}
+
+.registro-ubicacion-mapa-leyenda {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  color: #4a5568;
+  line-height: 1.35;
+}
+
+.registro-ubicacion-mapa--aviso {
+  padding: 0.85rem;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: #4a5568;
+  line-height: 1.4;
+}
+
+.registro-ubicacion-mapa--aviso code {
+  font-size: 0.75rem;
+  word-break: break-all;
+}
+
+.registro-ubicacion-mapa--error {
+  border-color: #feb2b2;
+  background: #fff5f5;
+  color: #9b2c2c;
+}
+
+.registro-ubicacion-mapa .gm-style {
+  border-radius: 8px;
+  overflow: hidden;
+}
