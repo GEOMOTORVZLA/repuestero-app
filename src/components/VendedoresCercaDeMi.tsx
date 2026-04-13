@@ -7,6 +7,7 @@ import {
   TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS,
 } from '../constants/googleMapsNavUi';
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
+import { mensajeWhatsappVendedorZona, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
 import './VendedoresCercaDeMi.css';
 import './avisoSeleccionarEstado.css';
 import './BusquedaRepuestos.css';
@@ -182,12 +183,6 @@ export function VendedoresCercaDeMi() {
   })();
 
   const nombreTienda = (t: TiendaCerca) => t.nombre_comercial || t.nombre || 'Sin nombre';
-  const linkWhatsApp = (t: TiendaCerca) => {
-    const tel = (t.telefono ?? '').replace(/\D/g, '');
-    if (!tel) return null;
-    const full = tel.startsWith('58') ? tel : `58${tel}`;
-    return `https://wa.me/${full}`;
-  };
 
   const [contactarTienda, setContactarTienda] = useState<TiendaCerca | null>(null);
   const [ubicado, setUbicado] = useState(false);
@@ -257,6 +252,11 @@ export function VendedoresCercaDeMi() {
   const abrirContactar = (t: TiendaCerca) => {
     setContactarTienda(t);
   };
+
+  const urlWhatsAppContactarVendedor =
+    contactarTienda?.telefono != null
+      ? urlWhatsAppGeomotor(contactarTienda.telefono, mensajeWhatsappVendedorZona())
+      : null;
 
   return (
     <section className="vendedores-cerca" id="vendedores-cerca">
@@ -494,9 +494,9 @@ export function VendedoresCercaDeMi() {
               userLng={gpsCoords?.lng}
             />
             <div className="busqueda-repuestos-modal-botones">
-              {contactarTienda.telefono && linkWhatsApp(contactarTienda) ? (
+              {urlWhatsAppContactarVendedor ? (
                 <a
-                  href={linkWhatsApp(contactarTienda)!}
+                  href={urlWhatsAppContactarVendedor}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="busqueda-repuestos-modal-whatsapp"

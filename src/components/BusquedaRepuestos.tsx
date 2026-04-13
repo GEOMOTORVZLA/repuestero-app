@@ -17,6 +17,7 @@ import {
   TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS,
 } from '../constants/googleMapsNavUi';
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
+import { mensajeWhatsappVendedorProducto, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
 import './BusquedaRepuestos.css';
 
 /** Distancia en km entre dos puntos (Haversine) */
@@ -475,12 +476,6 @@ export function BusquedaRepuestos({
     setUbicacionProducto(null);
   };
 
-  const linkWhatsApp = (telefono: string) => {
-    const num = telefono.replace(/\D/g, '');
-    const full = num.startsWith('58') ? num : `58${num}`;
-    return `https://wa.me/${full}`;
-  };
-
   const lanzarBusquedaDesdeCompacto = () => {
     const t = textoBusqueda.trim();
     if (!t) {
@@ -869,7 +864,12 @@ export function BusquedaRepuestos({
             <div className="busqueda-repuestos-modal-botones">
               {contactarProducto.tiendas?.telefono ? (
                 <a
-                  href={linkWhatsApp(contactarProducto.tiendas.telefono)}
+                  href={
+                    urlWhatsAppGeomotor(
+                      contactarProducto.tiendas.telefono,
+                      mensajeWhatsappVendedorProducto(contactarProducto.nombre),
+                    )!
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="busqueda-repuestos-modal-whatsapp"

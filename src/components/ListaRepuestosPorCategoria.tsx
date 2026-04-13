@@ -12,6 +12,7 @@ import {
   TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS,
 } from '../constants/googleMapsNavUi';
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
+import { mensajeWhatsappVendedorProducto, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import './BusquedaRepuestos.css';
@@ -170,12 +171,6 @@ export function ListaRepuestosPorCategoria({
   const tieneUbicacion = (p: ProductoResultado) => {
     const t = p.tiendas;
     return t && t.latitud != null && t.longitud != null;
-  };
-
-  const linkWhatsApp = (telefono: string) => {
-    const num = telefono.replace(/\D/g, '');
-    const full = num.startsWith('58') ? num : `58${num}`;
-    return `https://wa.me/${full}`;
   };
 
   const cerrarModalContactar = () => {
@@ -342,7 +337,12 @@ export function ListaRepuestosPorCategoria({
             <div className="busqueda-repuestos-modal-botones">
               {contactarProducto.tiendas?.telefono ? (
                 <a
-                  href={linkWhatsApp(contactarProducto.tiendas.telefono)}
+                  href={
+                    urlWhatsAppGeomotor(
+                      contactarProducto.tiendas.telefono,
+                      mensajeWhatsappVendedorProducto(contactarProducto.nombre),
+                    )!
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="busqueda-repuestos-modal-whatsapp"

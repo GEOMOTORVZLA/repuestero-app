@@ -9,6 +9,7 @@ import {
   TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS,
 } from '../constants/googleMapsNavUi';
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
+import { mensajeWhatsappTaller, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
 import './avisoSeleccionarEstado.css';
 import './BusquedaRepuestos.css';
 import './VendedoresCercaDeMi.css';
@@ -88,12 +89,6 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
   };
 
   const nombreTaller = (t: Taller) => t.nombre_comercial || t.nombre || 'Sin nombre';
-  const contactoWhatsApp = (t: Taller) => {
-    const tel = (t.telefono ?? '').replace(/\D/g, '');
-    if (!tel) return null;
-    const num = tel.startsWith('58') ? tel : `58${tel}`;
-    return `https://wa.me/${num}`;
-  };
 
   const abrirDetalleTaller = (t: Taller) => {
     setContactarTaller(t);
@@ -146,6 +141,11 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
 
   const tieneUbicacion = (t: Taller) =>
     t.latitud != null && t.longitud != null;
+
+  const urlWhatsAppContactarTaller =
+    contactarTaller?.telefono != null
+      ? urlWhatsAppGeomotor(contactarTaller.telefono, mensajeWhatsappTaller())
+      : null;
 
   return (
     <div className="busqueda-talleres">
@@ -427,9 +427,9 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
             )}
 
             <div className="busqueda-repuestos-modal-botones">
-              {contactarTaller.telefono && contactoWhatsApp(contactarTaller) ? (
+              {urlWhatsAppContactarTaller ? (
                 <a
-                  href={contactoWhatsApp(contactarTaller)!}
+                  href={urlWhatsAppContactarTaller}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="busqueda-repuestos-modal-whatsapp"
