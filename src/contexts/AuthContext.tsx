@@ -20,6 +20,18 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+const NETWORK_TIMEOUT_MS = 12000;
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs = NETWORK_TIMEOUT_MS): Promise<T> {
+  return await Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => {
+        reject(new Error('Tiempo de espera agotado al conectar con Supabase. Intenta de nuevo.'));
+      }, timeoutMs);
+    }),
+  ]);
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -85,19 +97,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT') {
-        if (!cancelled) setUser(null);
-        return;
-      }
-      if (session?.user) {
-        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-          const u = await incorporarUsuario(session.user);
-          if (!cancelled) setUser(u);
-        } else if (!cancelled) {
-          setUser(session.user);
+      try {
+        if (event === 'SIGNED_OUT') {
+          if (!cancelled) setUser(null);
+          return;
         }
-      } else if (!cancelled) {
-        setUser(null);
+        if (session?.user) {
+          if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+            // Si falla la sincronización extra (red/RLS), mantener sesión base para no "congelar" login.
+            const u = await incorporarUsuario(session.user);
+            if (!cancelled) setUser(u ?? session.user);
+          } else if (!cancelled) {
+            setUser(session.user);
+          }
+        } else if (!cancelled) {
+          setUser(null);
+        }
+      } catch (e) {
+        console.error('[Auth] onAuthStateChange fallo:', e);
+        if (!cancelled) {
+          setUser(session?.user ?? null);
+        }
       }
     });
 
@@ -109,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     marcarIntentoLoginPassword();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await withTimeout(supabase.auth.signInWithPassword({ email, password }));
     if (error) {
       try {
         sessionStorage.removeItem(INTENTO_LOGIN_KEY);
@@ -121,7 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await withTimeout(supabase.auth.signUp({ email, password }));
     return { error: error?.message ?? null };
   };
 
@@ -130,12 +150,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       marcarIntentoLoginGoogle();
       /* Misma URL actual (sin #) para volver del OAuth con la sesión activa */
       const redirectTo = new URL(window.location.pathname, window.location.origin).href;
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo,
-        },
-      });
+      const { error } = await withTimeout(
+        supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo,
+          },
+        })
+      );
       if (error) {
         try {
           sessionStorage.removeItem(INTENTO_LOGIN_KEY);
