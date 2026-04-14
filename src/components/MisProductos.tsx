@@ -7,6 +7,19 @@ import { urlImagenProductoVariante } from '../utils/imagenProducto';
 import { etiquetaMoneda } from '../utils/monedaProducto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 
+const NETWORK_TIMEOUT_MS = 12000;
+
+async function withTimeout<T>(promiseLike: PromiseLike<T>, timeoutMs = NETWORK_TIMEOUT_MS): Promise<T> {
+  return await Promise.race([
+    Promise.resolve(promiseLike),
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => {
+        reject(new Error('Tiempo de espera agotado al cargar datos. Intenta de nuevo.'));
+      }, timeoutMs);
+    }),
+  ]);
+}
+
 interface ProductoPanel {
   id: string;
   nombre: string;
@@ -76,51 +89,68 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
   const [cargandoContactos, setCargandoContactos] = useState(false);
 
   useEffect(() => {
+    let cancelado = false;
+
     const cargar = async () => {
       if (!user) return;
-      setCargando(true);
-      setError(null);
-
-      // Primero buscamos las tiendas asociadas a este usuario
-      const { data: tiendas, error: errTiendas } = await supabase
-        .from('tiendas')
-        .select('id')
-        .eq('user_id', user.id);
-
-      if (errTiendas) {
-        setError(errTiendas.message || 'Error al cargar tus tiendas.');
-        setCargando(false);
-        return;
+      if (!cancelado) {
+        setCargando(true);
+        setError(null);
       }
 
-      if (!tiendas || tiendas.length === 0) {
-        setProductos([]);
-        setCargando(false);
-        return;
+      try {
+        // Primero buscamos las tiendas asociadas a este usuario.
+        const { data: tiendas, error: errTiendas } = await withTimeout(
+          supabase.from('tiendas').select('id').eq('user_id', user.id)
+        );
+
+        if (errTiendas) {
+          throw new Error(errTiendas.message || 'Error al cargar tus tiendas.');
+        }
+
+        if (!tiendas || tiendas.length === 0) {
+          if (!cancelado) setProductos([]);
+          return;
+        }
+
+        const tiendaIds = tiendas.map((t) => t.id);
+
+        const { data: productosData, error: errProd } = await withTimeout(
+          supabase
+            .from('productos')
+            .select(
+              'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, aprobacion_publica, created_at, stock_confirmado_at, pausado_por_stock_vencido, vertical'
+            )
+            .in('tienda_id', tiendaIds)
+            .order('nombre')
+        );
+
+        if (errProd) {
+          throw new Error(errProd.message || 'Error al cargar tus productos.');
+        }
+
+        if (!cancelado) {
+          setProductos((productosData ?? []) as ProductoPanel[]);
+        }
+      } catch (e) {
+        if (!cancelado) {
+          const msg =
+            e instanceof Error
+              ? e.message
+              : 'No se pudo cargar tus productos. Revisa la conexión e intenta de nuevo.';
+          setProductos([]);
+          setError(msg);
+        }
+      } finally {
+        if (!cancelado) setCargando(false);
       }
-
-      const tiendaIds = tiendas.map((t) => t.id);
-
-      const { data: productosData, error: errProd } = await supabase
-        .from('productos')
-        .select(
-          'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, aprobacion_publica, created_at, stock_confirmado_at, pausado_por_stock_vencido, vertical'
-        )
-        .in('tienda_id', tiendaIds)
-        .order('nombre');
-
-      if (errProd) {
-        setError(errProd.message || 'Error al cargar tus productos.');
-        setProductos([]);
-        setCargando(false);
-        return;
-      }
-
-      setProductos((productosData ?? []) as ProductoPanel[]);
-      setCargando(false);
     };
 
-    cargar();
+    void cargar();
+
+    return () => {
+      cancelado = true;
+    };
   }, [user, refreshTrigger]);
 
   useEffect(() => {
