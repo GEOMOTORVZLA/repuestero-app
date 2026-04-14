@@ -138,6 +138,8 @@ export function BusquedaRepuestos({
   const [resultados, setResultados] = useState<ProductoResultado[]>([]);
   const resultadosRef = useRef(resultados);
   resultadosRef.current = resultados;
+  /** Texto de palabra clave de la última búsqueda aplicada (evita lista duplicada solo mientras el input coincide con esa consulta). */
+  const textoUltimaBusquedaEjecutadaRef = useRef('');
   const [buscando, setBuscando] = useState(false);
   const [hayMasResultados, setHayMasResultados] = useState(false);
   const [cargandoMasResultados, setCargandoMasResultados] = useState(false);
@@ -155,7 +157,11 @@ export function BusquedaRepuestos({
     : [];
 
   useEffect(() => {
-    if (!esCompacto && resultados.length > 0) {
+    if (
+      !esCompacto &&
+      resultados.length > 0 &&
+      textoBusqueda.trim() === textoUltimaBusquedaEjecutadaRef.current.trim()
+    ) {
       setSugerencias([]);
       setDropdownAbierto(false);
       setIndiceSugerencia(-1);
@@ -184,7 +190,13 @@ export function BusquedaRepuestos({
           .limit(24);
 
         if (error) return;
-        if (!esCompacto && resultadosRef.current.length > 0) return;
+        if (
+          !esCompacto &&
+          resultadosRef.current.length > 0 &&
+          texto.trim() === textoUltimaBusquedaEjecutadaRef.current.trim()
+        ) {
+          return;
+        }
 
         const vistos = new Set<string>();
         const lista: SugerenciaRepuesto[] = [];
@@ -330,6 +342,7 @@ export function BusquedaRepuestos({
       : filas;
 
     paramsUltimaBusquedaRef.current = params;
+    textoUltimaBusquedaEjecutadaRef.current = texto;
     setResultados(
       ubicacionActual ? ordenarPorUbicacionUsuario(primeraPagina, ubicacionActual) : primeraPagina
     );
@@ -510,6 +523,11 @@ export function BusquedaRepuestos({
     onIrAResultados?.({ texto: t });
   };
 
+  const puedeMostrarListaSugerencias =
+    esCompacto ||
+    resultados.length === 0 ||
+    textoBusqueda.trim() !== textoUltimaBusquedaEjecutadaRef.current.trim();
+
   const bloqueTextoYSugerencias = (
     <>
       {!esCompacto && (
@@ -530,10 +548,7 @@ export function BusquedaRepuestos({
             value={textoBusqueda}
             onChange={(e) => {
               setTextoBusqueda(e.target.value);
-              if (
-                e.target.value.trim().length >= 2 &&
-                (esCompacto || resultados.length === 0)
-              ) {
+              if (e.target.value.trim().length >= 2 && puedeMostrarListaSugerencias) {
                 setDropdownAbierto(true);
               }
             }}
@@ -541,7 +556,7 @@ export function BusquedaRepuestos({
               if (
                 textoBusqueda.trim().length >= 2 &&
                 sugerencias.length &&
-                (esCompacto || resultados.length === 0)
+                puedeMostrarListaSugerencias
               ) {
                 setDropdownAbierto(true);
               }
@@ -556,13 +571,9 @@ export function BusquedaRepuestos({
             spellCheck={false}
             autoComplete="off"
             role="combobox"
-            aria-expanded={
-              dropdownAbierto &&
-              (esCompacto || resultados.length === 0) &&
-              sugerencias.length > 0
-            }
+            aria-expanded={dropdownAbierto && puedeMostrarListaSugerencias && sugerencias.length > 0}
             aria-controls={
-              esCompacto || resultados.length === 0 ? 'busqueda-repuestos-sugerencias-lista' : undefined
+              puedeMostrarListaSugerencias ? 'busqueda-repuestos-sugerencias-lista' : undefined
             }
             aria-activedescendant={
               dropdownAbierto && indiceSugerencia >= 0
@@ -571,9 +582,7 @@ export function BusquedaRepuestos({
             }
             aria-labelledby={esCompacto ? 'busqueda-landing-titulo' : undefined}
           />
-          {dropdownAbierto &&
-            sugerencias.length > 0 &&
-            (esCompacto || resultados.length === 0) && (
+          {dropdownAbierto && sugerencias.length > 0 && puedeMostrarListaSugerencias && (
             <ul
               id="busqueda-repuestos-sugerencias-lista"
               className={`busqueda-repuestos-sugerencias ${esCompacto ? 'busqueda-repuestos-sugerencias--compact' : ''}`}
