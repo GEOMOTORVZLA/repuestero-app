@@ -142,8 +142,7 @@ export function BusquedaRepuestos({
   const [mensaje, setMensaje] = useState('');
   const paramsUltimaBusquedaRef = useRef<ParamsBusquedaProductos | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [esPantallaMovil, setEsPantallaMovil] = useState(false);
-  const [filtrosMovilAbiertos, setFiltrosMovilAbiertos] = useState(false);
+  const [filtrosAbiertos, setFiltrosAbiertos] = useState(true);
 
   const modelosOpciones = marca
     ? esMoto
@@ -205,23 +204,12 @@ export function BusquedaRepuestos({
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 768px)');
-    const sync = () => setEsPantallaMovil(mq.matches);
-    sync();
-    mq.addEventListener('change', sync);
-    return () => mq.removeEventListener('change', sync);
-  }, []);
-
-  useEffect(() => {
-    if (!esPantallaMovil) {
-      setFiltrosMovilAbiertos(false);
-      return;
-    }
     if (resultados.length > 0) {
-      setFiltrosMovilAbiertos(false);
+      setFiltrosAbiertos(false);
+    } else {
+      setFiltrosAbiertos(true);
     }
-  }, [esPantallaMovil, resultados.length]);
+  }, [resultados.length]);
 
   const seleccionarSugerencia = (s: SugerenciaRepuesto) => {
     setTextoBusqueda(s.nombre);
@@ -633,8 +621,8 @@ export function BusquedaRepuestos({
 
           <div
             className={`busqueda-repuestos-pagina-layout ${
-              esPantallaMovil && resultados.length > 0 ? 'filtros-movil-ocultables' : ''
-            } ${filtrosMovilAbiertos ? 'filtros-movil-abiertos' : ''}`}
+              resultados.length > 0 ? 'filtros-ocultables' : ''
+            } ${filtrosAbiertos ? 'filtros-abiertos' : ''}`}
           >
             <aside
               id="busqueda-filtros-sidebar"
@@ -709,16 +697,16 @@ export function BusquedaRepuestos({
             </aside>
 
             <div className="busqueda-repuestos-pagina-main">
-              {esPantallaMovil && resultados.length > 0 && (
+              {resultados.length > 0 && (
                 <div className="busqueda-repuestos-filtro-movil-barra">
                   <button
                     type="button"
                     className="busqueda-repuestos-filtro-movil-btn"
-                    onClick={() => setFiltrosMovilAbiertos((v) => !v)}
-                    aria-expanded={filtrosMovilAbiertos}
+                    onClick={() => setFiltrosAbiertos((v) => !v)}
+                    aria-expanded={filtrosAbiertos}
                     aria-controls="busqueda-filtros-sidebar"
                   >
-                    {filtrosMovilAbiertos ? 'Ocultar filtro' : 'Filtro'}
+                    {filtrosAbiertos ? 'Ocultar filtro' : 'Filtro'}
                   </button>
                 </div>
               )}
