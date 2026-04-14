@@ -231,9 +231,6 @@
   isolation: isolate;
 }
 
-.busqueda-repuestos-sugerencias--compact {
-  z-index: 60;
-}
 
 .busqueda-repuestos-texto-inner--compact input {
   display: block;
@@ -324,22 +321,65 @@
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 0 0 2px rgba(30, 58, 95, 0.22);
 }
 
-.busqueda-repuestos-sugerencias {
+/* Contenedor del desplegable: lista + botón “Cargar más” sin romper el posicionamiento */
+.busqueda-repuestos-sugerencias-bloque--compact {
+  z-index: 60;
+}
+
+.busqueda-repuestos-sugerencias-bloque {
   position: absolute;
   left: 0;
   right: 0;
   top: calc(100% + 4px);
-  margin: 0;
-  padding: 0.35rem 0;
-  list-style: none;
+  z-index: 40;
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
-  max-height: 280px;
-  overflow-y: auto;
-  z-index: 40;
   text-align: left;
+  overflow: hidden;
+}
+
+.busqueda-repuestos-sugerencias {
+  position: static;
+  margin: 0;
+  padding: 0.35rem 0;
+  list-style: none;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  max-height: min(52vh, 320px);
+  overflow-y: auto;
+  text-align: left;
+}
+
+.busqueda-repuestos-sugerencias-mas {
+  border-top: 1px solid #e2e8f0;
+  padding: 0.4rem 0.65rem 0.55rem;
+  background: #f8fafc;
+}
+
+.busqueda-repuestos-sugerencias-mas-btn {
+  width: 100%;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e3a5f;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.busqueda-repuestos-sugerencias-mas-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #1e3a5f;
+}
+
+.busqueda-repuestos-sugerencias-mas-btn:disabled {
+  opacity: 0.75;
+  cursor: wait;
 }
 
 .busqueda-repuestos-sugerencia-item {

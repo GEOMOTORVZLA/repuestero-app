@@ -61,8 +61,46 @@ interface ProductoResultado {
 /** Tamaño de página en listados públicos (se pide una fila extra para saber si hay más). */
 const PAGE_SIZE_RESULTADOS_PUBLICOS = 24;
 
-/** Autocompletado: una fila por producto; límite de filas para no saturar red ni UI. */
-const SUGERENCIAS_PRODUCTOS_FETCH = 50;
+/** Sugerencias: filas por página en el desplegable; se pide 1 extra para saber si hay más en el servidor. */
+const SUGERENCIAS_TAM_PAGINA = 20;
+
+type SugerenciaRepuesto = { id: string; nombre: string; detalle: string | null };
+
+/** Valor en filtros PostgREST: comas u otros caracteres sin citar rompen `.or()` y devuelven resultados erróneos. */
+function comillasFiltroPostgrest(valor: string): string {
+  if (/[",()]/.test(valor)) {
+    return `"${valor.replace(/"/g, '""')}"`;
+  }
+  return valor;
+}
+
+function mapFilasASugerencias(
+  raw: { id: unknown; nombre: unknown; marca: unknown; modelo: unknown }[]
+): SugerenciaRepuesto[] {
+  const lista: SugerenciaRepuesto[] = [];
+  for (const row of raw) {
+    const id = typeof row.id === 'string' ? row.id : String(row.id ?? '');
+    const n = typeof row.nombre === 'string' ? row.nombre.trim() : '';
+    if (!id || !n) continue;
+    const detalle = [row.marca, row.modelo].filter(Boolean).join(' · ') || null;
+    lista.push({ id, nombre: n, detalle });
+  }
+  return lista;
+}
+
+function queryProductosSugerencias(textoBusquedaTrim: string, vertical: VerticalVehiculo) {
+  const patron = `%${textoBusquedaTrim}%`;
+  const q = comillasFiltroPostgrest(patron);
+  return supabase
+    .from('productos')
+    .select('id, nombre, marca, modelo')
+    .eq('activo', true)
+    .eq('aprobacion_publica', 'aprobado')
+    .eq('vertical', vertical)
+    .or(`nombre.ilike.${q},descripcion.ilike.${q},comentarios.ilike.${q}`)
+    .order('nombre', { ascending: true })
+    .order('id', { ascending: true });
+}
 
 type ParamsBusquedaProductos = {
   texto: string;
@@ -86,8 +124,6 @@ function ordenarPorUbicacionUsuario(
     return dA - dB;
   });
 }
-
-type SugerenciaRepuesto = { id: string; nombre: string; detalle: string | null };
 
 function resaltarCoincidencia(texto: string, consulta: string) {
   const q = consulta.trim();
@@ -136,6 +172,9 @@ export function BusquedaRepuestos({
   const [modelo, setModelo] = useState('');
   const [anio, setAnio] = useState('');
   const [sugerencias, setSugerencias] = useState<SugerenciaRepuesto[]>([]);
+  const [hayMasSugerencias, setHayMasSugerencias] = useState(false);
+  const [cargandoMasSugerencias, setCargandoMasSugerencias] = useState(false);
+  const sugerenciasFetchIdRef = useRef(0);
   const [dropdownAbierto, setDropdownAbierto] = useState(false);
   const [indiceSugerencia, setIndiceSugerencia] = useState(-1);
   const [resultados, setResultados] = useState<ProductoResultado[]>([]);
@@ -166,6 +205,7 @@ export function BusquedaRepuestos({
       textoBusqueda.trim() === textoUltimaBusquedaEjecutadaRef.current.trim()
     ) {
       setSugerencias([]);
+      setHayMasSugerencias(false);
       setDropdownAbierto(false);
       setIndiceSugerencia(-1);
       return;
@@ -174,49 +214,51 @@ export function BusquedaRepuestos({
     const texto = textoBusqueda.trim();
     if (texto.length < 2) {
       setSugerencias([]);
+      setHayMasSugerencias(false);
       setDropdownAbierto(false);
       setIndiceSugerencia(-1);
       return;
     }
 
+    const idPeticion = ++sugerenciasFetchIdRef.current;
     const t = setTimeout(() => {
       void (async () => {
-        const like = `%${texto}%`;
-        const { data, error } = await supabase
-          .from('productos')
-          .select('id, nombre, marca, modelo')
-          .eq('activo', true)
-          .eq('aprobacion_publica', 'aprobado')
-          .eq('vertical', vertical)
-          .or(`nombre.ilike.${like},descripcion.ilike.${like},comentarios.ilike.${like}`)
-          .order('nombre')
-          .order('id')
-          .limit(SUGERENCIAS_PRODUCTOS_FETCH);
+        const { data, error } = await queryProductosSugerencias(texto, vertical).range(
+          0,
+          SUGERENCIAS_TAM_PAGINA
+        );
 
+        if (idPeticion !== sugerenciasFetchIdRef.current) return;
         if (error) return;
         if (
           !esCompacto &&
           resultadosRef.current.length > 0 &&
-          texto.trim() === textoUltimaBusquedaEjecutadaRef.current.trim()
+          texto === textoUltimaBusquedaEjecutadaRef.current.trim()
         ) {
           return;
         }
 
-        const lista: SugerenciaRepuesto[] = [];
-        for (const row of data ?? []) {
-          const id = typeof row.id === 'string' ? row.id : String(row.id ?? '');
-          const n = typeof row.nombre === 'string' ? row.nombre.trim() : '';
-          if (!id || !n) continue;
-          const detalle = [row.marca, row.modelo].filter(Boolean).join(' · ') || null;
-          lista.push({ id, nombre: n, detalle });
-        }
-        setSugerencias(lista);
+        const raw = (data ?? []) as {
+          id: unknown;
+          nombre: unknown;
+          marca: unknown;
+          modelo: unknown;
+        }[];
+        const lista = mapFilasASugerencias(raw);
+        const hayMas = lista.length > SUGERENCIAS_TAM_PAGINA;
+        const visibles = hayMas ? lista.slice(0, SUGERENCIAS_TAM_PAGINA) : lista;
+
+        setSugerencias(visibles);
+        setHayMasSugerencias(hayMas);
         setIndiceSugerencia(-1);
-        if (lista.length) setDropdownAbierto(true);
+        if (visibles.length) setDropdownAbierto(true);
       })();
     }, 220);
 
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      sugerenciasFetchIdRef.current++;
+    };
   }, [textoBusqueda, vertical, esCompacto, resultados.length]);
 
   useEffect(() => {
@@ -228,14 +270,6 @@ export function BusquedaRepuestos({
     document.addEventListener('mousedown', cerrar);
     return () => document.removeEventListener('mousedown', cerrar);
   }, []);
-
-  useEffect(() => {
-    if (resultados.length > 0) {
-      setFiltrosAbiertos(false);
-    } else {
-      setFiltrosAbiertos(true);
-    }
-  }, [resultados.length]);
 
   const seleccionarSugerencia = (s: SugerenciaRepuesto) => {
     setTextoBusqueda(s.nombre);
@@ -308,6 +342,7 @@ export function BusquedaRepuestos({
     setCargandoMasResultados(false);
     setMensaje('');
     setDropdownAbierto(false);
+    setHayMasSugerencias(false);
     setIndiceSugerencia(-1);
     setHayMasResultados(false);
 
@@ -330,6 +365,7 @@ export function BusquedaRepuestos({
     if (error) {
       setMensaje(error.message || 'Error al buscar.');
       setResultados([]);
+      setFiltrosAbiertos(true);
       setBuscando(false);
       paramsUltimaBusquedaRef.current = null;
       setSugerencias([]);
@@ -349,6 +385,11 @@ export function BusquedaRepuestos({
       ubicacionActual ? ordenarPorUbicacionUsuario(primeraPagina, ubicacionActual) : primeraPagina
     );
     setHayMasResultados(hayMas);
+    if (primeraPagina.length > 0) {
+      setFiltrosAbiertos(false);
+    } else {
+      setFiltrosAbiertos(true);
+    }
     if (!primeraPagina.length) {
       setMensaje('No hay repuestos que coincidan con tu búsqueda.');
       paramsUltimaBusquedaRef.current = null;
@@ -530,6 +571,48 @@ export function BusquedaRepuestos({
     resultados.length === 0 ||
     textoBusqueda.trim() !== textoUltimaBusquedaEjecutadaRef.current.trim();
 
+  const cargarMasSugerencias = async () => {
+    const texto = textoBusqueda.trim();
+    if (
+      texto.length < 2 ||
+      !hayMasSugerencias ||
+      cargandoMasSugerencias ||
+      !puedeMostrarListaSugerencias
+    ) {
+      return;
+    }
+    setCargandoMasSugerencias(true);
+    const offset = sugerencias.length;
+    const { data, error } = await queryProductosSugerencias(texto, vertical).range(
+      offset,
+      offset + SUGERENCIAS_TAM_PAGINA
+    );
+    setCargandoMasSugerencias(false);
+    if (error) return;
+
+    const raw = (data ?? []) as {
+      id: unknown;
+      nombre: unknown;
+      marca: unknown;
+      modelo: unknown;
+    }[];
+    const lista = mapFilasASugerencias(raw);
+    const hayMas = lista.length > SUGERENCIAS_TAM_PAGINA;
+    const chunk = hayMas ? lista.slice(0, SUGERENCIAS_TAM_PAGINA) : lista;
+    setHayMasSugerencias(hayMas);
+    setSugerencias((prev) => {
+      const vistos = new Set(prev.map((s) => s.id));
+      const out = [...prev];
+      for (const item of chunk) {
+        if (!vistos.has(item.id)) {
+          vistos.add(item.id);
+          out.push(item);
+        }
+      }
+      return out;
+    });
+  };
+
   const bloqueTextoYSugerencias = (
     <>
       {!esCompacto && (
@@ -585,40 +668,59 @@ export function BusquedaRepuestos({
             aria-labelledby={esCompacto ? 'busqueda-landing-titulo' : undefined}
           />
           {dropdownAbierto && sugerencias.length > 0 && puedeMostrarListaSugerencias && (
-            <ul
-              id="busqueda-repuestos-sugerencias-lista"
-              className={`busqueda-repuestos-sugerencias ${esCompacto ? 'busqueda-repuestos-sugerencias--compact' : ''}`}
-              role="listbox"
+            <div
+              className={`busqueda-repuestos-sugerencias-bloque ${
+                esCompacto ? 'busqueda-repuestos-sugerencias-bloque--compact' : ''
+              }`}
             >
-              {sugerencias.map((s, idx) => (
-                <li key={s.id} role="presentation">
+              <ul
+                id="busqueda-repuestos-sugerencias-lista"
+                className={`busqueda-repuestos-sugerencias ${esCompacto ? 'busqueda-repuestos-sugerencias--compact' : ''}`}
+                role="listbox"
+              >
+                {sugerencias.map((s, idx) => (
+                  <li key={s.id} role="presentation">
+                    <button
+                      type="button"
+                      id={`sugerencia-repuesto-${idx}`}
+                      role="option"
+                      aria-selected={idx === indiceSugerencia}
+                      className={`busqueda-repuestos-sugerencia-item ${idx === indiceSugerencia ? 'activa' : ''}`}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        if (esCompacto) {
+                          setMensaje('');
+                          onIrAResultados?.({ texto: s.nombre });
+                        } else {
+                          seleccionarSugerencia(s);
+                        }
+                      }}
+                      onMouseEnter={() => setIndiceSugerencia(idx)}
+                    >
+                      <span className="busqueda-repuestos-sugerencia-nombre">
+                        {resaltarCoincidencia(s.nombre, textoBusqueda)}
+                      </span>
+                      {s.detalle && (
+                        <span className="busqueda-repuestos-sugerencia-detalle">{s.detalle}</span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {hayMasSugerencias && (
+                <div className="busqueda-repuestos-sugerencias-mas">
                   <button
                     type="button"
-                    id={`sugerencia-repuesto-${idx}`}
-                    role="option"
-                    aria-selected={idx === indiceSugerencia}
-                    className={`busqueda-repuestos-sugerencia-item ${idx === indiceSugerencia ? 'activa' : ''}`}
+                    className="busqueda-repuestos-sugerencias-mas-btn"
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                      if (esCompacto) {
-                        setMensaje('');
-                        onIrAResultados?.({ texto: s.nombre });
-                      } else {
-                        seleccionarSugerencia(s);
-                      }
-                    }}
-                    onMouseEnter={() => setIndiceSugerencia(idx)}
+                    onClick={() => void cargarMasSugerencias()}
+                    disabled={cargandoMasSugerencias}
                   >
-                    <span className="busqueda-repuestos-sugerencia-nombre">
-                      {resaltarCoincidencia(s.nombre, textoBusqueda)}
-                    </span>
-                    {s.detalle && (
-                      <span className="busqueda-repuestos-sugerencia-detalle">{s.detalle}</span>
-                    )}
+                    {cargandoMasSugerencias ? 'Cargando…' : 'Cargar 20 más'}
                   </button>
-                </li>
-              ))}
-            </ul>
+                </div>
+              )}
+            </div>
           )}
         </div>
         {esCompacto && (
