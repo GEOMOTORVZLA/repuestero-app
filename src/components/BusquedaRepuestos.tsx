@@ -61,6 +61,9 @@ interface ProductoResultado {
 /** Tamaño de página en listados públicos (se pide una fila extra para saber si hay más). */
 const PAGE_SIZE_RESULTADOS_PUBLICOS = 24;
 
+/** Autocompletado: una fila por producto; límite de filas para no saturar red ni UI. */
+const SUGERENCIAS_PRODUCTOS_FETCH = 50;
+
 type ParamsBusquedaProductos = {
   texto: string;
   marca: string;
@@ -84,7 +87,7 @@ function ordenarPorUbicacionUsuario(
   });
 }
 
-type SugerenciaRepuesto = { nombre: string; detalle: string | null };
+type SugerenciaRepuesto = { id: string; nombre: string; detalle: string | null };
 
 function resaltarCoincidencia(texto: string, consulta: string) {
   const q = consulta.trim();
@@ -181,13 +184,14 @@ export function BusquedaRepuestos({
         const like = `%${texto}%`;
         const { data, error } = await supabase
           .from('productos')
-          .select('nombre, marca, modelo')
+          .select('id, nombre, marca, modelo')
           .eq('activo', true)
           .eq('aprobacion_publica', 'aprobado')
           .eq('vertical', vertical)
           .or(`nombre.ilike.${like},descripcion.ilike.${like},comentarios.ilike.${like}`)
           .order('nombre')
-          .limit(24);
+          .order('id')
+          .limit(SUGERENCIAS_PRODUCTOS_FETCH);
 
         if (error) return;
         if (
@@ -198,15 +202,13 @@ export function BusquedaRepuestos({
           return;
         }
 
-        const vistos = new Set<string>();
         const lista: SugerenciaRepuesto[] = [];
         for (const row of data ?? []) {
+          const id = typeof row.id === 'string' ? row.id : String(row.id ?? '');
           const n = typeof row.nombre === 'string' ? row.nombre.trim() : '';
-          if (!n || vistos.has(n)) continue;
-          vistos.add(n);
+          if (!id || !n) continue;
           const detalle = [row.marca, row.modelo].filter(Boolean).join(' · ') || null;
-          lista.push({ nombre: n, detalle });
-          if (lista.length >= 8) break;
+          lista.push({ id, nombre: n, detalle });
         }
         setSugerencias(lista);
         setIndiceSugerencia(-1);
@@ -589,7 +591,7 @@ export function BusquedaRepuestos({
               role="listbox"
             >
               {sugerencias.map((s, idx) => (
-                <li key={s.nombre} role="presentation">
+                <li key={s.id} role="presentation">
                   <button
                     type="button"
                     id={`sugerencia-repuesto-${idx}`}
