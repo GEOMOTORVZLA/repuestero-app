@@ -339,6 +339,9 @@ export function BusquedaRepuestos({
 
     setMostrarIntroBusquedaPagina(false);
     setBuscando(true);
+    if (!esCompacto) {
+      setFiltrosAbiertos(false);
+    }
     setCargandoMasResultados(false);
     setMensaje('');
     setDropdownAbierto(false);
@@ -768,7 +771,7 @@ export function BusquedaRepuestos({
 
           <div
             className={`busqueda-repuestos-pagina-layout ${
-              resultados.length > 0 ? 'filtros-ocultables' : ''
+              resultados.length > 0 || buscando ? 'filtros-ocultables' : ''
             } ${filtrosAbiertos ? 'filtros-abiertos' : ''}`}
           >
             <aside
