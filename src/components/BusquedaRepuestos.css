@@ -154,6 +154,11 @@
   cursor: pointer;
 }
 
+/* Con el aside oculto, el ítem display:none deja de ocupar celdas; el main queda solo en la 1.ª columna (~260px). Una sola columna evita la franja estrecha. */
+.busqueda-repuestos-pagina-layout.filtros-ocultables:not(.filtros-abiertos) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .busqueda-repuestos-pagina-layout.filtros-ocultables:not(.filtros-abiertos) .busqueda-repuestos-sidebar {
   display: none;
 }
