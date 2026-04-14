@@ -84,28 +84,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      try {
-        if (event === 'SIGNED_OUT') {
-          if (!cancelled) setUser(null);
-          return;
-        }
-        if (session?.user) {
-          if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-            // Si falla la sincronización extra (red/RLS), mantener sesión base para no "congelar" login.
-            const u = await incorporarUsuario(session.user);
-            if (!cancelled) setUser(u ?? session.user);
-          } else if (!cancelled) {
-            setUser(session.user);
-          }
-        } else if (!cancelled) {
-          setUser(null);
-        }
-      } catch (e) {
-        console.error('[Auth] onAuthStateChange fallo:', e);
-        if (!cancelled) {
-          setUser(session?.user ?? null);
-        }
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return;
+
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        return;
+      }
+
+      const raw = session?.user ?? null;
+      if (!raw) {
+        setUser(null);
+        return;
+      }
+
+      // Establece sesión base de inmediato para no bloquear el login.
+      setUser(raw);
+
+      // IMPORTANTE: no bloquear onAuthStateChange con await de consultas Supabase.
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        window.setTimeout(() => {
+          void (async () => {
+            try {
+              const u = await incorporarUsuario(raw);
+              if (!cancelled) setUser(u ?? raw);
+            } catch (e) {
+              console.error('[Auth] onAuthStateChange fallo:', e);
+              if (!cancelled) setUser(raw);
+            }
+          })();
+        }, 0);
       }
     });
 
