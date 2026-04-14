@@ -136,6 +136,8 @@ export function BusquedaRepuestos({
   const [dropdownAbierto, setDropdownAbierto] = useState(false);
   const [indiceSugerencia, setIndiceSugerencia] = useState(-1);
   const [resultados, setResultados] = useState<ProductoResultado[]>([]);
+  const resultadosRef = useRef(resultados);
+  resultadosRef.current = resultados;
   const [buscando, setBuscando] = useState(false);
   const [hayMasResultados, setHayMasResultados] = useState(false);
   const [cargandoMasResultados, setCargandoMasResultados] = useState(false);
@@ -143,6 +145,8 @@ export function BusquedaRepuestos({
   const paramsUltimaBusquedaRef = useRef<ParamsBusquedaProductos | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [filtrosAbiertos, setFiltrosAbiertos] = useState(true);
+  /** En página completa: texto introductorio bajo el título; se oculta al ejecutar una búsqueda válida */
+  const [mostrarIntroBusquedaPagina, setMostrarIntroBusquedaPagina] = useState(true);
 
   const modelosOpciones = marca
     ? esMoto
@@ -151,6 +155,13 @@ export function BusquedaRepuestos({
     : [];
 
   useEffect(() => {
+    if (!esCompacto && resultados.length > 0) {
+      setSugerencias([]);
+      setDropdownAbierto(false);
+      setIndiceSugerencia(-1);
+      return;
+    }
+
     const texto = textoBusqueda.trim();
     if (texto.length < 2) {
       setSugerencias([]);
@@ -173,6 +184,7 @@ export function BusquedaRepuestos({
           .limit(24);
 
         if (error) return;
+        if (!esCompacto && resultadosRef.current.length > 0) return;
 
         const vistos = new Set<string>();
         const lista: SugerenciaRepuesto[] = [];
@@ -191,7 +203,7 @@ export function BusquedaRepuestos({
     }, 220);
 
     return () => clearTimeout(t);
-  }, [textoBusqueda, vertical]);
+  }, [textoBusqueda, vertical, esCompacto, resultados.length]);
 
   useEffect(() => {
     const cerrar = (e: MouseEvent) => {
@@ -277,6 +289,7 @@ export function BusquedaRepuestos({
       setTextoBusqueda(textoOverride);
     }
 
+    setMostrarIntroBusquedaPagina(false);
     setBuscando(true);
     setCargandoMasResultados(false);
     setMensaje('');
@@ -305,6 +318,8 @@ export function BusquedaRepuestos({
       setResultados([]);
       setBuscando(false);
       paramsUltimaBusquedaRef.current = null;
+      setSugerencias([]);
+      setDropdownAbierto(false);
       return;
     }
 
@@ -515,10 +530,21 @@ export function BusquedaRepuestos({
             value={textoBusqueda}
             onChange={(e) => {
               setTextoBusqueda(e.target.value);
-              if (e.target.value.trim().length >= 2) setDropdownAbierto(true);
+              if (
+                e.target.value.trim().length >= 2 &&
+                (esCompacto || resultados.length === 0)
+              ) {
+                setDropdownAbierto(true);
+              }
             }}
             onFocus={() => {
-              if (textoBusqueda.trim().length >= 2 && sugerencias.length) setDropdownAbierto(true);
+              if (
+                textoBusqueda.trim().length >= 2 &&
+                sugerencias.length &&
+                (esCompacto || resultados.length === 0)
+              ) {
+                setDropdownAbierto(true);
+              }
             }}
             onKeyDown={onTecladoTexto}
             placeholder={
@@ -530,8 +556,14 @@ export function BusquedaRepuestos({
             spellCheck={false}
             autoComplete="off"
             role="combobox"
-            aria-expanded={dropdownAbierto}
-            aria-controls="busqueda-repuestos-sugerencias-lista"
+            aria-expanded={
+              dropdownAbierto &&
+              (esCompacto || resultados.length === 0) &&
+              sugerencias.length > 0
+            }
+            aria-controls={
+              esCompacto || resultados.length === 0 ? 'busqueda-repuestos-sugerencias-lista' : undefined
+            }
             aria-activedescendant={
               dropdownAbierto && indiceSugerencia >= 0
                 ? `sugerencia-repuesto-${indiceSugerencia}`
@@ -539,7 +571,9 @@ export function BusquedaRepuestos({
             }
             aria-labelledby={esCompacto ? 'busqueda-landing-titulo' : undefined}
           />
-          {dropdownAbierto && sugerencias.length > 0 && (
+          {dropdownAbierto &&
+            sugerencias.length > 0 &&
+            (esCompacto || resultados.length === 0) && (
             <ul
               id="busqueda-repuestos-sugerencias-lista"
               className={`busqueda-repuestos-sugerencias ${esCompacto ? 'busqueda-repuestos-sugerencias--compact' : ''}`}
@@ -710,11 +744,15 @@ export function BusquedaRepuestos({
                   </button>
                 </div>
               )}
-              <h2 className="busqueda-repuestos-titulo busqueda-repuestos-titulo--pagina">Resultados de búsqueda</h2>
-              <p className="busqueda-repuestos-subtitulo busqueda-repuestos-subtitulo--pagina">
-                Puedes cambiar las palabras de búsqueda aquí. Para afinar por vehículo usa la columna izquierda y pulsa{' '}
-                <strong>Aplicar filtros</strong>.
-              </p>
+              {mostrarIntroBusquedaPagina && (
+                <>
+                  <h2 className="busqueda-repuestos-titulo busqueda-repuestos-titulo--pagina">Resultados de búsqueda</h2>
+                  <p className="busqueda-repuestos-subtitulo busqueda-repuestos-subtitulo--pagina">
+                    Puedes cambiar las palabras de búsqueda aquí. Para afinar por vehículo usa la columna izquierda y pulsa{' '}
+                    <strong>Aplicar filtros</strong>.
+                  </p>
+                </>
+              )}
 
               <div className="busqueda-repuestos-texto-bloque busqueda-repuestos-texto-bloque--pagina">
                 {bloqueTextoYSugerencias}
