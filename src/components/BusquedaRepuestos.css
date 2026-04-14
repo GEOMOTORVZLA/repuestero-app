@@ -135,6 +135,34 @@
   .busqueda-repuestos-sidebar {
     position: static;
   }
+
+  .busqueda-repuestos-pagina-layout.filtros-movil-ocultables:not(.filtros-movil-abiertos)
+    .busqueda-repuestos-sidebar {
+    display: none;
+  }
+}
+
+.busqueda-repuestos-filtro-movil-barra {
+  display: none;
+}
+
+.busqueda-repuestos-filtro-movil-btn {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #1e3a5f;
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .busqueda-repuestos-filtro-movil-barra {
+    display: flex;
+    justify-content: flex-start;
+    margin: 0 0 0.65rem;
+  }
 }
 
 .busqueda-repuestos-volver {

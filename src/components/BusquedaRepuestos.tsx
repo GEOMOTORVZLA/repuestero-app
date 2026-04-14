@@ -142,6 +142,8 @@ export function BusquedaRepuestos({
   const [mensaje, setMensaje] = useState('');
   const paramsUltimaBusquedaRef = useRef<ParamsBusquedaProductos | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [esPantallaMovil, setEsPantallaMovil] = useState(false);
+  const [filtrosMovilAbiertos, setFiltrosMovilAbiertos] = useState(false);
 
   const modelosOpciones = marca
     ? esMoto
@@ -201,6 +203,25 @@ export function BusquedaRepuestos({
     document.addEventListener('mousedown', cerrar);
     return () => document.removeEventListener('mousedown', cerrar);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 768px)');
+    const sync = () => setEsPantallaMovil(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
+  useEffect(() => {
+    if (!esPantallaMovil) {
+      setFiltrosMovilAbiertos(false);
+      return;
+    }
+    if (resultados.length > 0) {
+      setFiltrosMovilAbiertos(false);
+    }
+  }, [esPantallaMovil, resultados.length]);
 
   const seleccionarSugerencia = (s: SugerenciaRepuesto) => {
     setTextoBusqueda(s.nombre);
@@ -610,8 +631,16 @@ export function BusquedaRepuestos({
             </div>
           )}
 
-          <div className="busqueda-repuestos-pagina-layout">
-            <aside className="busqueda-repuestos-sidebar" aria-label="Filtros de búsqueda">
+          <div
+            className={`busqueda-repuestos-pagina-layout ${
+              esPantallaMovil && resultados.length > 0 ? 'filtros-movil-ocultables' : ''
+            } ${filtrosMovilAbiertos ? 'filtros-movil-abiertos' : ''}`}
+          >
+            <aside
+              id="busqueda-filtros-sidebar"
+              className="busqueda-repuestos-sidebar"
+              aria-label="Filtros de búsqueda"
+            >
               <h3 className="busqueda-repuestos-sidebar-titulo">Filtra tu búsqueda</h3>
               <div className="busqueda-repuestos-sidebar-filtros">
                 <div className="busqueda-repuestos-campo">
@@ -680,6 +709,19 @@ export function BusquedaRepuestos({
             </aside>
 
             <div className="busqueda-repuestos-pagina-main">
+              {esPantallaMovil && resultados.length > 0 && (
+                <div className="busqueda-repuestos-filtro-movil-barra">
+                  <button
+                    type="button"
+                    className="busqueda-repuestos-filtro-movil-btn"
+                    onClick={() => setFiltrosMovilAbiertos((v) => !v)}
+                    aria-expanded={filtrosMovilAbiertos}
+                    aria-controls="busqueda-filtros-sidebar"
+                  >
+                    {filtrosMovilAbiertos ? 'Ocultar filtro' : 'Filtro'}
+                  </button>
+                </div>
+              )}
               <h2 className="busqueda-repuestos-titulo busqueda-repuestos-titulo--pagina">Resultados de búsqueda</h2>
               <p className="busqueda-repuestos-subtitulo busqueda-repuestos-subtitulo--pagina">
                 Puedes cambiar las palabras de búsqueda aquí. Para afinar por vehículo usa la columna izquierda y pulsa{' '}
