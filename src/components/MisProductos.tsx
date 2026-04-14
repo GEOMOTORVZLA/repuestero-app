@@ -7,7 +7,8 @@ import { urlImagenProductoVariante } from '../utils/imagenProducto';
 import { etiquetaMoneda } from '../utils/monedaProducto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 
-const NETWORK_TIMEOUT_MS = 12000;
+const NETWORK_TIMEOUT_MS = 30000;
+const NETWORK_RETRIES = 1;
 
 async function withTimeout<T>(promiseLike: PromiseLike<T>, timeoutMs = NETWORK_TIMEOUT_MS): Promise<T> {
   return await Promise.race([
@@ -18,6 +19,27 @@ async function withTimeout<T>(promiseLike: PromiseLike<T>, timeoutMs = NETWORK_T
       }, timeoutMs);
     }),
   ]);
+}
+
+async function withRetry<T>(
+  factory: () => PromiseLike<T>,
+  retries = NETWORK_RETRIES,
+  timeoutMs = NETWORK_TIMEOUT_MS
+): Promise<T> {
+  let lastError: unknown = null;
+  for (let intento = 0; intento <= retries; intento += 1) {
+    try {
+      return await withTimeout(factory(), timeoutMs);
+    } catch (e) {
+      lastError = e;
+      if (intento < retries) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1200));
+      }
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('No se pudo cargar tus productos. Revisa la conexión e intenta de nuevo.');
 }
 
 interface ProductoPanel {
@@ -100,7 +122,7 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
 
       try {
         // Primero buscamos las tiendas asociadas a este usuario.
-        const { data: tiendas, error: errTiendas } = await withTimeout(
+        const { data: tiendas, error: errTiendas } = await withRetry(() =>
           supabase.from('tiendas').select('id').eq('user_id', user.id)
         );
 
@@ -115,7 +137,7 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
 
         const tiendaIds = tiendas.map((t) => t.id);
 
-        const { data: productosData, error: errProd } = await withTimeout(
+        const { data: productosData, error: errProd } = await withRetry(() =>
           supabase
             .from('productos')
             .select(

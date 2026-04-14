@@ -20,17 +20,39 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
-const NETWORK_TIMEOUT_MS = 12000;
+const NETWORK_TIMEOUT_MS = 30000;
+const NETWORK_RETRIES = 1;
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs = NETWORK_TIMEOUT_MS): Promise<T> {
+async function withTimeout<T>(promiseLike: PromiseLike<T>, timeoutMs = NETWORK_TIMEOUT_MS): Promise<T> {
   return await Promise.race([
-    promise,
+    Promise.resolve(promiseLike),
     new Promise<T>((_, reject) => {
       window.setTimeout(() => {
         reject(new Error('Tiempo de espera agotado al conectar con Supabase. Intenta de nuevo.'));
       }, timeoutMs);
     }),
   ]);
+}
+
+async function withRetry<T>(
+  factory: () => PromiseLike<T>,
+  retries = NETWORK_RETRIES,
+  timeoutMs = NETWORK_TIMEOUT_MS
+): Promise<T> {
+  let lastError: unknown = null;
+  for (let intento = 0; intento <= retries; intento += 1) {
+    try {
+      return await withTimeout(factory(), timeoutMs);
+    } catch (e) {
+      lastError = e;
+      if (intento < retries) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1200));
+      }
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('No se pudo conectar con Supabase. Intenta de nuevo.');
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -129,7 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     marcarIntentoLoginPassword();
-    const { error } = await withTimeout(supabase.auth.signInWithPassword({ email, password }));
+    const { error } = await withRetry(() => supabase.auth.signInWithPassword({ email, password }));
     if (error) {
       try {
         sessionStorage.removeItem(INTENTO_LOGIN_KEY);
@@ -141,7 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await withTimeout(supabase.auth.signUp({ email, password }));
+    const { error } = await withRetry(() => supabase.auth.signUp({ email, password }));
     return { error: error?.message ?? null };
   };
 
@@ -150,7 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       marcarIntentoLoginGoogle();
       /* Misma URL actual (sin #) para volver del OAuth con la sesión activa */
       const redirectTo = new URL(window.location.pathname, window.location.origin).href;
-      const { error } = await withTimeout(
+      const { error } = await withRetry(() =>
         supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
