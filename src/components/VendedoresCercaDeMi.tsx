@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import type { VerticalVehiculo } from '../utils/verticalVehiculo';
+import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
 import {
@@ -13,6 +15,10 @@ import './avisoSeleccionarEstado.css';
 import './BusquedaRepuestos.css';
 
 const PAGE_SIZE_VENDEDORES = 30;
+
+export interface VendedoresCercaDeMiProps {
+  vertical?: VerticalVehiculo;
+}
 
 export interface TiendaCerca {
   id: string;
@@ -49,7 +55,7 @@ function distanciaKm(
   return R * c;
 }
 
-export function VendedoresCercaDeMi() {
+export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCercaDeMiProps) {
   const [tiendas, setTiendas] = useState<TiendaCerca[]>([]);
   const [cargando, setCargando] = useState(true);
   const [cargandoMas, setCargandoMas] = useState(false);
@@ -67,6 +73,7 @@ export function VendedoresCercaDeMi() {
     let query = supabase
       .from('tiendas')
       .select('id, nombre, nombre_comercial, rif, estado, ciudad, latitud, longitud, telefono, direccion, metodos_pago')
+      .eq('vertical', vertical)
       .order('estado', { ascending: true, nullsFirst: false })
       .order('ciudad', { ascending: true, nullsFirst: false })
       .order('nombre_comercial', { ascending: true, nullsFirst: false })
@@ -227,6 +234,13 @@ export function VendedoresCercaDeMi() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [overlayVendedoresActivo, contactarTienda]);
+
+  useEffect(() => {
+    setTiendas([]);
+    setHayMas(false);
+    setUbicado(false);
+    setError(null);
+  }, [vertical]);
 
   const cerrarOverlayVendedores = () => {
     setUbicado(false);

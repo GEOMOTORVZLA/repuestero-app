@@ -7,6 +7,7 @@ const ensureInflight = new Map<string, Promise<void>>();
 type PerfilVendedorMeta = {
   nombre?: string;
   nombre_comercial?: string;
+  vertical?: string | null;
   rif?: string | null;
   estado?: string | null;
   ciudad?: string | null;
@@ -22,6 +23,7 @@ type PerfilVendedorMeta = {
 type PerfilTallerMeta = {
   nombre?: string;
   nombre_comercial?: string;
+  vertical?: string | null;
   tipo_persona?: string;
   rif?: string | null;
   especialidad?: string[] | string | null;
@@ -38,6 +40,10 @@ type PerfilTallerMeta = {
   politica_divulgacion_version?: string | null;
   politica_divulgacion_aceptada_en?: string | null;
 };
+
+function verticalNegocioDesdePerfil(p: { vertical?: string | null }): 'auto' | 'moto' {
+  return p.vertical === 'moto' ? 'moto' : 'auto';
+}
 
 function especialidadTallerDesdeMeta(p: PerfilTallerMeta): string[] {
   const e = p.especialidad;
@@ -85,6 +91,7 @@ async function runEnsureNegocio(user: User): Promise<void> {
         user_id: user.id,
         nombre,
         nombre_comercial: nombreComercial,
+        vertical: verticalNegocioDesdePerfil(perfil),
         rif: perfil.rif ?? null,
         estado: perfil.estado ?? null,
         ciudad: perfil.ciudad ?? null,
@@ -136,6 +143,7 @@ async function runEnsureNegocio(user: User): Promise<void> {
         user_id: user.id,
         nombre,
         nombre_comercial: nombreComercial,
+        vertical: verticalNegocioDesdePerfil(perfil),
         tipo_persona: perfil.tipo_persona === 'juridico' ? 'juridico' : 'natural',
         rif: perfil.rif ?? null,
         especialidad: esp,

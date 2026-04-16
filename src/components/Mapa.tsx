@@ -1,6 +1,8 @@
 import { useRef, useCallback, useState, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useLoadScript, GoogleMap, Autocomplete, Marker } from '@react-google-maps/api';
 import { supabase } from '../supabaseClient';
+import { verticalDesdePathname } from '../utils/verticalVehiculo';
 import { normalizeEspecialidadesTallerDb } from '../utils/tallerEspecialidades';
 import './Mapa.css';
 
@@ -35,6 +37,8 @@ function distanciaKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 }
 
 export function Mapa() {
+  const location = useLocation();
+  const vertical = verticalDesdePathname(location.pathname);
   const [center, setCenter] = useState(DEFAULT_CENTER);
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [puntos, setPuntos] = useState<PuntoMapa[]>([]);
@@ -56,11 +60,13 @@ export function Mapa() {
       supabase
         .from('talleres')
         .select('id, nombre, nombre_comercial, latitud, longitud, especialidad, telefono')
+        .eq('vertical', vertical)
         .not('latitud', 'is', null)
         .not('longitud', 'is', null),
       supabase
         .from('tiendas')
         .select('id, nombre, latitud, longitud')
+        .eq('vertical', vertical)
         .not('latitud', 'is', null)
         .not('longitud', 'is', null),
     ]);
@@ -103,7 +109,7 @@ export function Mapa() {
       })),
     ];
     setPuntos(pts);
-  }, []);
+  }, [vertical]);
 
   useEffect(() => {
     if (isLoaded) cargarPuntos();

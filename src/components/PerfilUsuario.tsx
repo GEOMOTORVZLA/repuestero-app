@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../supabaseClient';
+import { verticalDesdePathname } from '../utils/verticalVehiculo';
 import { useAuth } from '../contexts/AuthContext';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import { bannerEstadoCuentaNegocio } from '../utils/estadoCuentaVendedorTaller';
@@ -28,9 +30,12 @@ interface TiendaPerfil {
   bloqueado?: boolean | null;
   aprobacion_estado?: string | null;
   membresia_hasta?: string | null;
+  vertical?: string | null;
 }
 
 export function PerfilUsuario() {
+  const location = useLocation();
+  const verticalRuta = verticalDesdePathname(location.pathname);
   const { user } = useAuth();
   const [tienda, setTienda] = useState<TiendaPerfil | null>(null);
   const [tiendaSnapshot, setTiendaSnapshot] = useState<TiendaPerfil | null>(null);
@@ -117,6 +122,7 @@ export function PerfilUsuario() {
             latitud: toNumberOrNull(perfilVendedor.latitud),
             longitud: toNumberOrNull(perfilVendedor.longitud),
             metodos_pago: normalizeMetodosPagoParaMostrar(perfilVendedor.metodos_pago),
+            vertical: perfilVendedor.vertical === 'moto' ? 'moto' : 'auto',
           });
           setMensaje('');
         } else if (esCuentaTaller) {
@@ -134,6 +140,7 @@ export function PerfilUsuario() {
             latitud: null,
             longitud: null,
             metodos_pago: [],
+            vertical: verticalRuta,
           });
           setMensaje(
             'No se encontró una tienda asociada a tu cuenta. Completa los datos y guarda.'
@@ -259,6 +266,7 @@ export function PerfilUsuario() {
       user_id: user.id,
       nombre: nombreJuridico || null,
       nombre_comercial: nombreComercial || null,
+      vertical: tienda.vertical === 'moto' ? 'moto' : 'auto',
       rif: rif || null,
       telefono: tienda.telefono?.trim() || null,
       estado: tienda.estado?.trim() || null,

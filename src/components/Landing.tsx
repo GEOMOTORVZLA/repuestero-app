@@ -230,7 +230,7 @@ export function Landing({
         />
       )}
 
-      <VendedoresCercaDeMi />
+      <VendedoresCercaDeMi vertical={vertical} />
 
       <section className="landing-categorias">
         <h2 className="landing-seccion-titulo">
@@ -351,7 +351,7 @@ export function Landing({
             <p>
               Porque sabemos que necesitas saber dónde puedes instalar ese repuesto que vas a comprar o hacer esa reparación que tu vehículo necesita, aquí te ofrecemos una lista de los talleres por categoría y ramo que se encuentran en tu ciudad, no dejes de consultarlo.
             </p>
-            <BusquedaTalleres />
+            <BusquedaTalleres vertical={vertical} />
           </div>
         </div>
       </section>

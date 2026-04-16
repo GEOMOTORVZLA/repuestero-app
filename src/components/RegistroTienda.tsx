@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import { verticalDesdePathname } from '../utils/verticalVehiculo';
 import { useAuth } from '../contexts/AuthContext';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import {
@@ -14,6 +16,8 @@ const METODOS_PAGO = ['Efectivo', 'Pagomovil', 'Transferencia', 'Zelle', 'Binanc
 type MetodoPago = (typeof METODOS_PAGO)[number];
 
 export function RegistroTienda() {
+  const location = useLocation();
+  const vertical = verticalDesdePathname(location.pathname);
   const { user } = useAuth();
   const [nombre, setNombre] = useState('');
   const [rif, setRif] = useState('');
@@ -135,6 +139,7 @@ export function RegistroTienda() {
       user_id: user?.id,
       nombre: nombre.trim(),
       nombre_comercial: nombre.trim(),
+      vertical,
       rif: rif.trim(),
       estado: estadoUbicacion.trim() || null,
       ciudad: ciudad.trim() || null,

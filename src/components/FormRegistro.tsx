@@ -37,6 +37,7 @@ interface FormRegistroProps {
 
 export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
   const location = useLocation();
+  const verticalNegocio = location.pathname.startsWith('/motos') ? 'moto' : 'auto';
   const rutaPoliticaDivulgacion = location.pathname.startsWith('/motos')
     ? '/motos/legal/politica-divulgacion-datos'
     : RUTA_POLITICA_DIVULGACION_DATOS;
@@ -207,6 +208,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
               nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi tienda',
               nombre_comercial:
                 nombreComercial.trim() || nombreJuridico.trim() || 'Mi tienda',
+              vertical: verticalNegocio,
               rif: rifCompletoMeta,
               estado: estadoTaller.trim() || null,
               ciudad: ciudadTaller.trim() || null,
@@ -224,6 +226,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
                 nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi taller',
                 nombre_comercial:
                   nombreComercial.trim() || nombreJuridico.trim() || 'Mi taller',
+                vertical: verticalNegocio,
                 tipo_persona: tipoPersona,
                 rif: rifUsuarioOComun || null,
                 especialidad: especialidadesTaller,
@@ -299,6 +302,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           user_id: sessionUserId,
           nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi tienda',
           nombre_comercial: nombreComercial.trim() || nombreJuridico.trim() || 'Mi tienda',
+          vertical: verticalNegocio,
           rif: rifCompleto,
           estado: estadoTaller.trim() || null,
           ciudad: ciudadTaller.trim() || null,
@@ -318,6 +322,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           user_id: sessionUserId,
           nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi taller',
           nombre_comercial: nombreComercial.trim() || nombreJuridico.trim() || 'Mi taller',
+          vertical: verticalNegocio,
           tipo_persona: tipoPersona,
           rif: rifUsuarioOComun || null,
           especialidad: especialidadesTaller,

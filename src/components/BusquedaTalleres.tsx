@@ -14,6 +14,8 @@ import './avisoSeleccionarEstado.css';
 import './BusquedaRepuestos.css';
 import './VendedoresCercaDeMi.css';
 import './BusquedaTalleres.css';
+import type { VerticalVehiculo } from '../utils/verticalVehiculo';
+import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 
 export interface Taller {
   id: string;
@@ -36,9 +38,10 @@ export interface Taller {
 
 interface BusquedaTalleresProps {
   onBuscar?: () => void;
+  vertical?: VerticalVehiculo;
 }
 
-export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
+export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: BusquedaTalleresProps) {
   const [especialidad, setEspecialidad] = useState('');
   const [estado, setEstado] = useState('');
   const [ciudad, setCiudad] = useState('');
@@ -67,7 +70,8 @@ export function BusquedaTalleres({ onBuscar }: BusquedaTalleresProps) {
       .from('talleres')
       .select(
         'id, nombre, nombre_comercial, rif, especialidad, marca_vehiculo, acerca_de, estado, ciudad, telefono, email, direccion, latitud, longitud, metodos_pago'
-      );
+      )
+      .eq('vertical', vertical);
 
     if (especialidad) {
       query = query.contains('especialidad', [especialidad]);

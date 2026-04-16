@@ -65,6 +65,7 @@ export function RegistroRepuestos({
         .from('tiendas')
         .select('id, nombre, nombre_comercial')
         .eq('user_id', user.id)
+        .eq('vertical', vertical)
         .order('nombre');
 
       if (!error && data && data.length > 0) {
@@ -99,6 +100,7 @@ export function RegistroRepuestos({
         user_id: user.id,
         nombre: (perfil?.nombre ?? nombreAuto) as string,
         nombre_comercial: nombreAuto,
+        vertical,
         rif: rifAuto,
         estado: estadoAuto,
         ciudad: ciudadAuto,
@@ -118,13 +120,14 @@ export function RegistroRepuestos({
         .from('tiendas')
         .select('id, nombre, nombre_comercial')
         .eq('user_id', user.id)
+        .eq('vertical', vertical)
         .order('nombre');
 
       setTiendas(data2 ?? []);
       setCargandoTienda(false);
     };
     cargarTiendas();
-  }, [user]);
+  }, [user, vertical]);
 
   const registrarRepuesto = async () => {
     if (registrandoRef.current) return;
