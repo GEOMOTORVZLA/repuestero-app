@@ -18,6 +18,7 @@ import {
 } from '../constants/googleMapsNavUi';
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
 import { mensajeWhatsappVendedorProducto, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
+import { permitirAccionCliente } from '../utils/rateLimitCliente';
 import './BusquedaRepuestos.css';
 
 /** Distancia en km entre dos puntos (Haversine) */
@@ -330,6 +331,16 @@ export function BusquedaRepuestos({
     const texto = (textoOverride !== undefined ? textoOverride : textoBusqueda).trim();
     if (!texto && !marca.trim() && !modelo.trim() && !anio.trim()) {
       setMensaje('Escribe qué repuesto buscas o aplica al menos un filtro.');
+      return;
+    }
+
+    const rl = permitirAccionCliente('busqueda-repuestos', {
+      maxIntentos: 35,
+      ventanaMs: 60 * 1000,
+      bloqueoMs: 60 * 1000,
+    });
+    if (!rl.ok) {
+      setMensaje(rl.mensaje);
       return;
     }
 

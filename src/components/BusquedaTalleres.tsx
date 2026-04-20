@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
-import { ESPECIALIDADES_TALLER } from '../data/registroVenezuela';
+import { ESPECIALIDADES_TALLER, ESPECIALIDADES_TALLER_MOTO } from '../data/registroVenezuela';
 import { normalizeEspecialidadesTallerDb } from '../utils/tallerEspecialidades';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
 import {
@@ -50,7 +50,16 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
   const [buscado, setBuscado] = useState(false);
   const [avisoSeleccionarEstado, setAvisoSeleccionarEstado] = useState(false);
   const [contactarTaller, setContactarTaller] = useState<Taller | null>(null);
+  const especialidadesOpciones =
+    vertical === 'moto' ? ESPECIALIDADES_TALLER_MOTO : ESPECIALIDADES_TALLER;
   const ciudadesOpciones = estado ? getCiudadesPorEstado(estado) : [];
+
+  useEffect(() => {
+    setEspecialidad('');
+    setBuscado(false);
+    setTalleres([]);
+    setAvisoSeleccionarEstado(false);
+  }, [vertical]);
 
   const buscar = async () => {
     onBuscar?.();
@@ -167,7 +176,7 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
             }}
           >
             <option value="">Todas</option>
-            {ESPECIALIDADES_TALLER.map((esp) => (
+            {especialidadesOpciones.map((esp) => (
               <option key={esp} value={esp}>{esp}</option>
             ))}
           </select>

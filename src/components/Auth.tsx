@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { permitirAccionCliente } from '../utils/rateLimitCliente';
 import './Auth.css';
 
 interface AuthProps {
@@ -30,6 +31,18 @@ export function Auth({ onVolver, onIrARegistro, mensajeInicialError }: AuthProps
     e.preventDefault();
     setMensaje('');
     setMensajeEsError(false);
+
+    const rl = permitirAccionCliente(`auth:${modo}`, {
+      maxIntentos: modo === 'login' ? 8 : 5,
+      ventanaMs: 10 * 60 * 1000,
+      bloqueoMs: 2 * 60 * 1000,
+    });
+    if (!rl.ok) {
+      setMensaje(rl.mensaje);
+      setMensajeEsError(true);
+      return;
+    }
+
     setCargando(true);
 
     try {
@@ -77,6 +90,16 @@ export function Auth({ onVolver, onIrARegistro, mensajeInicialError }: AuthProps
                 onClick={async () => {
                   setMensaje('');
                   setMensajeEsError(false);
+                  const rl = permitirAccionCliente('auth:google', {
+                    maxIntentos: 5,
+                    ventanaMs: 10 * 60 * 1000,
+                    bloqueoMs: 2 * 60 * 1000,
+                  });
+                  if (!rl.ok) {
+                    setMensaje(rl.mensaje);
+                    setMensajeEsError(true);
+                    return;
+                  }
                   setCargando(true);
                   const { error } = await signInWithGoogle();
                   if (error) {

@@ -9,6 +9,7 @@ import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import * as XLSX from 'xlsx';
 import { normalizarMonedaImport } from '../utils/monedaProducto';
+import { permitirAccionCliente } from '../utils/rateLimitCliente';
 import './ImportarProductosCSV.css';
 
 type Moneda = 'BS' | 'USD';
@@ -202,6 +203,17 @@ export function ImportarProductosCSV({
     if (!archivo) {
       setEstado('error');
       setMensaje('Selecciona un archivo CSV, XLS o XLSX.');
+      return;
+    }
+
+    const rl = permitirAccionCliente('importar-productos', {
+      maxIntentos: 4,
+      ventanaMs: 10 * 60 * 1000,
+      bloqueoMs: 3 * 60 * 1000,
+    });
+    if (!rl.ok) {
+      setEstado('error');
+      setMensaje(rl.mensaje);
       return;
     }
 
