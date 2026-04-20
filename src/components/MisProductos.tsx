@@ -317,6 +317,10 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
       {alertaStock}
       <section className="mis-productos-ajuste-masivo" aria-label="Ajuste masivo de precios">
         <p className="mis-productos-ajuste-masivo-titulo">Ajuste masivo de precios</p>
+        <p className="mis-productos-ajuste-masivo-descripcion">
+          Puedes ajustar tus precios de manera masiva con esta opción colocando los porcentajes que
+          deseas ajustar, positivos para aumentos y negativos para disminuciones.
+        </p>
         <div className="mis-productos-ajuste-masivo-fila">
           <input
             type="text"

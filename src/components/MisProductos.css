@@ -32,6 +32,13 @@
   color: #1e3a5f;
 }
 
+.mis-productos-ajuste-masivo-descripcion {
+  margin: 0 0 0.45rem;
+  font-size: 0.8rem;
+  color: #475569;
+  line-height: 1.35;
+}
+
 .mis-productos-ajuste-masivo-fila {
   display: flex;
   gap: 0.45rem;
