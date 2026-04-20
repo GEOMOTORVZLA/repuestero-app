@@ -6,6 +6,7 @@ import {
   CODIGOS_TELEFONO,
   CODIGOS_AREA_FIJO,
   ESPECIALIDADES_TALLER,
+  ESPECIALIDADES_TALLER_MOTO,
 } from '../data/registroVenezuela';
 import { MARCAS_VEHICULOS } from '../data/marcasVehiculos';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
@@ -69,6 +70,8 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
   const [cargando, setCargando] = useState(false);
   const [metodosPago, setMetodosPago] = useState<string[]>([]);
   const [aceptaPoliticaDivulgacion, setAceptaPoliticaDivulgacion] = useState(false);
+  const especialidadesTallerOpciones =
+    verticalNegocio === 'moto' ? ESPECIALIDADES_TALLER_MOTO : ESPECIALIDADES_TALLER;
 
   const titulo =
     tipo === 'vendedor'
@@ -503,7 +506,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
                   Marca todas las ramas en las que trabajas; los clientes podrán encontrarte al filtrar por cualquiera de ellas.
                 </p>
                 <div className="form-registro-metodos-pago-opciones">
-                  {ESPECIALIDADES_TALLER.map((esp) => (
+                  {especialidadesTallerOpciones.map((esp) => (
                     <label key={esp} className="form-registro-metodos-pago-opcion">
                       <input
                         type="checkbox"

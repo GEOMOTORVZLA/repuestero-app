@@ -346,7 +346,7 @@ export function Landing({
       <section className="landing-taller">
         <h2 className="landing-seccion-titulo">ENCUENTRA EL TALLER QUE NECESITAS AQUI</h2>
         <div className="landing-taller-contenido">
-          <img src="/taller.png" alt="Taller" className="landing-taller-imagen" />
+          <img src={esMoto ? "/taller-moto-catalogo.png" : "/taller.png"} alt="Taller" className="landing-taller-imagen" />
           <div className="landing-taller-texto">
             <p>
               Porque sabemos que necesitas saber dónde puedes instalar ese repuesto que vas a comprar o hacer esa reparación que tu vehículo necesita, aquí te ofrecemos una lista de los talleres por categoría y ramo que se encuentran en tu ciudad, no dejes de consultarlo.

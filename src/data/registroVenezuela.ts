@@ -47,3 +47,11 @@ export const ESPECIALIDADES_TALLER = [
   'Tapicería automotriz',
   'Aire acondicionado',
 ] as const;
+
+/** Especialidades del taller para vertical motos */
+export const ESPECIALIDADES_TALLER_MOTO = [
+  'Mecánica Ligera',
+  'Mecánica Pesada',
+  'Electroauto',
+  'Latonería y Pintura',
+] as const;

@@ -17,6 +17,56 @@
   color: #78350f;
 }
 
+.mis-productos-ajuste-masivo {
+  margin: 0 0 0.9rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.mis-productos-ajuste-masivo-titulo {
+  margin: 0 0 0.4rem;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #1e3a5f;
+}
+
+.mis-productos-ajuste-masivo-fila {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.mis-productos-ajuste-masivo-input {
+  min-width: 170px;
+  max-width: 240px;
+  width: 100%;
+  padding: 0.42rem 0.55rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.mis-productos-ajuste-masivo-btn {
+  width: auto;
+  min-width: 150px;
+}
+
+.mis-productos-ajuste-masivo-ayuda {
+  margin: 0.35rem 0 0;
+  font-size: 0.76rem;
+  color: #64748b;
+}
+
+.mis-productos-ajuste-masivo-mensaje {
+  margin: 0.3rem 0 0;
+  font-size: 0.8rem;
+  color: #2f855a;
+  font-weight: 600;
+}
+
 .mis-productos-editor {
   margin-bottom: 1rem;
 }

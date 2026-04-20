@@ -102,6 +102,9 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
   const [productos, setProductos] = useState<ProductoPanel[]>([]);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ajustePorcentaje, setAjustePorcentaje] = useState('');
+  const [ajustandoPrecios, setAjustandoPrecios] = useState(false);
+  const [mensajeAjuste, setMensajeAjuste] = useState<string | null>(null);
   const [productoEditando, setProductoEditando] = useState<ProductoPanel | null>(null);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [productoAEliminar, setProductoAEliminar] = useState<ProductoPanel | null>(null);
@@ -209,6 +212,69 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
     return null;
   }
 
+  const aplicarAjusteMasivoPrecios = async () => {
+    const porcentaje = Number.parseFloat(ajustePorcentaje.replace(',', '.'));
+    if (!Number.isFinite(porcentaje)) {
+      setMensajeAjuste('Escribe un porcentaje válido. Ejemplo: 10 o -5.');
+      return;
+    }
+    if (porcentaje === 0) {
+      setMensajeAjuste('El porcentaje no puede ser 0.');
+      return;
+    }
+    if (!productos.length) {
+      setMensajeAjuste('No hay productos para ajustar.');
+      return;
+    }
+
+    const confirmar = window.confirm(
+      `Se ajustarán ${productos.length} producto(s) con ${porcentaje > 0 ? '+' : ''}${porcentaje}%.\n` +
+        'Los precios se redondearán a entero.'
+    );
+    if (!confirmar) return;
+
+    setAjustandoPrecios(true);
+    setMensajeAjuste(null);
+    setError(null);
+    try {
+      const actualizados: { id: string; precio_usd: number }[] = productos.map((p) => {
+        const base = Number(p.precio_usd) || 0;
+        const siguiente = Math.max(1, Math.round(base * (1 + porcentaje / 100)));
+        return { id: p.id, precio_usd: siguiente };
+      });
+
+      for (const upd of actualizados) {
+        const { error: errUpd } = await supabase
+          .from('productos')
+          .update({ precio_usd: upd.precio_usd })
+          .eq('id', upd.id);
+        if (errUpd) throw errUpd;
+      }
+
+      setProductos((prev) =>
+        prev.map((p) => {
+          const next = actualizados.find((u) => u.id === p.id);
+          return next ? { ...p, precio_usd: next.precio_usd } : p;
+        })
+      );
+      setProductoDetalle((prev) => {
+        if (!prev) return prev;
+        const next = actualizados.find((u) => u.id === prev.id);
+        return next ? { ...prev, precio_usd: next.precio_usd } : prev;
+      });
+      setMensajeAjuste(
+        `Ajuste aplicado a ${actualizados.length} producto(s) con ${porcentaje > 0 ? '+' : ''}${porcentaje}%.`
+      );
+      setAjustePorcentaje('');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'No se pudo aplicar el ajuste masivo.';
+      setError(msg);
+      setMensajeAjuste('No se pudo completar el ajuste de precios.');
+    } finally {
+      setAjustandoPrecios(false);
+    }
+  };
+
   const alertaStock = (
     <div className="mis-productos-alerta-stock" role="status">
       <strong>Control de inventario:</strong> todo producto con más de 20 días sin actualización de stock
@@ -249,6 +315,33 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
   return (
     <div className="mis-productos">
       {alertaStock}
+      <section className="mis-productos-ajuste-masivo" aria-label="Ajuste masivo de precios">
+        <p className="mis-productos-ajuste-masivo-titulo">Ajuste masivo de precios</p>
+        <div className="mis-productos-ajuste-masivo-fila">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={ajustePorcentaje}
+            onChange={(e) => setAjustePorcentaje(e.target.value)}
+            placeholder="Ej: 10 o -5"
+            className="mis-productos-ajuste-masivo-input"
+            disabled={ajustandoPrecios}
+            aria-label="Porcentaje de ajuste"
+          />
+          <button
+            type="button"
+            className="mis-productos-btn-primario mis-productos-ajuste-masivo-btn"
+            onClick={() => void aplicarAjusteMasivoPrecios()}
+            disabled={ajustandoPrecios}
+          >
+            {ajustandoPrecios ? 'Ajustando…' : 'Aplicar ajuste'}
+          </button>
+        </div>
+        <p className="mis-productos-ajuste-masivo-ayuda">
+          Se redondea a entero y nunca baja de 1.
+        </p>
+        {mensajeAjuste && <p className="mis-productos-ajuste-masivo-mensaje">{mensajeAjuste}</p>}
+      </section>
       {productoDetalle && (
         <div
           className="mis-productos-modal-overlay"
