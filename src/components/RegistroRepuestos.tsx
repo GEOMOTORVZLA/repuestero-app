@@ -11,6 +11,7 @@ import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import {
   MAX_BYTES_FOTO_PRODUCTO,
   MAX_MB_FOTO_PRODUCTO,
+  optimizarImagenProductoParaStorage,
 } from '../utils/imagenProducto';
 import { MAX_FOTOS_EXTRA, slotsArchivosExtraVacios } from '../utils/productoImagenesExtra';
 import './RegistroRepuestos.css';
@@ -177,7 +178,13 @@ export function RegistroRepuestos({
       setMensaje('Sube al menos una foto principal del repuesto.');
       return;
     }
-    if (fotoPrincipal.size > MAX_BYTES_FOTO_PRODUCTO) {
+    setEstado('registrando');
+    setMensaje('Optimizando imágenes y registrando repuesto...');
+
+    const fotoPrincipalLista = await optimizarImagenProductoParaStorage(fotoPrincipal, {
+      maxBytes: MAX_BYTES_FOTO_PRODUCTO,
+    });
+    if (fotoPrincipalLista.size > MAX_BYTES_FOTO_PRODUCTO) {
       registrandoRef.current = false;
       setEstado('error');
       setMensaje(
@@ -185,7 +192,15 @@ export function RegistroRepuestos({
       );
       return;
     }
-    const fotoExtraGrande = fotosExtraSlots.find((f) => f && f.size > MAX_BYTES_FOTO_PRODUCTO);
+    const fotosExtraListas = await Promise.all(
+      fotosExtraSlots.map(async (f) => {
+        if (!f) return null;
+        return await optimizarImagenProductoParaStorage(f, {
+          maxBytes: MAX_BYTES_FOTO_PRODUCTO,
+        });
+      })
+    );
+    const fotoExtraGrande = fotosExtraListas.find((f) => f && f.size > MAX_BYTES_FOTO_PRODUCTO);
     if (fotoExtraGrande) {
       registrandoRef.current = false;
       setEstado('error');
@@ -194,9 +209,6 @@ export function RegistroRepuestos({
       );
       return;
     }
-
-    setEstado('registrando');
-    setMensaje('Registrando repuesto...');
 
     const payload: Record<string, unknown> = {
       tienda_id: tienda.id,
@@ -235,10 +247,10 @@ export function RegistroRepuestos({
 
     // Subir imágenes a Supabase Storage (bucket "productos")
     const bucket = supabase.storage.from('productos');
-    const principalExt = fotoPrincipal.name.split('.').pop() || 'jpg';
+    const principalExt = fotoPrincipalLista.name.split('.').pop() || 'jpg';
     const principalPath = `${productoId}/principal.${principalExt}`;
 
-    const { error: upPrincipalError } = await bucket.upload(principalPath, fotoPrincipal, {
+    const { error: upPrincipalError } = await bucket.upload(principalPath, fotoPrincipalLista, {
       upsert: true,
     });
 
@@ -255,7 +267,7 @@ export function RegistroRepuestos({
 
     const slotsUrls: (string | null)[] = [null, null, null, null];
     for (let i = 0; i < MAX_FOTOS_EXTRA; i += 1) {
-      const file = fotosExtraSlots[i];
+      const file = fotosExtraListas[i];
       if (!file) continue;
       const ext = file.name.split('.').pop() || 'jpg';
       const extraPath = `${productoId}/extra-${i + 1}.${ext}`;

@@ -10,6 +10,7 @@ import { VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import {
   MAX_BYTES_FOTO_PRODUCTO,
   MAX_MB_FOTO_PRODUCTO,
+  optimizarImagenProductoParaStorage,
   urlImagenProductoVariante,
 } from '../utils/imagenProducto';
 import {
@@ -125,14 +126,17 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
     const MAX_MB = 2;
 
     if (nuevaFotoPrincipal) {
-      if (nuevaFotoPrincipal.size > MAX_MB * 1024 * 1024) {
+      const fotoPrincipalLista = await optimizarImagenProductoParaStorage(nuevaFotoPrincipal, {
+        maxBytes: MAX_MB * 1024 * 1024,
+      });
+      if (fotoPrincipalLista.size > MAX_MB * 1024 * 1024) {
         setEstado('error');
         setMensaje(`La foto no debe superar ${MAX_MB} MB. Comprímela o elige otra.`);
         return;
       }
-      const ext = nuevaFotoPrincipal.name.split('.').pop() || 'jpg';
+      const ext = fotoPrincipalLista.name.split('.').pop() || 'jpg';
       const principalPath = `${producto.id}/principal.${ext}`;
-      const { error: upPrincipalError } = await bucket.upload(principalPath, nuevaFotoPrincipal, {
+      const { error: upPrincipalError } = await bucket.upload(principalPath, fotoPrincipalLista, {
         upsert: true,
       });
       if (upPrincipalError) {
@@ -149,8 +153,11 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
 
     if (hayNuevasExtras) {
       for (let i = 0; i < MAX_FOTOS_EXTRA; i += 1) {
-        const file = nuevasFotosExtraSlots[i];
-        if (!file) continue;
+        const fileRaw = nuevasFotosExtraSlots[i];
+        if (!fileRaw) continue;
+        const file = await optimizarImagenProductoParaStorage(fileRaw, {
+          maxBytes: MAX_BYTES_FOTO_PRODUCTO,
+        });
         if (file.size > MAX_BYTES_FOTO_PRODUCTO) {
           setEstado('error');
           setMensaje(
