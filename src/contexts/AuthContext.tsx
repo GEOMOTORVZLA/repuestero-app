@@ -107,7 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           void (async () => {
             try {
               const u = await incorporarUsuario(raw);
-              if (!cancelled) setUser(u ?? raw);
+              if (!cancelled) setUser(u);
             } catch (e) {
               console.error('[Auth] onAuthStateChange fallo:', e);
               if (!cancelled) setUser(raw);
