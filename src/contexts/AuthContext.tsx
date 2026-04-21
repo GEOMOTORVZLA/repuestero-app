@@ -27,6 +27,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    const hayIntentoGooglePendiente = (): boolean => {
+      try {
+        return sessionStorage.getItem(INTENTO_LOGIN_KEY) === 'google';
+      } catch {
+        return false;
+      }
+    };
 
     const incorporarUsuario = async (u: User): Promise<User | null> => {
       await ensureNegocioDesdeMetadataUsuario(u);
@@ -64,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionRespondio = true;
         window.clearTimeout(watchdog);
         const raw = session?.user ?? null;
-        if (raw) setUser(raw);
+        if (raw && !hayIntentoGooglePendiente()) setUser(raw);
         else setUser(null);
         setLoading(false);
         try {
@@ -98,8 +105,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Establece sesión base de inmediato para no bloquear el login.
-      setUser(raw);
+      // En login por Google no mostramos sesión base hasta validar registro Geomotor.
+      if (!hayIntentoGooglePendiente()) {
+        setUser(raw);
+      }
 
       // IMPORTANTE: no bloquear onAuthStateChange con await de consultas Supabase.
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
