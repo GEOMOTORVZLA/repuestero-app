@@ -253,26 +253,24 @@ async function usuarioPuedeEntrarConGoogle(user: User): Promise<boolean> {
 }
 
 /**
- * Solo si el usuario acaba de pulsar «Entrar con Google» (intento en sessionStorage).
- * Comprueba registro Geomotor + tienda/taller aprobados, o comprador con perfil y no suspendido.
+ * Comprueba siempre las cuentas Google:
+ * si no tienen registro Geomotor válido, se cierra sesión y se muestra aviso.
  */
 export async function rechazarGoogleSiNoHayRegistroGeomotor(user: User): Promise<boolean> {
-  let esIntentoGoogle = false;
   try {
     const v = sessionStorage.getItem(INTENTO_LOGIN_KEY);
-    if (v === 'google') {
-      esIntentoGoogle = true;
-      sessionStorage.removeItem(INTENTO_LOGIN_KEY);
-    } else if (v === 'password') {
+    if (v === 'google' || v === 'password') {
       sessionStorage.removeItem(INTENTO_LOGIN_KEY);
     }
   } catch {
     /* ignore */
   }
-  if (!esIntentoGoogle) return false;
 
   const ids = user.identities ?? [];
-  if (!ids.some((i) => i.provider === 'google')) return false;
+  const tieneGoogleIdentity = ids.some((i) => i.provider === 'google');
+  const providers = ((user.app_metadata ?? {}) as Record<string, unknown>).providers;
+  const tieneGoogleProvider = Array.isArray(providers) && providers.includes('google');
+  if (!tieneGoogleIdentity && !tieneGoogleProvider) return false;
 
   const permitido = await usuarioPuedeEntrarConGoogle(user);
   if (permitido) return false;
@@ -281,7 +279,7 @@ export async function rechazarGoogleSiNoHayRegistroGeomotor(user: User): Promise
   try {
     sessionStorage.setItem(
       AUTH_FLASH_KEY,
-      'Regístrate como vendedor, comprador o taller y espera la aprobación del administrador. Luego podrás usar Entrar con Google.'
+      'No tienes un usuario registrado en Geomotor. Debes registrarte primero y luego podrás usar Entrar con Google.'
     );
   } catch {
     /* ignore */
