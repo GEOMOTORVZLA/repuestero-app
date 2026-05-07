@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
+import { useAuth } from '../contexts/AuthContext';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import { ESPECIALIDADES_TALLER, ESPECIALIDADES_TALLER_MOTO } from '../data/registroVenezuela';
 import { normalizeEspecialidadesTallerDb } from '../utils/tallerEspecialidades';
@@ -42,6 +43,7 @@ interface BusquedaTalleresProps {
 }
 
 export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: BusquedaTalleresProps) {
+  const { user } = useAuth();
   const [especialidad, setEspecialidad] = useState('');
   const [estado, setEstado] = useState('');
   const [ciudad, setCiudad] = useState('');
@@ -104,6 +106,7 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
   const nombreTaller = (t: Taller) => t.nombre_comercial || t.nombre || 'Sin nombre';
 
   const abrirDetalleTaller = (t: Taller) => {
+    if (!user) return;
     setContactarTaller(t);
   };
   const cerrarContactar = () => {
@@ -273,6 +276,11 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
                 </p>
               ) : (
                 <div className="busqueda-talleres-resultados busqueda-talleres-resultados--en-overlay">
+                  {!user && (
+                    <p className="busqueda-repuestos-login-aviso">
+                      Debes iniciar sesión o registrarte para contactar talleres.
+                    </p>
+                  )}
                   <div className="busqueda-talleres-grid">
                     {talleres.map((t) => {
                       const espList = normalizeEspecialidadesTallerDb(t.especialidad);
@@ -283,6 +291,8 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
                             type="button"
                             className="busqueda-talleres-card-resumen"
                             onClick={() => abrirDetalleTaller(t)}
+                            disabled={!user}
+                            title={!user ? 'Inicia sesión para contactar talleres' : undefined}
                             aria-label={labelCard}
                           >
                             <div className="vendedores-cerca-card-cuerpo busqueda-talleres-card-cuerpo-solo">

@@ -6,19 +6,41 @@ import './Auth.css';
 interface AuthProps {
   onVolver?: () => void;
   onIrARegistro?: () => void;
+  restablecerPassword?: boolean;
   /** Tras rechazar Google sin registro Geomotor (lo pone App al leer sessionStorage). */
   mensajeInicialError?: string | null;
 }
 
-export function Auth({ onVolver, onIrARegistro, mensajeInicialError }: AuthProps) {
-  const { signIn, signUp, signInWithGoogle } = useAuth();
-  const [modo, setModo] = useState<'login' | 'registro'>('login');
+type ModoAuth = 'login' | 'registro' | 'recuperar' | 'restablecer';
+
+function traducirErrorAuth(error: string): string {
+  const normalizado = error.toLowerCase();
+  if (normalizado.includes('invalid login credentials')) {
+    return 'Correo o contraseña incorrectos. Si no recuerdas tu contraseña, usa "Olvidé mi contraseña".';
+  }
+  if (normalizado.includes('email not confirmed')) {
+    return 'Este correo aún no está habilitado para iniciar sesión. Contacta al administrador si ya completaste el registro.';
+  }
+  if (normalizado.includes('rate limit')) {
+    return 'Se enviaron demasiados correos en poco tiempo. Espera unos minutos e intenta de nuevo.';
+  }
+  return error;
+}
+
+export function Auth({ onVolver, onIrARegistro, restablecerPassword = false, mensajeInicialError }: AuthProps) {
+  const { signIn, signUp, signInWithGoogle, resetPassword, updatePassword, clearPasswordRecovery } = useAuth();
+  const [modo, setModo] = useState<ModoAuth>(restablecerPassword ? 'restablecer' : 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [mensaje, setMensaje] = useState('');
   const [mensajeEsError, setMensajeEsError] = useState(false);
   const [cargando, setCargando] = useState(false);
+
+  useEffect(() => {
+    if (restablecerPassword) setModo('restablecer');
+  }, [restablecerPassword]);
 
   useEffect(() => {
     if (mensajeInicialError) {
@@ -46,21 +68,42 @@ export function Auth({ onVolver, onIrARegistro, mensajeInicialError }: AuthProps
     setCargando(true);
 
     try {
-      const { error } = modo === 'login'
-        ? await signIn(email, password)
-        : await signUp(email, password);
+      let error: string | null = null;
+
+      if (modo === 'login') {
+        ({ error } = await signIn(email, password));
+      } else if (modo === 'registro') {
+        ({ error } = await signUp(email, password));
+      } else if (modo === 'recuperar') {
+        ({ error } = await resetPassword(email));
+      } else {
+        if (password.length < 6) {
+          setMensaje('La contraseña debe tener al menos 6 caracteres.');
+          setMensajeEsError(true);
+          return;
+        }
+        if (password !== passwordConfirm) {
+          setMensaje('Las contraseñas no coinciden.');
+          setMensajeEsError(true);
+          return;
+        }
+        ({ error } = await updatePassword(password));
+      }
 
       if (error) {
-        const msg = error.toLowerCase().includes('rate limit')
-          ? 'Se enviaron demasiados correos en poco tiempo. Espera unos minutos e intenta de nuevo.'
-          : error;
-        setMensaje(msg);
+        setMensaje(traducirErrorAuth(error));
         setMensajeEsError(true);
         return;
       }
 
       if (modo === 'registro') {
         setMensaje('Cuenta creada. Revisa tu correo para confirmar, o inicia sesión si ya está activa.');
+      } else if (modo === 'recuperar') {
+        setMensaje('Te enviamos un enlace para restablecer tu contraseña. Revisa tu correo.');
+      } else if (modo === 'restablecer') {
+        setMensaje('Contraseña actualizada correctamente. Ya puedes continuar en Geomotor.');
+        setPassword('');
+        setPasswordConfirm('');
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'No se pudo conectar. Revisa la red e intenta de nuevo.';
@@ -76,11 +119,26 @@ export function Auth({ onVolver, onIrARegistro, mensajeInicialError }: AuthProps
       <main className="auth-main">
         <div className="auth-card">
           {onVolver && (
-            <button type="button" className="auth-volver" onClick={onVolver}>
+            <button
+              type="button"
+              className="auth-volver"
+              onClick={() => {
+                if (modo === 'restablecer') clearPasswordRecovery();
+                onVolver();
+              }}
+            >
               ← Volver
             </button>
           )}
-          <h2 className="auth-titulo">{modo === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}</h2>
+          <h2 className="auth-titulo">
+            {modo === 'login'
+              ? 'Iniciar sesión'
+              : modo === 'registro'
+                ? 'Crear cuenta'
+                : modo === 'recuperar'
+                  ? 'Recuperar contraseña'
+                  : 'Nueva contraseña'}
+          </h2>
           {modo === 'login' && (
             <>
               <button
@@ -135,43 +193,85 @@ export function Auth({ onVolver, onIrARegistro, mensajeInicialError }: AuthProps
             </>
           )}
           <form onSubmit={handleSubmit} className="auth-form">
-            <div className="auth-campo">
-              <label htmlFor="auth-email">Correo electrónico</label>
-              <input
-                id="auth-email"
-                type="email"
-                placeholder="correo@ejemplo.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={cargando}
-              />
-            </div>
-            <div className="auth-campo">
-              <label htmlFor="auth-password">Contraseña</label>
-              <div className="auth-password-wrap">
+            {modo !== 'restablecer' && (
+              <div className="auth-campo">
+                <label htmlFor="auth-email">Correo electrónico</label>
                 <input
-                  id="auth-password"
+                  id="auth-email"
+                  type="email"
+                  placeholder="correo@ejemplo.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={cargando}
+                />
+              </div>
+            )}
+            {modo !== 'recuperar' && (
+              <div className="auth-campo">
+                <label htmlFor="auth-password">
+                  {modo === 'restablecer' ? 'Nueva contraseña' : 'Contraseña'}
+                </label>
+                <div className="auth-password-wrap">
+                  <input
+                    id="auth-password"
+                    type={mostrarPassword ? 'text' : 'password'}
+                    placeholder="Mínimo 6 caracteres"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    disabled={cargando}
+                  />
+                  <button
+                    type="button"
+                    className="auth-toggle-password"
+                    onClick={() => setMostrarPassword((v) => !v)}
+                    title={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  >
+                    {mostrarPassword ? 'Ocultar' : 'Mostrar'}
+                  </button>
+                </div>
+                {modo === 'login' && (
+                  <button
+                    type="button"
+                    className="auth-recuperar-password"
+                    onClick={() => {
+                      setMensaje('');
+                      setMensajeEsError(false);
+                      setModo('recuperar');
+                    }}
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                )}
+              </div>
+            )}
+            {modo === 'restablecer' && (
+              <div className="auth-campo">
+                <label htmlFor="auth-password-confirm">Confirmar nueva contraseña</label>
+                <input
+                  id="auth-password-confirm"
                   type={mostrarPassword ? 'text' : 'password'}
-                  placeholder="Mínimo 6 caracteres"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Repite la contraseña"
+                  value={passwordConfirm}
+                  onChange={(e) => setPasswordConfirm(e.target.value)}
                   required
                   minLength={6}
                   disabled={cargando}
                 />
-                <button
-                  type="button"
-                  className="auth-toggle-password"
-                  onClick={() => setMostrarPassword((v) => !v)}
-                  title={mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                >
-                  {mostrarPassword ? 'Ocultar' : 'Mostrar'}
-                </button>
               </div>
-            </div>
+            )}
             <button type="submit" className="auth-submit" disabled={cargando}>
-              {cargando ? 'Espera...' : modo === 'login' ? 'Entrar' : 'Crear cuenta'}
+              {cargando
+                ? 'Espera...'
+                : modo === 'login'
+                  ? 'Entrar'
+                  : modo === 'registro'
+                    ? 'Crear cuenta'
+                    : modo === 'recuperar'
+                      ? 'Enviar enlace'
+                      : 'Actualizar contraseña'}
             </button>
           </form>
           <p className="auth-switch">
@@ -191,11 +291,30 @@ export function Auth({ onVolver, onIrARegistro, mensajeInicialError }: AuthProps
                   Regístrate
                 </button>
               </>
-            ) : (
+            ) : modo === 'registro' ? (
               <>
                 ¿Ya tienes cuenta?{' '}
                 <button type="button" onClick={() => setModo('login')}>
                   Inicia sesión
+                </button>
+              </>
+            ) : modo === 'recuperar' ? (
+              <>
+                ¿Recordaste tu contraseña?{' '}
+                <button type="button" onClick={() => setModo('login')}>
+                  Volver a iniciar sesión
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearPasswordRecovery();
+                    setModo('login');
+                  }}
+                >
+                  Volver a iniciar sesión
                 </button>
               </>
             )}

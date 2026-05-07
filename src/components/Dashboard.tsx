@@ -60,11 +60,15 @@ export function Dashboard({ onVolverInicio, vertical = VERTICAL_AUTO }: Dashboar
         .from('tiendas')
         .select('bloqueado, aprobacion_estado, membresia_hasta')
         .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
         .maybeSingle();
       const { data: tallerRow } = await supabase
         .from('talleres')
         .select('bloqueado, aprobacion_estado, membresia_hasta')
         .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
         .maybeSingle();
 
       if (cancelled) return;

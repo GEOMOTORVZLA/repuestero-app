@@ -193,7 +193,13 @@ export function PerfilTaller() {
     const u = authData?.user ?? user;
     const metaTaller = extraerMetaTaller(u);
 
-    const { data, error } = await supabase.from('talleres').select('*').eq('user_id', u.id).maybeSingle();
+    const { data, error } = await supabase
+      .from('talleres')
+      .select('*')
+      .eq('user_id', u.id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
 
     if (error) {
       setDatos(null);
@@ -229,7 +235,13 @@ export function PerfilTaller() {
       const metaTaller = extraerMetaTaller(u);
 
       const leerFila = async () => {
-        const { data, error } = await supabase.from('talleres').select('*').eq('user_id', u.id).maybeSingle();
+        const { data, error } = await supabase
+          .from('talleres')
+          .select('*')
+          .eq('user_id', u.id)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
         return { data, error } as const;
       };
 

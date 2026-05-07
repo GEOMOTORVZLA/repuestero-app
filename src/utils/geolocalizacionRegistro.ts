@@ -184,7 +184,7 @@ export type GeocodificacionInversaResult =
 export function mensajeUsuarioGeocodificacion(res: GeocodificacionInversaResult): string {
   if (res.ok) return '';
   if (res.fase === 'maps') {
-    return 'No se pudo cargar Google Maps. Revisa VITE_GOOGLE_MAPS_API_KEY en Vercel y haz Redeploy sin cache.';
+    return 'No se pudo cargar Google Maps. Revisa VITE_GOOGLE_MAPS_API_KEY en las variables de entorno de producción y haz redeploy sin caché.';
   }
   const c = res.codigo;
   if (c === 'REQUEST_DENIED') {
@@ -197,7 +197,7 @@ export function mensajeUsuarioGeocodificacion(res: GeocodificacionInversaResult)
       `En Google Cloud → APIs y servicios → Credenciales → abre esta API key → Restricciones de aplicación → ` +
       `«Sitios web» y añade el referente: ${ref} ` +
       `(con https y /* al final). En «Restricciones de API» incluye al menos Maps JavaScript API. ` +
-      `Si la clave estaba limitada por direcciones IP, cámbiala a referentes web: las peticiones salen del navegador, no de los servidores de Vercel.`
+      `Si la clave estaba limitada por direcciones IP, cámbiala a referentes web: las peticiones salen del navegador del usuario, no del servidor de hosting.`
     );
   }
   if (c === 'OVER_QUERY_LIMIT' || c === 'OVER_DAILY_LIMIT') {

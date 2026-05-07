@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
 import { CATEGORIAS_MOTO_MAS_BUSCADAS, imagenPinCategoriaMoto } from '../data/categoriasProductoMoto';
 import { getUserAvatarUrl } from '../utils/userAvatar';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import { BusquedaRepuestos } from './BusquedaRepuestos';
+import { MecanicoVirtualMoto } from './MecanicoVirtualMoto';
+import { MecanicoVirtualObd } from './MecanicoVirtualObd';
 import { VendedoresCercaDeMi } from './VendedoresCercaDeMi';
 import { ListaRepuestosPorCategoria } from './ListaRepuestosPorCategoria';
 import { IconoCategoria } from './IconosCategorias';
@@ -16,6 +18,7 @@ import imgCorreasBandas from '../assets/categoria-correas-bandas.png';
 import imgBujiasEncendido from '../assets/categoria-bujias-encendido.png';
 import imgLucesFaros from '../assets/categoria-luces-faros.png';
 import { BusquedaTalleres } from './BusquedaTalleres';
+import { PARAM_REPUESTO_COMPARTIDO, esIdProductoUuid } from '../utils/enlaceCompartirProducto';
 import './Landing.css';
 
 interface LandingProps {
@@ -64,6 +67,16 @@ export function Landing({
   sessionUser = null,
   onIrAPanel,
 }: LandingProps) {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const productoIdDesdeUrl = useMemo(() => {
+    const raw = searchParams.get(PARAM_REPUESTO_COMPARTIDO)?.trim();
+    if (!raw || !esIdProductoUuid(raw)) return null;
+    return raw;
+  }, [searchParams]);
+
   const esMoto = vertical === 'moto';
   const heroSlides = useMemo(() => (esMoto ? HERO_IMAGENES_MOTO : HERO_IMAGENES_AUTO), [esMoto]);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -83,8 +96,11 @@ export function Landing({
 
   const cerrarPaginaBusquedaRepuestos = useCallback(() => {
     setVistaBusquedaRepuestos({ activa: false, texto: '' });
+    if (searchParams.has(PARAM_REPUESTO_COMPARTIDO)) {
+      navigate({ pathname: location.pathname, search: '' }, { replace: true });
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+  }, [navigate, location.pathname, searchParams]);
 
   const cerrarOverlayCategoria = useCallback(() => {
     setCategoriaSeleccionada(null);
@@ -111,6 +127,14 @@ export function Landing({
     setCategoriaSeleccionada(null);
     setBusquedaRepuestosMountKey((k) => k + 1);
   }, [vertical]);
+
+  /** Abrir búsqueda al entrar con ?repuesto=uuid (enlace compartido). */
+  useEffect(() => {
+    if (!productoIdDesdeUrl) return;
+    setVistaBusquedaRepuestos({ activa: true, texto: '' });
+    setBusquedaRepuestosMountKey((k) => k + 1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [productoIdDesdeUrl]);
 
   const overlayLandingActivo =
     vistaBusquedaRepuestos.activa || Boolean(categoriaSeleccionada);
@@ -228,6 +252,10 @@ export function Landing({
           variant="compact"
           onIrAResultados={({ texto }) => abrirPaginaBusquedaRepuestos(texto)}
         />
+      )}
+
+      {!vistaBusquedaRepuestos.activa && (
+        esMoto ? <MecanicoVirtualMoto /> : <MecanicoVirtualObd vertical={vertical} />
       )}
 
       <VendedoresCercaDeMi vertical={vertical} />
@@ -498,6 +526,7 @@ export function Landing({
               vertical={vertical}
               variant="full"
               initialTexto={vistaBusquedaRepuestos.texto}
+              productoIdDesdeEnlace={vistaBusquedaRepuestos.activa ? productoIdDesdeUrl : null}
               onVolver={cerrarPaginaBusquedaRepuestos}
             />
           </div>

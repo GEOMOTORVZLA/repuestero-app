@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../supabaseClient';
-import { urlImagenProductoVariante } from '../utils/imagenProducto';
+import {
+  MAX_BYTES_FOTO_PRODUCTO,
+  MAX_MB_FOTO_PRODUCTO,
+  optimizarImagenProductoParaStorage,
+  urlImagenProductoVariante,
+} from '../utils/imagenProducto';
 import { urlsFotosProducto } from '../utils/productoImagenesExtra';
 import { etiquetaEspecialidadesTaller } from '../utils/tallerEspecialidades';
 import { etiquetaMoneda } from '../utils/monedaProducto';
+import { formatearPrecioProducto } from '../utils/precioProducto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import './Dashboard.css';
 
@@ -33,6 +39,13 @@ type AdminKpis = {
 };
 
 type AprobacionEstado = 'pendiente' | 'aprobado' | 'rechazado';
+type FiltroEstadoProductoGestion =
+  | 'todos'
+  | 'activos'
+  | 'pausados'
+  | 'proximos_stock'
+  | 'stock_vencido'
+  | 'sin_fecha_stock';
 
 type AdminUsuario = {
   user_id: string;
@@ -58,6 +71,8 @@ type AdminComprador = {
 type AdminProducto = {
   id: string;
   nombre: string;
+  descripcion?: string | null;
+  comentarios?: string | null;
   tienda_id?: string | null;
   categoria: string | null;
   marca: string | null;
@@ -70,6 +85,8 @@ type AdminProducto = {
   imagen_url?: string | null;
   imagenes_extra?: (string | null)[] | string[] | null;
   created_at?: string | null;
+  stock_confirmado_at?: string | null;
+  pausado_por_stock_vencido?: boolean | null;
   vertical?: string | null;
   tiendas?:
     | { id?: string; nombre_comercial: string | null; nombre: string | null }
@@ -156,6 +173,27 @@ function etiquetaVendedorDesdeProducto(p: AdminProducto, vendedores: AdminTienda
   return '—';
 }
 
+function diasDesdeFechaISO(fechaIso: string | null | undefined): number | null {
+  if (!fechaIso) return null;
+  const ts = Date.parse(fechaIso);
+  if (Number.isNaN(ts)) return null;
+  const dias = Math.floor((Date.now() - ts) / (1000 * 60 * 60 * 24));
+  return Math.max(0, dias);
+}
+
+function semaforoStockGestion(p: {
+  stock_confirmado_at?: string | null;
+  created_at?: string | null;
+}): { clase: 'verde' | 'amarillo' | 'rojo' | 'vencido' | 'sin-fecha'; texto: string } {
+  const base = p.stock_confirmado_at ?? p.created_at ?? null;
+  const dias = diasDesdeFechaISO(base);
+  if (dias == null) return { clase: 'sin-fecha', texto: 'Sin fecha' };
+  if (dias <= 9) return { clase: 'verde', texto: `${dias} día(s)` };
+  if (dias <= 15) return { clase: 'amarillo', texto: `Por confirmar (${dias})` };
+  if (dias <= 20) return { clase: 'rojo', texto: `Crítico (${dias})` };
+  return { clase: 'vencido', texto: `Vencido (${dias})` };
+}
+
 export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: DashboardAdminProps) {
   const { user, signOut } = useAuth();
   const [tab, setTab] = useState<AdminTab>('resumen');
@@ -164,6 +202,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   );
   /** id de tienda = vendedor en catálogo */
   const [adminFiltroVendedorTiendaId, setAdminFiltroVendedorTiendaId] = useState('');
+  const [busquedaProductosAdmin, setBusquedaProductosAdmin] = useState('');
+  const [filtroEstadoProductosAdmin, setFiltroEstadoProductosAdmin] =
+    useState<FiltroEstadoProductoGestion>('todos');
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
@@ -177,12 +218,18 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [busquedaCompradores, setBusquedaCompradores] = useState('');
   const [busquedaVendedores, setBusquedaVendedores] = useState('');
   const [busquedaTalleres, setBusquedaTalleres] = useState('');
+  const [fotosMasivasTiendaId, setFotosMasivasTiendaId] = useState('');
+  const [fotosMasivasAlcance, setFotosMasivasAlcance] = useState<'todos' | 'sin_foto' | 'seleccionados'>('sin_foto');
+  const [fotosMasivasArchivos, setFotosMasivasArchivos] = useState<(File | null)[]>([null, null, null, null]);
+  const [fotosMasivasSeleccionados, setFotosMasivasSeleccionados] = useState<string[]>([]);
+  const [mensajeFotosMasivas, setMensajeFotosMasivas] = useState<string | null>(null);
+  const [fotoActivaAdminProducto, setFotoActivaAdminProducto] = useState<Record<string, number>>({});
 
   const cargarProductos = async () => {
     const pRes = await supabase
       .from('productos')
       .select(
-        'id, nombre, tienda_id, categoria, marca, modelo, anio, precio_usd, moneda, activo, aprobacion_publica, imagen_url, imagenes_extra, created_at, vertical, tiendas(id, nombre, nombre_comercial)'
+        'id, nombre, descripcion, comentarios, tienda_id, categoria, marca, modelo, anio, precio_usd, moneda, activo, aprobacion_publica, imagen_url, imagenes_extra, created_at, stock_confirmado_at, pausado_por_stock_vencido, vertical, tiendas(id, nombre, nombre_comercial)'
       )
       .order('created_at', { ascending: false });
     if (pRes.error) setError(pRes.error.message);
@@ -328,15 +375,86 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   }, [vendedores]);
 
   const productosFiltrados = useMemo(() => {
+    const texto = busquedaProductosAdmin.trim().toLocaleLowerCase('es');
+    const terminos = texto.split(/\s+/).filter(Boolean);
     return productos.filter((p) => {
       const vertOk =
         adminFiltroVertical === 'todos' || (p.vertical ?? 'auto') === adminFiltroVertical;
       const tidProd = p.tienda_id ?? primeraTiendaProducto(p)?.id;
       const vendedorOk =
         !adminFiltroVendedorTiendaId || tidProd === adminFiltroVendedorTiendaId;
-      return vertOk && vendedorOk;
+      const semaforo = semaforoStockGestion(p);
+      const estadoOk =
+        filtroEstadoProductosAdmin === 'todos' ||
+        (filtroEstadoProductosAdmin === 'activos' && p.activo !== false) ||
+        (filtroEstadoProductosAdmin === 'pausados' && p.activo === false) ||
+        (filtroEstadoProductosAdmin === 'proximos_stock' &&
+          p.activo !== false &&
+          (semaforo.clase === 'amarillo' || semaforo.clase === 'rojo')) ||
+        (filtroEstadoProductosAdmin === 'stock_vencido' && semaforo.clase === 'vencido') ||
+        (filtroEstadoProductosAdmin === 'sin_fecha_stock' && semaforo.clase === 'sin-fecha');
+      const fuente = [
+        p.nombre,
+        p.descripcion,
+        p.comentarios,
+        p.categoria,
+        p.marca,
+        p.modelo,
+        p.anio != null ? String(p.anio) : '',
+        p.precio_usd != null ? String(p.precio_usd) : '',
+        etiquetaVendedorDesdeProducto(p, vendedores),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLocaleLowerCase('es');
+      const textoOk = terminos.length === 0 || terminos.every((t) => fuente.includes(t));
+      return vertOk && vendedorOk && estadoOk && textoOk;
     });
-  }, [productos, adminFiltroVertical, adminFiltroVendedorTiendaId]);
+  }, [
+    productos,
+    adminFiltroVertical,
+    adminFiltroVendedorTiendaId,
+    busquedaProductosAdmin,
+    filtroEstadoProductosAdmin,
+    vendedores,
+  ]);
+  const productosObjetivoFotosMasivas = useMemo(() => {
+    if (!fotosMasivasTiendaId) return [];
+    if (fotosMasivasAlcance === 'seleccionados') {
+      return productos.filter((p) => {
+        if (!fotosMasivasSeleccionados.includes(p.id)) return false;
+        const tidProd = p.tienda_id ?? primeraTiendaProducto(p)?.id;
+        return tidProd === fotosMasivasTiendaId;
+      });
+    }
+    return productos.filter((p) => {
+      const tidProd = p.tienda_id ?? primeraTiendaProducto(p)?.id;
+      if (tidProd !== fotosMasivasTiendaId) return false;
+      if (fotosMasivasAlcance === 'sin_foto') {
+        return !p.imagen_url || !String(p.imagen_url).trim();
+      }
+      return true;
+    });
+  }, [productos, fotosMasivasTiendaId, fotosMasivasAlcance, fotosMasivasSeleccionados]);
+  const productosSeleccionablesFotosMasivas = useMemo(() => {
+    if (!fotosMasivasTiendaId) return [];
+    return productosFiltrados.filter((p) => {
+      const tidProd = p.tienda_id ?? primeraTiendaProducto(p)?.id;
+      return tidProd === fotosMasivasTiendaId;
+    });
+  }, [productosFiltrados, fotosMasivasTiendaId]);
+  const productosPendientesFiltrados = useMemo(
+    () => productosFiltrados.filter((p) => (p.aprobacion_publica ?? 'aprobado') === 'pendiente'),
+    [productosFiltrados]
+  );
+  const vendedoresPendientesVisibles = useMemo(
+    () => vendedores.filter((v) => (v.aprobacion_estado ?? 'aprobado') === 'pendiente'),
+    [vendedores]
+  );
+  const talleresPendientesVisibles = useMemo(
+    () => talleres.filter((t) => (t.aprobacion_estado ?? 'aprobado') === 'pendiente'),
+    [talleres]
+  );
   const tiendasPendientes = kpis?.tiendas_pendientes_aprobacion ?? vendedores.filter(
     (v) => (v.aprobacion_estado ?? 'aprobado') === 'pendiente'
   ).length;
@@ -440,6 +558,214 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       setProductos((prev) =>
         prev.map((p) => (p.id === productoId ? { ...p, aprobacion_publica: estado } : p))
       );
+    }
+    setAccionando(null);
+  };
+
+  const cambiarFotoMasiva = (idx: number, file: File | null) => {
+    setMensajeFotosMasivas(null);
+    setFotosMasivasArchivos((prev) => prev.map((f, i) => (i === idx ? file : f)));
+  };
+
+  const toggleProductoFotoMasiva = (productoId: string, checked: boolean) => {
+    setMensajeFotosMasivas(null);
+    setFotosMasivasSeleccionados((prev) => {
+      if (checked) return prev.includes(productoId) ? prev : [...prev, productoId];
+      return prev.filter((id) => id !== productoId);
+    });
+  };
+
+  const seleccionarProductosFotosMasivasVisibles = () => {
+    setMensajeFotosMasivas(null);
+    const ids = productosSeleccionablesFotosMasivas.map((p) => p.id);
+    setFotosMasivasSeleccionados((prev) => Array.from(new Set([...prev, ...ids])));
+  };
+
+  const limpiarSeleccionFotosMasivas = () => {
+    setMensajeFotosMasivas(null);
+    setFotosMasivasSeleccionados([]);
+  };
+
+  const cambiarFotoAdminProducto = (productoId: string, total: number, delta: number) => {
+    if (total <= 1) return;
+    setFotoActivaAdminProducto((prev) => {
+      const actual = prev[productoId] ?? 0;
+      return { ...prev, [productoId]: (actual + delta + total) % total };
+    });
+  };
+
+  const aplicarFotosMasivas = async () => {
+    setMensajeFotosMasivas(null);
+    setError(null);
+
+    const tiendaId = fotosMasivasTiendaId.trim();
+    const fotoPrincipal = fotosMasivasArchivos[0];
+    const objetivos = productosObjetivoFotosMasivas;
+
+    if (!tiendaId) {
+      setMensajeFotosMasivas('Selecciona un vendedor.');
+      return;
+    }
+    if (!fotoPrincipal) {
+      setMensajeFotosMasivas('Sube al menos la foto 1 (principal).');
+      return;
+    }
+    if (!objetivos.length) {
+      setMensajeFotosMasivas('No hay productos para actualizar con el alcance elegido.');
+      return;
+    }
+
+    const vendedor = vendedores.find((v) => v.id === tiendaId);
+    const etiqueta = vendedor?.nombre_comercial || vendedor?.nombre || 'este vendedor';
+    if (
+      !window.confirm(
+        `¿Aplicar estas fotos a ${objetivos.length} producto(s) de "${etiqueta}"?\n\n` +
+          'La foto 1 será principal y las demás quedarán como fotos adicionales. Esta acción reemplaza las fotos actuales de esos productos.'
+      )
+    ) {
+      return;
+    }
+
+    setAccionando('bulk-fotos-productos');
+    try {
+      const bucket = supabase.storage.from('productos');
+      const urls: string[] = [];
+      const lote = `${Date.now()}`;
+
+      for (let i = 0; i < fotosMasivasArchivos.length; i += 1) {
+        const raw = fotosMasivasArchivos[i];
+        if (!raw) continue;
+        const lista = await optimizarImagenProductoParaStorage(raw, {
+          maxBytes: MAX_BYTES_FOTO_PRODUCTO,
+        });
+        if (lista.size > MAX_BYTES_FOTO_PRODUCTO) {
+          throw new Error(`La foto ${i + 1} no debe superar ${MAX_MB_FOTO_PRODUCTO} MB.`);
+        }
+        const ext = lista.name.split('.').pop() || 'jpg';
+        const path = `admin-fotos-masivas/${tiendaId}/${lote}/foto-${i + 1}.${ext}`;
+        const { error: upErr } = await bucket.upload(path, lista, { upsert: true });
+        if (upErr) throw upErr;
+        const { data: pub } = bucket.getPublicUrl(path);
+        urls[i] = pub.publicUrl;
+      }
+
+      const imagenUrl = urls[0];
+      const extras = urls.slice(1).filter((u): u is string => typeof u === 'string' && Boolean(u));
+      const ids = objetivos.map((p) => p.id);
+      const { data, error: rpcError } = await supabase.rpc('admin_set_productos_fotos_masivas', {
+        p_producto_ids: ids,
+        p_imagen_url: imagenUrl,
+        p_imagenes_extra: extras.length ? extras : null,
+      });
+      if (rpcError) throw rpcError;
+
+      const actualizados = typeof data === 'number' ? data : ids.length;
+      setProductos((prev) =>
+        prev.map((p) =>
+          ids.includes(p.id)
+            ? { ...p, imagen_url: imagenUrl, imagenes_extra: extras.length ? extras : null }
+            : p
+        )
+      );
+      setMensajeFotosMasivas(`Fotos aplicadas a ${actualizados} producto(s).`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'No se pudieron aplicar las fotos masivas.';
+      setMensajeFotosMasivas(msg);
+      setError(msg);
+    } finally {
+      setAccionando(null);
+    }
+  };
+
+  const aprobarProductosPendientesVisibles = async () => {
+    const pendientes = productosPendientesFiltrados;
+    if (!pendientes.length) return;
+    if (!window.confirm(`¿Autorizar ${pendientes.length} producto(s) pendiente(s) visibles en esta lista?`)) return;
+
+    setAccionando('bulk-productos-aprobar');
+    setError(null);
+    const okIds: string[] = [];
+    const errores: string[] = [];
+
+    for (const p of pendientes) {
+      const { error: rpcError } = await supabase.rpc('admin_set_producto_aprobacion_publica', {
+        p_producto_id: p.id,
+        p_estado: 'aprobado',
+      });
+      if (rpcError) errores.push(`${p.nombre}: ${rpcError.message}`);
+      else okIds.push(p.id);
+    }
+
+    if (okIds.length) {
+      setProductos((prev) =>
+        prev.map((p) => (okIds.includes(p.id) ? { ...p, aprobacion_publica: 'aprobado' } : p))
+      );
+      void cargarKpis();
+    }
+    if (errores.length) {
+      setError(`Se aprobaron ${okIds.length} producto(s), pero fallaron ${errores.length}: ${errores.slice(0, 3).join(' | ')}`);
+    }
+    setAccionando(null);
+  };
+
+  const aprobarVendedoresPendientesVisibles = async () => {
+    const pendientes = vendedoresPendientesVisibles;
+    if (!pendientes.length) return;
+    if (!window.confirm(`¿Autorizar ${pendientes.length} vendedor(es) pendiente(s) visibles?`)) return;
+
+    setAccionando('bulk-vendedores-aprobar');
+    setError(null);
+    const okIds: string[] = [];
+    const errores: string[] = [];
+
+    for (const v of pendientes) {
+      const { error: rpcError } = await supabase.rpc('admin_set_tienda_aprobacion', {
+        p_tienda_id: v.id,
+        p_estado: 'aprobado',
+      });
+      if (rpcError) errores.push(`${v.nombre_comercial || v.nombre || v.id}: ${rpcError.message}`);
+      else okIds.push(v.id);
+    }
+
+    if (okIds.length) {
+      setVendedores((prev) =>
+        prev.map((v) => (okIds.includes(v.id) ? { ...v, aprobacion_estado: 'aprobado' } : v))
+      );
+      void cargarKpis();
+    }
+    if (errores.length) {
+      setError(`Se aprobaron ${okIds.length} vendedor(es), pero fallaron ${errores.length}: ${errores.slice(0, 3).join(' | ')}`);
+    }
+    setAccionando(null);
+  };
+
+  const aprobarTalleresPendientesVisibles = async () => {
+    const pendientes = talleresPendientesVisibles;
+    if (!pendientes.length) return;
+    if (!window.confirm(`¿Autorizar ${pendientes.length} taller(es) pendiente(s) visibles?`)) return;
+
+    setAccionando('bulk-talleres-aprobar');
+    setError(null);
+    const okIds: string[] = [];
+    const errores: string[] = [];
+
+    for (const t of pendientes) {
+      const { error: rpcError } = await supabase.rpc('admin_set_taller_aprobacion', {
+        p_taller_id: t.id,
+        p_estado: 'aprobado',
+      });
+      if (rpcError) errores.push(`${t.nombre_comercial || t.nombre || t.id}: ${rpcError.message}`);
+      else okIds.push(t.id);
+    }
+
+    if (okIds.length) {
+      setTalleres((prev) =>
+        prev.map((t) => (okIds.includes(t.id) ? { ...t, aprobacion_estado: 'aprobado' } : t))
+      );
+      void cargarKpis();
+    }
+    if (errores.length) {
+      setError(`Se aprobaron ${okIds.length} taller(es), pero fallaron ${errores.length}: ${errores.slice(0, 3).join(' | ')}`);
     }
     setAccionando(null);
   };
@@ -695,6 +1021,16 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                 <section className="dashboard-seccion">
                   <h2 className="dashboard-seccion-titulo">Productos publicados</h2>
                   <div className="dashboard-admin-filtros-productos">
+                    <div className="dashboard-admin-filtro-vertical dashboard-admin-filtro-producto-buscar">
+                      <label htmlFor="admin-buscar-productos">Buscar producto</label>
+                      <input
+                        id="admin-buscar-productos"
+                        type="search"
+                        value={busquedaProductosAdmin}
+                        onChange={(e) => setBusquedaProductosAdmin(e.target.value)}
+                        placeholder="Nombre, descripción, marca, modelo, vendedor..."
+                      />
+                    </div>
                     <div className="dashboard-admin-filtro-vertical">
                       <label htmlFor="admin-filtro-vendedor-productos">Vendedor</label>
                       <select
@@ -722,15 +1058,158 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         <option value="moto">Solo moto</option>
                       </select>
                     </div>
+                    <div className="dashboard-admin-filtro-vertical">
+                      <label htmlFor="admin-filtro-estado-productos">Estado del artículo</label>
+                      <select
+                        id="admin-filtro-estado-productos"
+                        value={filtroEstadoProductosAdmin}
+                        onChange={(e) =>
+                          setFiltroEstadoProductosAdmin(e.target.value as FiltroEstadoProductoGestion)
+                        }
+                      >
+                        <option value="todos">Todos los productos</option>
+                        <option value="activos">Activos</option>
+                        <option value="pausados">Pausados</option>
+                        <option value="proximos_stock">Próximos a pausarse por fecha</option>
+                        <option value="stock_vencido">Stock vencido</option>
+                        <option value="sin_fecha_stock">Sin fecha de stock</option>
+                      </select>
+                    </div>
                   </div>
+                  <p className="dashboard-admin-productos-hint">
+                    Mostrando {productosFiltrados.length} de {productos.length} producto(s) según búsqueda y filtros.
+                  </p>
                   <p className="dashboard-admin-productos-hint">
                     Cada fila muestra las miniaturas de la foto principal y las adicionales. Pulsa una imagen para
                     abrirla en tamaño completo en otra pestaña y verificar el contenido antes de autorizar.
                   </p>
+                  <div className="dashboard-admin-fotos-masivas">
+                    <div className="dashboard-admin-fotos-masivas-header">
+                      <div>
+                        <h3>Fotos masivas por vendedor</h3>
+                        <p>
+                          Usa hasta 4 fotos comunes: la foto 1 será principal y las demás adicionales.
+                        </p>
+                      </div>
+                      <span className="dashboard-admin-busqueda-hint">
+                        Productos objetivo: {productosObjetivoFotosMasivas.length}
+                      </span>
+                    </div>
+                    <div className="dashboard-admin-fotos-masivas-grid">
+                      <label>
+                        Vendedor
+                        <select
+                          value={fotosMasivasTiendaId}
+                          onChange={(e) => {
+                            setFotosMasivasTiendaId(e.target.value);
+                            setFotosMasivasSeleccionados([]);
+                            setMensajeFotosMasivas(null);
+                          }}
+                          disabled={accionando === 'bulk-fotos-productos'}
+                        >
+                          <option value="">Selecciona vendedor</option>
+                          {vendedoresParaFiltroProductos.map((v) => (
+                            <option key={v.id} value={v.id}>
+                              {v.nombre_comercial || v.nombre || v.id}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Alcance
+                        <select
+                          value={fotosMasivasAlcance}
+                          onChange={(e) => {
+                            setFotosMasivasAlcance(e.target.value as 'todos' | 'sin_foto' | 'seleccionados');
+                            setMensajeFotosMasivas(null);
+                          }}
+                          disabled={accionando === 'bulk-fotos-productos'}
+                        >
+                          <option value="sin_foto">Solo productos sin foto principal</option>
+                          <option value="todos">Todos los productos del vendedor</option>
+                          <option value="seleccionados">Solo productos seleccionados manualmente</option>
+                        </select>
+                      </label>
+                    </div>
+                    {fotosMasivasAlcance === 'seleccionados' && (
+                      <div className="dashboard-admin-fotos-masivas-seleccion">
+                        <p>
+                          Seleccionados: {productosObjetivoFotosMasivas.length}. Usa la columna “Seleccionar”
+                          en la tabla de productos filtrada.
+                        </p>
+                        <div className="dashboard-admin-acciones-masivas">
+                          <button
+                            type="button"
+                            className="dashboard-admin-btn"
+                            disabled={!fotosMasivasTiendaId || productosSeleccionablesFotosMasivas.length === 0}
+                            onClick={seleccionarProductosFotosMasivasVisibles}
+                          >
+                            Seleccionar visibles de este vendedor ({productosSeleccionablesFotosMasivas.length})
+                          </button>
+                          <button
+                            type="button"
+                            className="dashboard-admin-btn warn"
+                            disabled={fotosMasivasSeleccionados.length === 0}
+                            onClick={limpiarSeleccionFotosMasivas}
+                          >
+                            Limpiar selección
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <div className="dashboard-admin-fotos-masivas-files">
+                      {fotosMasivasArchivos.map((archivo, idx) => (
+                        <label key={idx}>
+                          Foto {idx + 1}{idx === 0 ? ' (principal)' : ''}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={accionando === 'bulk-fotos-productos'}
+                            onChange={(e) => cambiarFotoMasiva(idx, e.target.files?.[0] ?? null)}
+                          />
+                          {archivo && <span>{archivo.name}</span>}
+                        </label>
+                      ))}
+                    </div>
+                    <div className="dashboard-admin-acciones-masivas">
+                      <button
+                        type="button"
+                        className="dashboard-admin-btn ok"
+                        disabled={
+                          accionando === 'bulk-fotos-productos' ||
+                          !fotosMasivasTiendaId ||
+                          !fotosMasivasArchivos[0] ||
+                          productosObjetivoFotosMasivas.length === 0
+                        }
+                        onClick={() => void aplicarFotosMasivas()}
+                      >
+                        {accionando === 'bulk-fotos-productos'
+                          ? 'Aplicando fotos...'
+                          : `Aplicar fotos a ${productosObjetivoFotosMasivas.length} producto(s)`}
+                      </button>
+                    </div>
+                    {mensajeFotosMasivas && (
+                      <p className="dashboard-admin-fotos-masivas-mensaje">{mensajeFotosMasivas}</p>
+                    )}
+                  </div>
+                  <div className="dashboard-admin-acciones-masivas">
+                    <button
+                      type="button"
+                      className="dashboard-admin-btn ok"
+                      disabled={
+                        productosPendientesFiltrados.length === 0 ||
+                        accionando === 'bulk-productos-aprobar'
+                      }
+                      onClick={() => void aprobarProductosPendientesVisibles()}
+                    >
+                      Autorizar pendientes visibles ({productosPendientesFiltrados.length})
+                    </button>
+                  </div>
                   <div className="dashboard-admin-table-wrap">
                     <table className="dashboard-admin-table">
                       <thead>
                         <tr>
+                          {fotosMasivasAlcance === 'seleccionados' && <th>Seleccionar</th>}
                           <th>Fotos</th>
                           <th>Nombre</th>
                           <th>Vendedor</th>
@@ -740,6 +1219,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           <th>Precio</th>
                           <th>En la web</th>
                           <th>Venta</th>
+                          <th>Stock</th>
                           <th>Creado</th>
                           <th>Acciones</th>
                         </tr>
@@ -747,28 +1227,57 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       <tbody>
                         {productosFiltrados.map((p) => {
                           const mod = claseAprobacion(p.aprobacion_publica);
+                          const stock = semaforoStockGestion(p);
                           const fotos = urlsFotosProducto({
                             imagen_url: p.imagen_url ?? null,
                             imagenes_extra: p.imagenes_extra ?? null,
                           });
+                          const fotoActivaIdx = Math.min(
+                            fotoActivaAdminProducto[p.id] ?? 0,
+                            Math.max(0, fotos.length - 1)
+                          );
+                          const fotoActiva = fotos[fotoActivaIdx] ?? null;
                           return (
                           <tr key={p.id}>
+                            {fotosMasivasAlcance === 'seleccionados' && (
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  checked={fotosMasivasSeleccionados.includes(p.id)}
+                                  disabled={
+                                    !fotosMasivasTiendaId ||
+                                    (p.tienda_id ?? primeraTiendaProducto(p)?.id) !== fotosMasivasTiendaId ||
+                                    accionando === 'bulk-fotos-productos'
+                                  }
+                                  onChange={(e) => toggleProductoFotoMasiva(p.id, e.target.checked)}
+                                  aria-label={`Seleccionar ${p.nombre} para fotos masivas`}
+                                />
+                              </td>
+                            )}
                             <td className="dashboard-admin-td-fotos">
                               {fotos.length === 0 ? (
                                 <span className="dashboard-admin-sin-foto">Sin fotos</span>
                               ) : (
-                                <div className="dashboard-admin-producto-fotos">
-                                  {fotos.map((url, i) => (
+                                <div className="dashboard-admin-producto-foto-carrusel">
+                                  <button
+                                    type="button"
+                                    className="dashboard-admin-producto-foto-nav"
+                                    disabled={fotos.length <= 1}
+                                    onClick={() => cambiarFotoAdminProducto(p.id, fotos.length, -1)}
+                                    aria-label="Ver foto anterior"
+                                  >
+                                    ‹
+                                  </button>
+                                  {fotoActiva && (
                                     <a
-                                      key={`${p.id}-img-${i}`}
-                                      href={url}
+                                      href={fotoActiva}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="dashboard-admin-producto-thumb-link"
-                                      title={`Foto ${i + 1} de ${fotos.length} — abrir tamaño completo`}
+                                      title={`Foto ${fotoActivaIdx + 1} de ${fotos.length} — abrir tamaño completo`}
                                     >
                                       <img
-                                        src={urlImagenProductoVariante(url, 'miniatura') ?? url}
+                                        src={urlImagenProductoVariante(fotoActiva, 'miniatura') ?? fotoActiva}
                                         alt=""
                                         className="dashboard-admin-producto-thumb"
                                         width={160}
@@ -778,7 +1287,19 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                         sizes="48px"
                                       />
                                     </a>
-                                  ))}
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="dashboard-admin-producto-foto-nav"
+                                    disabled={fotos.length <= 1}
+                                    onClick={() => cambiarFotoAdminProducto(p.id, fotos.length, 1)}
+                                    aria-label="Ver foto siguiente"
+                                  >
+                                    ›
+                                  </button>
+                                  <span className="dashboard-admin-producto-foto-contador">
+                                    {fotoActivaIdx + 1}/{fotos.length}
+                                  </span>
                                 </div>
                               )}
                             </td>
@@ -789,7 +1310,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             <td>{[p.marca, p.modelo, p.anio].filter(Boolean).join(' · ') || '—'}</td>
                             <td>
                               {p.precio_usd != null
-                                ? `${etiquetaMoneda(p.moneda)} ${Number(p.precio_usd).toLocaleString()}`
+                                ? `${etiquetaMoneda(p.moneda)} ${formatearPrecioProducto(p.precio_usd)}`
                                 : '—'}
                             </td>
                             <td>
@@ -836,6 +1357,11 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             <td>
                               <span className={`dashboard-admin-status ${p.activo ? 'ok' : 'warn'}`}>
                                 {p.activo ? 'Activo' : 'Pausado'}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`dashboard-admin-status dashboard-admin-status-stock--${stock.clase}`}>
+                                {stock.texto}
                               </span>
                             </td>
                             <td>{fmtFecha(p.created_at)}</td>
@@ -889,6 +1415,19 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     <span className="dashboard-admin-busqueda-hint">
                       Hasta {ADMIN_LIST_LIMIT} filas. <strong>Suspender por impago</strong> usa el mismo bloqueo que ya tenías (tienda no publicable).
                     </span>
+                  </div>
+                  <div className="dashboard-admin-acciones-masivas">
+                    <button
+                      type="button"
+                      className="dashboard-admin-btn ok"
+                      disabled={
+                        vendedoresPendientesVisibles.length === 0 ||
+                        accionando === 'bulk-vendedores-aprobar'
+                      }
+                      onClick={() => void aprobarVendedoresPendientesVisibles()}
+                    >
+                      Autorizar vendedores pendientes visibles ({vendedoresPendientesVisibles.length})
+                    </button>
                   </div>
                   <div className="dashboard-admin-table-wrap">
                     <table className="dashboard-admin-table">
@@ -1010,6 +1549,19 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       spellCheck={false}
                     />
                     <span className="dashboard-admin-busqueda-hint">Hasta {ADMIN_LIST_LIMIT} filas.</span>
+                  </div>
+                  <div className="dashboard-admin-acciones-masivas">
+                    <button
+                      type="button"
+                      className="dashboard-admin-btn ok"
+                      disabled={
+                        talleresPendientesVisibles.length === 0 ||
+                        accionando === 'bulk-talleres-aprobar'
+                      }
+                      onClick={() => void aprobarTalleresPendientesVisibles()}
+                    >
+                      Autorizar talleres pendientes visibles ({talleresPendientesVisibles.length})
+                    </button>
                   </div>
                   <div className="dashboard-admin-table-wrap">
                     <table className="dashboard-admin-table">

@@ -9,6 +9,7 @@ import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import * as XLSX from 'xlsx';
 import { normalizarMonedaImport } from '../utils/monedaProducto';
+import { parsePrecioProducto } from '../utils/precioProducto';
 import { permitirAccionCliente } from '../utils/rateLimitCliente';
 import './ImportarProductosCSV.css';
 
@@ -329,9 +330,9 @@ export function ImportarProductosCSV({
         continue;
       }
 
-      const precio = parseFloat(String(precioRaw).replace(',', '.'));
-      if (Number.isNaN(precio) || precio < 0) {
-        erroresFila.push(`Fila ${rowNumber}: "precio" inválido (${precioRaw || 'vacío'}).`);
+      const precio = parsePrecioProducto(precioRaw);
+      if (precio == null) {
+        erroresFila.push(`Fila ${rowNumber}: "precio" inválido (${precioRaw || 'vacío'}). Usa máximo 2 decimales.`);
         continue;
       }
       if (!moneda) {

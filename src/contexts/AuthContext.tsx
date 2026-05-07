@@ -1,5 +1,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
+import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
 import { supabase } from '../supabaseClient';
 import {
   ensureNegocioDesdeMetadataUsuario,
@@ -12,18 +15,38 @@ import {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  passwordRecovery: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string) => Promise<{ error: string | null }>;
   /** Acceso con Google para cuentas ya registradas (no para darse de alta). */
   signInWithGoogle: () => Promise<{ error: string | null }>;
+  resetPassword: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (password: string) => Promise<{ error: string | null }>;
+  clearPasswordRecovery: () => void;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+const OAUTH_NATIVE_REDIRECT = 'com.geomotorvzla.app://auth/callback';
+
+function esAppNativa(): boolean {
+  return Capacitor.isNativePlatform();
+}
+
+function extraerParametrosOAuthNativo(url: string): URLSearchParams {
+  const parsed = new URL(url);
+  const params = new URLSearchParams(parsed.search);
+  if (parsed.hash.startsWith('#')) {
+    const hashParams = new URLSearchParams(parsed.hash.slice(1));
+    hashParams.forEach((value, key) => params.set(key, value));
+  }
+  return params;
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,12 +119,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (event === 'SIGNED_OUT') {
         setUser(null);
+        setPasswordRecovery(false);
         return;
       }
 
       const raw = session?.user ?? null;
       if (!raw) {
         setUser(null);
+        return;
+      }
+
+      if (event === 'PASSWORD_RECOVERY') {
+        setPasswordRecovery(true);
+        setUser(raw);
         return;
       }
 
@@ -132,6 +162,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!esAppNativa()) return;
+
+    const listener = CapacitorApp.addListener('appUrlOpen', ({ url }) => {
+      if (!url.startsWith(OAUTH_NATIVE_REDIRECT)) return;
+      void Browser.close().catch(() => undefined);
+      const params = extraerParametrosOAuthNativo(url);
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      const errorDescription = params.get('error_description');
+
+      if (errorDescription) {
+        console.error('[Auth] Google OAuth Android:', errorDescription);
+        return;
+      }
+
+      if (accessToken && refreshToken) {
+        void supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+      }
+    });
+
+    return () => {
+      void listener.then((handle) => handle.remove());
+    };
+  }, []);
+
   const signIn = async (email: string, password: string) => {
     marcarIntentoLoginPassword();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -150,18 +209,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null };
   };
 
+  const resetPassword = async (email: string) => {
+    const redirectTo = new URL(window.location.pathname, window.location.origin).href;
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo,
+    });
+    return { error: error?.message ?? null };
+  };
+
+  const updatePassword = async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (!error) setPasswordRecovery(false);
+    return { error: error?.message ?? null };
+  };
+
   const signInWithGoogle = async () => {
     try {
       marcarIntentoLoginGoogle();
       /* Misma URL actual (sin #) para volver del OAuth con la sesión activa */
-      const redirectTo = new URL(window.location.pathname, window.location.origin).href;
-      const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo,
-          },
-        })
-      ;
+      const redirectTo = esAppNativa()
+        ? OAUTH_NATIVE_REDIRECT
+        : new URL(window.location.pathname, window.location.origin).href;
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: esAppNativa(),
+        },
+      });
       if (error) {
         try {
           sessionStorage.removeItem(INTENTO_LOGIN_KEY);
@@ -169,6 +244,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           /* ignore */
         }
         return { error: error.message };
+      }
+      if (esAppNativa() && data.url) {
+        await Browser.open({ url: data.url, windowName: '_self' });
       }
       /* El navegador redirige; no hay error local */
       return { error: null };
@@ -181,7 +259,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   };
 
-  const value: AuthContextType = { user, loading, signIn, signUp, signInWithGoogle, signOut };
+  const value: AuthContextType = {
+    user,
+    loading,
+    passwordRecovery,
+    signIn,
+    signUp,
+    signInWithGoogle,
+    resetPassword,
+    updatePassword,
+    clearPasswordRecovery: () => setPasswordRecovery(false),
+    signOut,
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

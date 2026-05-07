@@ -281,6 +281,13 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
       setMensaje(msg);
       return;
     }
+    // Permitir login con Google solo a correos previamente registrados en Geomotor.
+    // Si esta llamada falla, no bloqueamos el alta principal para no romper onboarding.
+    try {
+      await supabase.rpc('allow_google_email', { p_email: email.trim().toLowerCase() });
+    } catch (e) {
+      console.warn('[FormRegistro] allow_google_email:', e);
+    }
     // Si el usuario requiere confirmación de correo, normalmente NO hay sesión todavía.
     // En ese caso NO intentamos insertar en `tiendas`/`talleres`, porque RLS usa auth.uid()
     // y auth.uid() no existe hasta que el usuario confirma e inicia sesión.
@@ -300,6 +307,17 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
       const lng = parseFloat(String(longitudGps).replace(',', '.')) || 0;
       const telefonoCompleto = restoTel ? `${codigoTel}${restoTel}` : null;
       if (tipo === 'vendedor') {
+        const { data: tiendaYa } = await supabase
+          .from('tiendas')
+          .select('id')
+          .eq('user_id', sessionUserId)
+          .limit(1);
+        if (tiendaYa?.length) {
+          setCargando(false);
+          setMensaje('Vendedor registrado exitosamente.');
+          onExito();
+          return;
+        }
         const rifCompleto = `${tipoRif}${numeroRif.replace(/\D/g, '')}`.trim() || null;
         const { error: insertError } = await supabase.from('tiendas').insert({
           user_id: sessionUserId,
@@ -321,6 +339,17 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           return;
         }
       } else if (tipo === 'taller') {
+        const { data: tallerYa } = await supabase
+          .from('talleres')
+          .select('id')
+          .eq('user_id', sessionUserId)
+          .limit(1);
+        if (tallerYa?.length) {
+          setCargando(false);
+          setMensaje('Taller registrado exitosamente.');
+          onExito();
+          return;
+        }
         const { error: insertError } = await supabase.from('talleres').insert({
           user_id: sessionUserId,
           nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi taller',

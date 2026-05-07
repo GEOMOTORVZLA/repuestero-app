@@ -1,0 +1,7 @@
+project_id = "repuestero-app"
+
+[api]
+enabled = true
+
+[functions.notify-registro]
+verify_jwt = false

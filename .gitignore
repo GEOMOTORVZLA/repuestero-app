@@ -33,3 +33,6 @@ public/client_secret*.json
 *.sw?
 
 .vercel
+
+# Supabase CLI local
+supabase/.temp/

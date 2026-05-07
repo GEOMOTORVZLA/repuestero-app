@@ -19,6 +19,7 @@ import {
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
 import { mensajeWhatsappVendedorProducto, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
 import { permitirAccionCliente } from '../utils/rateLimitCliente';
+import { esIdProductoUuid } from '../utils/enlaceCompartirProducto';
 import './BusquedaRepuestos.css';
 
 /** Distancia en km entre dos puntos (Haversine) */
@@ -59,6 +60,22 @@ interface ProductoResultado {
   tiendas: TiendaContacto | null;
 }
 
+const SELECT_PRODUCTOS_PUBLICO_LISTA = `
+        id,
+        activo,
+        nombre,
+        descripcion,
+        comentarios,
+        precio_usd,
+        moneda,
+        marca,
+        modelo,
+        anio,
+        imagen_url,
+        imagenes_extra,
+        tiendas ( nombre_comercial, nombre, rif, telefono, direccion, latitud, longitud, metodos_pago )
+      `;
+
 /** Tamaño de página en listados públicos (se pide una fila extra para saber si hay más). */
 const PAGE_SIZE_RESULTADOS_PUBLICOS = 24;
 
@@ -73,6 +90,26 @@ function comillasFiltroPostgrest(valor: string): string {
     return `"${valor.replace(/"/g, '""')}"`;
   }
   return valor;
+}
+
+function terminosBusqueda(texto: string): string[] {
+  const vistos = new Set<string>();
+  return texto
+    .trim()
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2)
+    .filter((t) => {
+      const k = t.toLocaleLowerCase();
+      if (vistos.has(k)) return false;
+      vistos.add(k);
+      return true;
+    });
+}
+
+function patronIlikeTermino(termino: string): string {
+  const limpio = termino.replace(/[%_]/g, '');
+  return comillasFiltroPostgrest(`%${limpio}%`);
 }
 
 function mapFilasASugerencias(
@@ -90,17 +127,21 @@ function mapFilasASugerencias(
 }
 
 function queryProductosSugerencias(textoBusquedaTrim: string, vertical: VerticalVehiculo) {
-  const patron = `%${textoBusquedaTrim}%`;
-  const q = comillasFiltroPostgrest(patron);
-  return supabase
+  let query = supabase
     .from('productos')
     .select('id, nombre, marca, modelo')
     .eq('activo', true)
     .eq('aprobacion_publica', 'aprobado')
-    .eq('vertical', vertical)
-    .or(`nombre.ilike.${q},descripcion.ilike.${q},comentarios.ilike.${q}`)
-    .order('nombre', { ascending: true })
-    .order('id', { ascending: true });
+    .eq('vertical', vertical);
+
+  for (const termino of terminosBusqueda(textoBusquedaTrim)) {
+    const q = patronIlikeTermino(termino);
+    query = query.or(
+      `nombre.ilike.${q},descripcion.ilike.${q},comentarios.ilike.${q},marca.ilike.${q},modelo.ilike.${q},categoria.ilike.${q}`
+    );
+  }
+
+  return query.order('nombre', { ascending: true }).order('id', { ascending: true });
 }
 
 type ParamsBusquedaProductos = {
@@ -152,6 +193,8 @@ export interface BusquedaRepuestosProps {
   onIrAResultados?: (payload: { texto: string }) => void;
   /** Texto inicial al abrir la página de resultados */
   initialTexto?: string;
+  /** Si viene de `?repuesto=uuid`, carga ese producto y expande la tarjeta */
+  productoIdDesdeEnlace?: string | null;
   /** Botón volver (página de resultados) */
   onVolver?: () => void;
 }
@@ -161,6 +204,7 @@ export function BusquedaRepuestos({
   vertical = VERTICAL_AUTO,
   onIrAResultados,
   initialTexto = '',
+  productoIdDesdeEnlace = null,
   onVolver,
 }: BusquedaRepuestosProps) {
   const { user } = useAuth();
@@ -281,27 +325,14 @@ export function BusquedaRepuestos({
   const armarQueryListaProductos = (p: ParamsBusquedaProductos) => {
     let query = supabase
       .from('productos')
-      .select(`
-        id,
-        activo,
-        nombre,
-        descripcion,
-        comentarios,
-        precio_usd,
-        moneda,
-        marca,
-        modelo,
-        anio,
-        imagen_url,
-        imagenes_extra,
-        tiendas ( nombre_comercial, nombre, rif, telefono, direccion, latitud, longitud, metodos_pago )
-      `)
+      .select(SELECT_PRODUCTOS_PUBLICO_LISTA)
       .eq('activo', true)
       .eq('aprobacion_publica', 'aprobado')
       .eq('vertical', vertical);
 
-    if (p.texto) {
-      const like = `%${p.texto}%`;
+    const terminos = terminosBusqueda(p.texto);
+    for (const termino of terminos) {
+      const like = patronIlikeTermino(termino);
       query = query.or(
         `nombre.ilike.${like},descripcion.ilike.${like},comentarios.ilike.${like},marca.ilike.${like},modelo.ilike.${like},categoria.ilike.${like}`
       );
@@ -331,6 +362,10 @@ export function BusquedaRepuestos({
     const texto = (textoOverride !== undefined ? textoOverride : textoBusqueda).trim();
     if (!texto && !marca.trim() && !modelo.trim() && !anio.trim()) {
       setMensaje('Escribe qué repuesto buscas o aplica al menos un filtro.');
+      return;
+    }
+    if (texto && terminosBusqueda(texto).length === 0 && !marca.trim() && !modelo.trim() && !anio.trim()) {
+      setMensaje('Escribe al menos una palabra clave de 2 caracteres o más.');
       return;
     }
 
@@ -444,11 +479,12 @@ export function BusquedaRepuestos({
   /** Primera carga de la página de resultados con el texto que trae desde la landing */
   useEffect(() => {
     if (esCompacto) return;
+    if (productoIdDesdeEnlace?.trim()) return;
     const t = initialTexto.trim();
     if (!t) return;
     void buscar(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intencional: ejecutar al abrir la vista con initialTexto
-  }, [esCompacto, initialTexto]);
+  }, [esCompacto, initialTexto, productoIdDesdeEnlace]);
 
   const onTecladoTexto = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
@@ -497,7 +533,99 @@ export function BusquedaRepuestos({
   const [contactarProducto, setContactarProducto] = useState<ProductoResultado | null>(null);
   const [ubicacionProducto, setUbicacionProducto] = useState<ProductoResultado | null>(null);
   const [preguntandoUbicacion, setPreguntandoUbicacion] = useState<ProductoResultado | null>(null);
+
+  /** Carga un repuesto compartido por URL (?repuesto=uuid) y expande la tarjeta. */
+  useEffect(() => {
+    if (esCompacto) return;
+    const id = productoIdDesdeEnlace?.trim() ?? '';
+    if (!id) return;
+
+    if (!esIdProductoUuid(id)) {
+      setMensaje('El enlace del repuesto no es válido.');
+      setResultados([]);
+      setProductoExpandidoId(null);
+      setHayMasResultados(false);
+      setBuscando(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      setBuscando(true);
+      setMensaje('');
+      setSugerencias([]);
+      setHayMasSugerencias(false);
+      setDropdownAbierto(false);
+      setIndiceSugerencia(-1);
+      setMostrarIntroBusquedaPagina(false);
+      setFiltrosAbiertos(false);
+
+      const { data, error } = await supabase
+        .from('productos')
+        .select(SELECT_PRODUCTOS_PUBLICO_LISTA)
+        .eq('id', id)
+        .eq('activo', true)
+        .eq('aprobacion_publica', 'aprobado')
+        .eq('vertical', vertical)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (error) {
+        setBuscando(false);
+        setMensaje(error.message || 'No se pudo cargar el repuesto.');
+        setResultados([]);
+        setProductoExpandidoId(null);
+        setHayMasResultados(false);
+        return;
+      }
+
+      const fila = data as unknown as ProductoResultado | null;
+      if (!fila) {
+        setBuscando(false);
+        setMensaje(
+          'Este repuesto no está disponible o pertenece a la otra sección (autos / motos). Abre el enlace desde la vertical correcta.'
+        );
+        setResultados([]);
+        setProductoExpandidoId(null);
+        setHayMasResultados(false);
+        return;
+      }
+
+      let ubicacionActual = userLocation;
+      if (!ubicacionActual) {
+        ubicacionActual = await solicitarUbicacionActual();
+        if (!cancelled && ubicacionActual) setUserLocation(ubicacionActual);
+      }
+      if (cancelled) return;
+
+      const lista = ubicacionActual ? ordenarPorUbicacionUsuario([fila], ubicacionActual) : [fila];
+
+      setTextoBusqueda(fila.nombre);
+      textoUltimaBusquedaEjecutadaRef.current = '';
+      setResultados(lista);
+      setHayMasResultados(false);
+      paramsUltimaBusquedaRef.current = null;
+      setProductoExpandidoId(fila.id);
+      setBuscando(false);
+
+      window.setTimeout(() => {
+        const safeId = typeof CSS !== 'undefined' && 'escape' in CSS ? CSS.escape(fila.id) : fila.id;
+        document.querySelector(`[data-producto-id="${safeId}"]`)?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+        });
+      }, 150);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [esCompacto, productoIdDesdeEnlace, vertical]);
+
   const abrirContactar = (p: ProductoResultado) => {
+    if (!user) return;
     setContactarProducto(p);
     if (user) {
       void (async () => {
@@ -900,6 +1028,7 @@ export function BusquedaRepuestos({
                       <TarjetaProductoBusqueda
                         key={p.id}
                         producto={p}
+                        vertical={vertical}
                         expandida={productoExpandidoId === p.id}
                         onExpand={() => setProductoExpandidoId(p.id)}
                         onContraer={() => setProductoExpandidoId(null)}

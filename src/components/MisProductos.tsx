@@ -1,10 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import './MisProductos.css';
 import { EditarProducto, type ProductoEditable } from './EditarProducto';
-import { urlImagenProductoVariante } from '../utils/imagenProducto';
+import {
+  MAX_BYTES_FOTO_PRODUCTO,
+  MAX_MB_FOTO_PRODUCTO,
+  optimizarImagenProductoParaStorage,
+  urlImagenProductoVariante,
+} from '../utils/imagenProducto';
 import { etiquetaMoneda } from '../utils/monedaProducto';
+import { formatearPrecioProducto } from '../utils/precioProducto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 
 const NETWORK_TIMEOUT_MS = 30000;
@@ -68,6 +74,14 @@ interface MisProductosProps {
   refreshTrigger?: number;
 }
 
+type FiltroEstadoProductoGestion =
+  | 'todos'
+  | 'activos'
+  | 'pausados'
+  | 'proximos_stock'
+  | 'stock_vencido'
+  | 'sin_fecha_stock';
+
 function diasDesdeFechaISO(fechaIso: string | null | undefined): number | null {
   if (!fechaIso) return null;
   const ts = Date.parse(fechaIso);
@@ -112,6 +126,15 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
   const [fotoDetalleActiva, setFotoDetalleActiva] = useState<string | null>(null);
   const [contactosDetalle, setContactosDetalle] = useState<number | null>(null);
   const [cargandoContactos, setCargandoContactos] = useState(false);
+  const [fotosMasivasAlcance, setFotosMasivasAlcance] = useState<'sin_foto' | 'todos' | 'seleccionados'>('sin_foto');
+  const [fotosMasivasArchivos, setFotosMasivasArchivos] = useState<(File | null)[]>([null, null, null, null]);
+  const [fotosMasivasInputKey, setFotosMasivasInputKey] = useState(0);
+  const [fotosMasivasSeleccionados, setFotosMasivasSeleccionados] = useState<string[]>([]);
+  const [aplicandoFotosMasivas, setAplicandoFotosMasivas] = useState(false);
+  const [mensajeFotosMasivas, setMensajeFotosMasivas] = useState<string | null>(null);
+  const [busquedaProductosInput, setBusquedaProductosInput] = useState('');
+  const [busquedaProductos, setBusquedaProductos] = useState('');
+  const [filtroEstadoProductos, setFiltroEstadoProductos] = useState<FiltroEstadoProductoGestion>('todos');
 
   useEffect(() => {
     let cancelado = false;
@@ -208,9 +231,182 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
     }
   }, [productoDetalle, user]);
 
+  const productoCoincideBusqueda = (p: ProductoPanel, texto: string) => {
+    const q = texto.trim().toLocaleLowerCase('es');
+    if (!q) return true;
+    const terminos = q.split(/\s+/).filter(Boolean);
+    const fuente = [
+      p.nombre,
+      p.descripcion,
+      p.comentarios,
+      p.categoria,
+      p.marca,
+      p.modelo,
+      p.anio != null ? String(p.anio) : '',
+      p.precio_usd != null ? String(p.precio_usd) : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase('es');
+    return terminos.every((t) => fuente.includes(t));
+  };
+
+  const productoCoincideEstado = (p: ProductoPanel, filtro: FiltroEstadoProductoGestion) => {
+    const semaforo = semaforoStockProducto(p);
+    if (filtro === 'activos') return p.activo !== false;
+    if (filtro === 'pausados') return p.activo === false;
+    if (filtro === 'proximos_stock') {
+      return p.activo !== false && (semaforo.clase === 'amarillo' || semaforo.clase === 'rojo');
+    }
+    if (filtro === 'stock_vencido') return semaforo.clase === 'vencido';
+    if (filtro === 'sin_fecha_stock') return semaforo.clase === 'sin-fecha';
+    return true;
+  };
+
+  const productosVisibles = useMemo(
+    () =>
+      productos.filter(
+        (p) =>
+          productoCoincideBusqueda(p, busquedaProductos) &&
+          productoCoincideEstado(p, filtroEstadoProductos)
+      ),
+    [productos, busquedaProductos, filtroEstadoProductos]
+  );
+
   if (!user) {
     return null;
   }
+
+  const aplicarBusquedaProductos = () => {
+    setBusquedaProductos(busquedaProductosInput.trim());
+  };
+
+  const limpiarBusquedaProductos = () => {
+    setBusquedaProductosInput('');
+    setBusquedaProductos('');
+  };
+
+  const productosObjetivoFotosMasivas =
+    fotosMasivasAlcance === 'seleccionados'
+      ? productosVisibles.filter((p) => fotosMasivasSeleccionados.includes(p.id))
+      : productosVisibles.filter((p) => {
+          if (fotosMasivasAlcance === 'sin_foto') {
+            return !p.imagen_url || !String(p.imagen_url).trim();
+          }
+          return true;
+        });
+
+  const cambiarFotoMasiva = (idx: number, file: File | null) => {
+    setMensajeFotosMasivas(null);
+    setFotosMasivasArchivos((prev) => prev.map((f, i) => (i === idx ? file : f)));
+  };
+
+  const resetearFotosMasivas = () => {
+    setFotosMasivasArchivos([null, null, null, null]);
+    setFotosMasivasInputKey((prev) => prev + 1);
+    setMensajeFotosMasivas('Fotos reseteadas. Ya puedes cargar nuevas imágenes.');
+  };
+
+  const toggleProductoFotoMasiva = (productoId: string, checked: boolean) => {
+    setMensajeFotosMasivas(null);
+    setFotosMasivasSeleccionados((prev) => {
+      if (checked) return prev.includes(productoId) ? prev : [...prev, productoId];
+      return prev.filter((id) => id !== productoId);
+    });
+  };
+
+  const seleccionarTodosProductosFotosMasivas = () => {
+    setMensajeFotosMasivas(null);
+    setFotosMasivasSeleccionados(productosVisibles.map((p) => p.id));
+  };
+
+  const limpiarSeleccionFotosMasivas = () => {
+    setMensajeFotosMasivas(null);
+    setFotosMasivasSeleccionados([]);
+  };
+
+  const aplicarFotosMasivas = async () => {
+    setMensajeFotosMasivas(null);
+    setError(null);
+    const fotoPrincipal = fotosMasivasArchivos[0];
+    const objetivos = productosObjetivoFotosMasivas;
+
+    if (!fotoPrincipal) {
+      setMensajeFotosMasivas('Sube al menos la foto 1 (principal).');
+      return;
+    }
+    if (!objetivos.length) {
+      setMensajeFotosMasivas('No hay productos para actualizar con el alcance elegido.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `¿Aplicar estas fotos a ${objetivos.length} producto(s)?\n\n` +
+          'La foto 1 será principal y las demás quedarán como fotos adicionales. Esta acción reemplaza las fotos actuales de esos productos.'
+      )
+    ) {
+      return;
+    }
+
+    setAplicandoFotosMasivas(true);
+    try {
+      const bucket = supabase.storage.from('productos');
+      const urls: string[] = [];
+      const lote = `${Date.now()}`;
+
+      for (let i = 0; i < fotosMasivasArchivos.length; i += 1) {
+        const raw = fotosMasivasArchivos[i];
+        if (!raw) continue;
+        const lista = await optimizarImagenProductoParaStorage(raw, {
+          maxBytes: MAX_BYTES_FOTO_PRODUCTO,
+        });
+        if (lista.size > MAX_BYTES_FOTO_PRODUCTO) {
+          throw new Error(`La foto ${i + 1} no debe superar ${MAX_MB_FOTO_PRODUCTO} MB.`);
+        }
+        const ext = lista.name.split('.').pop() || 'jpg';
+        const path = `fotos-masivas-vendedor/${user.id}/${lote}/foto-${i + 1}.${ext}`;
+        const { error: upErr } = await bucket.upload(path, lista, { upsert: true });
+        if (upErr) throw upErr;
+        const { data: pub } = bucket.getPublicUrl(path);
+        urls[i] = pub.publicUrl;
+      }
+
+      const imagenUrl = urls[0];
+      const extras = urls.slice(1).filter((u): u is string => typeof u === 'string' && Boolean(u));
+      const ids = objetivos.map((p) => p.id);
+
+      for (const id of ids) {
+        const { error: updErr } = await supabase
+          .from('productos')
+          .update({
+            imagen_url: imagenUrl,
+            imagenes_extra: extras.length ? extras : null,
+          })
+          .eq('id', id);
+        if (updErr) throw updErr;
+      }
+
+      setProductos((prev) =>
+        prev.map((p) =>
+          ids.includes(p.id)
+            ? { ...p, imagen_url: imagenUrl, imagenes_extra: extras.length ? extras : null }
+            : p
+        )
+      );
+      setProductoDetalle((prev) =>
+        prev && ids.includes(prev.id)
+          ? { ...prev, imagen_url: imagenUrl, imagenes_extra: extras.length ? extras : null }
+          : prev
+      );
+      setMensajeFotosMasivas(`Fotos aplicadas a ${ids.length} producto(s).`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'No se pudieron aplicar las fotos masivas.';
+      setMensajeFotosMasivas(msg);
+      setError(msg);
+    } finally {
+      setAplicandoFotosMasivas(false);
+    }
+  };
 
   const aplicarAjusteMasivoPrecios = async () => {
     const porcentaje = Number.parseFloat(ajustePorcentaje.replace(',', '.'));
@@ -229,7 +425,7 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
 
     const confirmar = window.confirm(
       `Se ajustarán ${productos.length} producto(s) con ${porcentaje > 0 ? '+' : ''}${porcentaje}%.\n` +
-        'Los precios se redondearán a entero.'
+        'Los precios se redondearán a 2 decimales.'
     );
     if (!confirmar) return;
 
@@ -239,7 +435,7 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
     try {
       const actualizados: { id: string; precio_usd: number }[] = productos.map((p) => {
         const base = Number(p.precio_usd) || 0;
-        const siguiente = Math.max(1, Math.round(base * (1 + porcentaje / 100)));
+        const siguiente = Math.max(0.01, Math.round(base * (1 + porcentaje / 100) * 100) / 100);
         return { id: p.id, precio_usd: siguiente };
       });
 
@@ -315,6 +511,62 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
   return (
     <div className="mis-productos">
       {alertaStock}
+      <section className="mis-productos-filtros" aria-label="Buscar y filtrar productos">
+        <div>
+          <p className="mis-productos-ajuste-masivo-titulo">Buscar en mis productos</p>
+          <p className="mis-productos-ajuste-masivo-descripcion">
+            Ubica productos por nombre, descripción, marca, modelo, año, categoría o precio.
+          </p>
+        </div>
+        <div className="mis-productos-filtros-grid">
+          <form
+            className="mis-productos-filtros-busqueda"
+            onSubmit={(e) => {
+              e.preventDefault();
+              aplicarBusquedaProductos();
+            }}
+          >
+            <label>
+              Buscar producto
+              <input
+                type="search"
+                value={busquedaProductosInput}
+                onChange={(e) => setBusquedaProductosInput(e.target.value)}
+                placeholder="Ej: amortiguador x1, batería, Cherokee..."
+              />
+            </label>
+            <button type="submit" className="mis-productos-btn-primario">
+              Buscar
+            </button>
+            {busquedaProductos && (
+              <button
+                type="button"
+                className="mis-productos-btn-secundario"
+                onClick={limpiarBusquedaProductos}
+              >
+                Limpiar
+              </button>
+            )}
+          </form>
+          <label>
+            Estado del artículo
+            <select
+              value={filtroEstadoProductos}
+              onChange={(e) => setFiltroEstadoProductos(e.target.value as FiltroEstadoProductoGestion)}
+            >
+              <option value="todos">Todos los productos</option>
+              <option value="activos">Activos</option>
+              <option value="pausados">Pausados</option>
+              <option value="proximos_stock">Próximos a pausarse por fecha</option>
+              <option value="stock_vencido">Stock vencido</option>
+              <option value="sin_fecha_stock">Sin fecha de stock</option>
+            </select>
+          </label>
+        </div>
+        <p className="mis-productos-filtros-resumen">
+          Mostrando {productosVisibles.length} de {productos.length} producto(s).
+        </p>
+      </section>
       <section className="mis-productos-ajuste-masivo" aria-label="Ajuste masivo de precios">
         <p className="mis-productos-ajuste-masivo-titulo">Ajuste masivo de precios</p>
         <p className="mis-productos-ajuste-masivo-descripcion">
@@ -342,9 +594,100 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
           </button>
         </div>
         <p className="mis-productos-ajuste-masivo-ayuda">
-          Se redondea a entero y nunca baja de 1.
+          Se redondea a 2 decimales y nunca baja de 0.01.
         </p>
         {mensajeAjuste && <p className="mis-productos-ajuste-masivo-mensaje">{mensajeAjuste}</p>}
+      </section>
+      <section className="mis-productos-fotos-masivas" aria-label="Carga masiva de fotos">
+        <div className="mis-productos-fotos-masivas-header">
+          <div>
+            <p className="mis-productos-ajuste-masivo-titulo">Carga masiva de fotos</p>
+            <p className="mis-productos-ajuste-masivo-descripcion">
+              Sube hasta 4 fotos comunes para aplicarlas a varios productos. La foto 1 será la principal.
+            </p>
+          </div>
+          <span className="mis-productos-fotos-masivas-contador">
+            Productos objetivo: {productosObjetivoFotosMasivas.length}
+          </span>
+        </div>
+        <div className="mis-productos-fotos-masivas-config">
+          <label>
+            Alcance
+            <select
+              value={fotosMasivasAlcance}
+              onChange={(e) => {
+                setFotosMasivasAlcance(e.target.value as 'sin_foto' | 'todos' | 'seleccionados');
+                setMensajeFotosMasivas(null);
+              }}
+              disabled={aplicandoFotosMasivas}
+            >
+              <option value="sin_foto">Solo productos sin foto principal</option>
+              <option value="todos">Todos mis productos</option>
+              <option value="seleccionados">Solo productos seleccionados manualmente</option>
+            </select>
+          </label>
+        </div>
+        {fotosMasivasAlcance === 'seleccionados' && (
+          <div className="mis-productos-fotos-masivas-seleccion">
+            <p>
+              Seleccionados: {productosObjetivoFotosMasivas.length}. Marca los productos en la lista inferior.
+            </p>
+            <div className="mis-productos-fotos-masivas-acciones">
+              <button type="button" className="mis-productos-btn-secundario" onClick={seleccionarTodosProductosFotosMasivas}>
+                Seleccionar visibles ({productosVisibles.length})
+              </button>
+              <button
+                type="button"
+                className="mis-productos-btn-secundario"
+                onClick={limpiarSeleccionFotosMasivas}
+                disabled={fotosMasivasSeleccionados.length === 0}
+              >
+                Limpiar selección
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="mis-productos-fotos-masivas-files">
+          {fotosMasivasArchivos.map((archivo, idx) => (
+            <label key={`${fotosMasivasInputKey}-${idx}`}>
+              Foto {idx + 1}{idx === 0 ? ' (principal)' : ''}
+              <input
+                type="file"
+                accept="image/*"
+                disabled={aplicandoFotosMasivas}
+                onChange={(e) => cambiarFotoMasiva(idx, e.target.files?.[0] ?? null)}
+              />
+              {archivo && <span>{archivo.name}</span>}
+            </label>
+          ))}
+        </div>
+        <div className="mis-productos-fotos-masivas-acciones">
+          <button
+            type="button"
+            className="mis-productos-btn-secundario"
+            disabled={aplicandoFotosMasivas || fotosMasivasArchivos.every((archivo) => !archivo)}
+            onClick={resetearFotosMasivas}
+          >
+            Resetear fotos
+          </button>
+          <button
+            type="button"
+            className="mis-productos-btn-primario"
+            disabled={
+              aplicandoFotosMasivas ||
+              !fotosMasivasArchivos[0] ||
+              productosObjetivoFotosMasivas.length === 0
+            }
+            onClick={() => void aplicarFotosMasivas()}
+          >
+            {aplicandoFotosMasivas
+              ? 'Aplicando fotos...'
+              : `Aplicar fotos a ${productosObjetivoFotosMasivas.length} producto(s)`}
+          </button>
+        </div>
+        {mensajeFotosMasivas && (
+          <p className="mis-productos-ajuste-masivo-mensaje">{mensajeFotosMasivas}</p>
+        )}
       </section>
       {productoDetalle && (
         <div
@@ -416,10 +759,7 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
               <p className="mis-productos-detalle-linea">
                 <strong>Precio:</strong>{' '}
                 {etiquetaMoneda(productoDetalle.moneda)}{' '}
-                {Number(productoDetalle.precio_usd).toLocaleString(undefined, {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 2,
-                })}
+                {formatearPrecioProducto(productoDetalle.precio_usd)}
               </p>
               {productoDetalle.comentarios && (
                 <p className="mis-productos-detalle-linea">
@@ -506,19 +846,42 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
         </div>
       )}
       <div className="mis-productos-grid">
-        {productos.map((p) => {
+        {productosVisibles.length === 0 ? (
+          <p className="mis-productos-mensaje">
+            No hay productos que coincidan con la búsqueda o el filtro seleccionado.
+          </p>
+        ) : productosVisibles.map((p) => {
           const vehiculo = [p.marca, p.modelo, p.anio].filter(Boolean).join(' · ');
           const estaActivo = p.activo !== false;
           const semaforoStock = semaforoStockProducto(p);
           const mod = (p.aprobacion_publica ?? 'pendiente').toLowerCase();
+          const seleccionadoFotosMasivas = fotosMasivasSeleccionados.includes(p.id);
           const claseMod =
             mod === 'aprobado' ? 'aprobado' : mod === 'rechazado' ? 'rechazado' : 'pendiente';
           return (
             <article
               key={p.id}
-              className="mis-productos-card"
+              className={`mis-productos-card${
+                fotosMasivasAlcance === 'seleccionados' && seleccionadoFotosMasivas
+                  ? ' mis-productos-card--seleccionada'
+                  : ''
+              }`}
               onClick={() => setProductoDetalle(p)}
             >
+              {fotosMasivasAlcance === 'seleccionados' && (
+                <label
+                  className="mis-productos-card-selector"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={seleccionadoFotosMasivas}
+                    onChange={(e) => toggleProductoFotoMasiva(p.id, e.target.checked)}
+                    disabled={aplicandoFotosMasivas}
+                  />
+                  Seleccionar
+                </label>
+              )}
               <div className="mis-productos-card-foto">
                 {p.imagen_url ? (
                   <img
@@ -570,10 +933,7 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
                       </span>
                       <span className="mis-productos-card-precio">
                         {etiquetaMoneda(p.moneda)}{' '}
-                        {Number(p.precio_usd).toLocaleString(undefined, {
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 2,
-                        })}
+                        {formatearPrecioProducto(p.precio_usd)}
                       </span>
                     </div>
                     <p className="mis-productos-card-desc">

@@ -206,28 +206,28 @@ export function ListaRepuestosPorCategoria({
               <TarjetaProductoBusqueda
                 key={p.id}
                 producto={p}
+                vertical={vertical}
                 expandida={productoExpandidoId === p.id}
                 onExpand={() => setProductoExpandidoId(p.id)}
                 onContraer={() => setProductoExpandidoId(null)}
                 onContactar={(prod) => {
+                  if (!user) return;
                   setContactarProducto(prod);
-                  if (user) {
-                    void (async () => {
-                      const debe = await usuarioDebeRegistrarHistorialContactos(supabase, user);
-                      if (!debe) return;
-                      await registrarContactoProducto(
-                        supabase,
-                        user.id,
-                        {
-                          id: prod.id,
-                          nombre: prod.nombre,
-                          precio_usd: prod.precio_usd,
-                          moneda: prod.moneda,
-                        },
-                        nombreTienda(prod)
-                      );
-                    })();
-                  }
+                  void (async () => {
+                    const debe = await usuarioDebeRegistrarHistorialContactos(supabase, user);
+                    if (!debe) return;
+                    await registrarContactoProducto(
+                      supabase,
+                      user.id,
+                      {
+                        id: prod.id,
+                        nombre: prod.nombre,
+                        precio_usd: prod.precio_usd,
+                        moneda: prod.moneda,
+                      },
+                      nombreTienda(prod)
+                    );
+                  })();
                 }}
               />
             ))}

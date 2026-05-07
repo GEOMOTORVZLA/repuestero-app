@@ -409,7 +409,8 @@
   color: #4a5568;
 }
 
-.dashboard-admin-filtro-vertical select {
+.dashboard-admin-filtro-vertical select,
+.dashboard-admin-filtro-vertical input {
   padding: 0.45rem 0.6rem;
   border-radius: 6px;
   border: 1px solid #e2e8f0;
@@ -418,7 +419,21 @@
   max-width: 22rem;
 }
 
-.dashboard-admin-filtro-vertical select:focus {
+.dashboard-admin-filtro-vertical input {
+  min-width: 18rem;
+}
+
+.dashboard-admin-filtro-producto-buscar {
+  flex: 1 1 20rem;
+}
+
+.dashboard-admin-filtro-producto-buscar input {
+  width: 100%;
+  max-width: none;
+}
+
+.dashboard-admin-filtro-vertical select:focus,
+.dashboard-admin-filtro-vertical input:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
@@ -481,6 +496,31 @@
   color: #991b1b;
 }
 
+.dashboard-admin-status-stock--verde {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.dashboard-admin-status-stock--amarillo {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.dashboard-admin-status-stock--rojo {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.dashboard-admin-status-stock--vencido {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.dashboard-admin-status-stock--sin-fecha {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
 .dashboard-kpi-card--alerta {
   border: 1px solid #f6ad55;
   background: #fffaf0;
@@ -495,15 +535,17 @@
 
 .dashboard-admin-td-fotos {
   vertical-align: middle;
-  min-width: 5.5rem;
+  min-width: 6rem;
 }
 
-.dashboard-admin-producto-fotos {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
+.dashboard-admin-producto-foto-carrusel {
+  display: grid;
+  grid-template-columns: 20px 56px 20px;
+  grid-template-rows: 56px auto;
+  gap: 0.15rem;
   align-items: center;
-  max-width: 200px;
+  justify-content: start;
+  max-width: 104px;
 }
 
 .dashboard-admin-producto-thumb-link {
@@ -529,6 +571,39 @@
   background: #f1f5f9;
 }
 
+.dashboard-admin-producto-foto-nav {
+  width: 20px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #1e3a5f;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dashboard-admin-producto-foto-nav:hover:not(:disabled) {
+  background: #e0e7ff;
+  border-color: #94a3b8;
+}
+
+.dashboard-admin-producto-foto-nav:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.dashboard-admin-producto-foto-contador {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #64748b;
+  line-height: 1;
+}
+
 .dashboard-admin-sin-foto {
   font-size: 0.72rem;
   color: #94a3b8;
@@ -542,6 +617,98 @@
   color: #64748b;
   line-height: 1.45;
   max-width: 52rem;
+}
+
+.dashboard-admin-acciones-masivas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0 0 0.85rem;
+}
+
+.dashboard-admin-fotos-masivas {
+  margin: 0 0 1rem;
+  padding: 0.85rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #eff6ff;
+}
+
+.dashboard-admin-fotos-masivas-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.dashboard-admin-fotos-masivas-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #1e3a5f;
+}
+
+.dashboard-admin-fotos-masivas-header p {
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+  color: #475569;
+}
+
+.dashboard-admin-fotos-masivas-grid,
+.dashboard-admin-fotos-masivas-files {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.dashboard-admin-fotos-masivas-seleccion {
+  margin: 0 0 0.75rem;
+  padding: 0.6rem;
+  border-radius: 10px;
+  background: #dbeafe;
+}
+
+.dashboard-admin-fotos-masivas-seleccion p {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  color: #1e3a5f;
+  font-weight: 700;
+}
+
+.dashboard-admin-fotos-masivas label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.dashboard-admin-fotos-masivas select,
+.dashboard-admin-fotos-masivas input[type='file'] {
+  width: 100%;
+  padding: 0.42rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
+.dashboard-admin-fotos-masivas label span {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #64748b;
+  word-break: break-all;
+}
+
+.dashboard-admin-fotos-masivas-mensaje {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: #1e3a5f;
+  font-weight: 700;
 }
 
 .dashboard-admin-usuario-acciones {

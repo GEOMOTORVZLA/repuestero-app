@@ -14,6 +14,7 @@ import {
   optimizarImagenProductoParaStorage,
 } from '../utils/imagenProducto';
 import { MAX_FOTOS_EXTRA, slotsArchivosExtraVacios } from '../utils/productoImagenesExtra';
+import { normalizarInputPrecio, parsePrecioProducto } from '../utils/precioProducto';
 import './RegistroRepuestos.css';
 
 interface Tienda {
@@ -159,11 +160,11 @@ export function RegistroRepuestos({
       setMensaje(esMoto ? 'Selecciona la marca de la moto.' : 'Selecciona la marca del vehículo.');
       return;
     }
-    const precioNum = parseFloat(precio.trim().replace(',', '.'));
-    if (!precio.trim() || Number.isNaN(precioNum) || precioNum < 0) {
+    const precioNum = parsePrecioProducto(precio);
+    if (precioNum == null) {
       registrandoRef.current = false;
       setEstado('error');
-      setMensaje('Ingresa un precio válido.');
+      setMensaje('Ingresa un precio válido con máximo 2 decimales.');
       return;
     }
     if (comentarios.length > 500) {
@@ -428,7 +429,7 @@ export function RegistroRepuestos({
           type="text"
           placeholder={`Precio (${moneda === 'BS' ? 'Bs' : 'USD'}) *`}
           value={precio}
-          onChange={(e) => setPrecio(e.target.value)}
+          onChange={(e) => setPrecio(normalizarInputPrecio(e.target.value))}
           disabled={estado === 'registrando'}
         />
       </div>

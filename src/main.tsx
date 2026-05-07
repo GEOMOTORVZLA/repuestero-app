@@ -21,9 +21,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
         compilación.
       </p>
       <p>
-        En <strong>Vercel</strong>: Project → Settings → Environment Variables → añade ambas para
-        <strong> Production </strong>
-        (y Preview si aplica), luego redeploy.
+        En el panel de tu hosting (por ejemplo <strong>Vercel</strong>): Settings → Environment Variables → añade
+        ambas para <strong>Production</strong> (y Preview si aplica), luego redeploy.
       </p>
       <p style={{ color: '#64748b', fontSize: '0.875rem' }}>
         Si ya están definidas, abre la consola del navegador (F12) por si hay otro error.

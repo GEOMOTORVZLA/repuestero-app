@@ -19,6 +19,7 @@ import {
   slotsArchivosExtraVacios,
 } from '../utils/productoImagenesExtra';
 import { esMonedaBolivar } from '../utils/monedaProducto';
+import { normalizarInputPrecio, parsePrecioProducto } from '../utils/precioProducto';
 import './RegistroRepuestos.css';
 
 export interface ProductoEditable {
@@ -92,10 +93,10 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       setMensaje(esMoto ? 'Selecciona la marca de la moto.' : 'Selecciona la marca del vehículo.');
       return;
     }
-    const precioNum = parseFloat(precio.trim().replace(',', '.'));
-    if (!precio.trim() || Number.isNaN(precioNum) || precioNum < 0) {
+    const precioNum = parsePrecioProducto(precio);
+    if (precioNum == null) {
       setEstado('error');
-      setMensaje('Ingresa un precio válido.');
+      setMensaje('Ingresa un precio válido con máximo 2 decimales.');
       return;
     }
     if (comentarios.length > 500) {
@@ -317,7 +318,7 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
           type="text"
           placeholder={`Precio (${moneda === 'BS' ? 'Bs' : 'USD'}) *`}
           value={precio}
-          onChange={(e) => setPrecio(e.target.value)}
+          onChange={(e) => setPrecio(normalizarInputPrecio(e.target.value))}
           disabled={estado === 'guardando'}
         />
       </div>

@@ -1,5 +1,7 @@
 /** URLs para Google Maps (direcciones). */
 
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 import { emitirMapsNavSinUbicacion } from './mapsNavToastBridge';
 
 const MAPS_DIR = 'https://www.google.com/maps/dir/';
@@ -29,10 +31,33 @@ export function abrirNavegacionGoogleMapsDesdeAqui(destLat: number, destLng: num
   if (typeof window === 'undefined') return;
 
   const destinoUrl = urlGoogleMapsDirSoloDestino(destLat, destLng);
+  const esNativa = Capacitor.isNativePlatform();
+  const abrirUrl = (url: string) => {
+    if (esNativa) {
+      void Browser.open({ url, windowName: '_system' });
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
 
   if (!window.navigator?.geolocation) {
     emitirMapsNavSinUbicacion();
-    window.open(destinoUrl, '_blank', 'noopener,noreferrer');
+    abrirUrl(destinoUrl);
+    return;
+  }
+
+  if (esNativa) {
+    window.navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude: oLat, longitude: oLng } = pos.coords;
+        abrirUrl(urlGoogleMapsDirConOrigen(destLat, destLng, oLat, oLng));
+      },
+      () => {
+        emitirMapsNavSinUbicacion();
+        abrirUrl(destinoUrl);
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 }
+    );
     return;
   }
 

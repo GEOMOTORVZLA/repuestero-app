@@ -8,7 +8,7 @@
 
 export const MAX_MB_FOTO_PRODUCTO = 2;
 export const MAX_BYTES_FOTO_PRODUCTO = MAX_MB_FOTO_PRODUCTO * 1024 * 1024;
-export const TARGET_BYTES_FOTO_PRODUCTO = 700 * 1024;
+export const TARGET_BYTES_FOTO_PRODUCTO = 1200 * 1024;
 
 const MARKER_OBJECT_PUBLIC = '/storage/v1/object/public/';
 const MARKER_RENDER = '/storage/v1/render/image/public/';
@@ -27,10 +27,11 @@ function variantDimensiones(variante: 'tarjeta' | 'miniatura' | 'vista'): {
   width: number;
   height: number;
   resize: 'cover' | 'contain';
+  quality: string;
 } {
-  if (variante === 'tarjeta') return { width: 400, height: 400, resize: 'cover' };
-  if (variante === 'miniatura') return { width: 160, height: 160, resize: 'cover' };
-  return { width: 1080, height: 1080, resize: 'contain' };
+  if (variante === 'tarjeta') return { width: 400, height: 400, resize: 'cover', quality: '82' };
+  if (variante === 'miniatura') return { width: 160, height: 160, resize: 'cover', quality: '78' };
+  return { width: 1600, height: 1600, resize: 'contain', quality: '88' };
 }
 
 /**
@@ -54,13 +55,13 @@ export function urlImagenProductoVariante(
   const pathOnly = qIdx === -1 ? pathAndQuery : pathAndQuery.slice(0, qIdx);
   if (!pathOnly) return u;
 
-  const { width, height, resize } = variantDimensiones(variante);
+  const { width, height, resize, quality } = variantDimensiones(variante);
   const renderBase = `${baseOrigin}${MARKER_RENDER}${pathOnly}`;
   const qs = new URLSearchParams({
     width: String(width),
     height: String(height),
     resize,
-    quality: '78',
+    quality,
   });
   return `${renderBase}?${qs.toString()}`;
 }
@@ -94,7 +95,7 @@ export async function optimizarImagenProductoParaStorage(
 
   const targetBytes = opts?.targetBytes ?? TARGET_BYTES_FOTO_PRODUCTO;
   const maxBytes = opts?.maxBytes ?? MAX_BYTES_FOTO_PRODUCTO;
-  const maxLado = opts?.maxLado ?? 1600;
+  const maxLado = opts?.maxLado ?? 2200;
 
   const objectUrl = URL.createObjectURL(file);
   try {
@@ -122,7 +123,7 @@ export async function optimizarImagenProductoParaStorage(
 
     const mimePreferido = 'image/webp';
     const mimeFallback = 'image/jpeg';
-    let quality = 0.86;
+    let quality = 0.9;
     let blob = await blobDesdeCanvas(canvas, mimePreferido, quality);
     let mime = blob ? mimePreferido : mimeFallback;
     if (!blob) {
@@ -132,8 +133,8 @@ export async function optimizarImagenProductoParaStorage(
 
     let intentos = 0;
     while ((blob.size > targetBytes || blob.size > maxBytes) && intentos < 7) {
-      quality -= 0.08;
-      if (quality < 0.52) break;
+      quality -= 0.06;
+      if (quality < 0.66) break;
       const next = await blobDesdeCanvas(canvas, mime, quality);
       if (!next) break;
       blob = next;

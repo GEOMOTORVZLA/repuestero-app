@@ -71,12 +71,12 @@ async function runEnsureNegocio(user: User): Promise<void> {
       const perfil = md.perfil_vendedor as PerfilVendedorMeta | undefined;
       if (!perfil || typeof perfil !== 'object') return;
 
-      const { data: existente } = await supabase
+      const { data: filasTienda } = await supabase
         .from('tiendas')
         .select('id')
         .eq('user_id', user.id)
-        .maybeSingle();
-      if (existente) return;
+        .limit(1);
+      if (filasTienda?.length) return;
 
       const nombre =
         (perfil.nombre && String(perfil.nombre).trim()) ||
@@ -117,12 +117,12 @@ async function runEnsureNegocio(user: User): Promise<void> {
       const perfil = md.perfil_taller as PerfilTallerMeta | undefined;
       if (!perfil || typeof perfil !== 'object') return;
 
-      const { data: existente } = await supabase
+      const { data: filasTaller } = await supabase
         .from('talleres')
         .select('id')
         .eq('user_id', user.id)
-        .maybeSingle();
-      if (existente) return;
+        .limit(1);
+      if (filasTaller?.length) return;
 
       const esp = especialidadTallerDesdeMeta(perfil);
       if (esp.length === 0) {

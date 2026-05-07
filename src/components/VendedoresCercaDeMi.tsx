@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { useAuth } from '../contexts/AuthContext';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
+import { TarjetaProductoBusqueda, type ProductoTarjetaBusqueda } from './TarjetaProductoBusqueda';
 import {
   MENSAJE_AVISO_NAVEGACION_MAPS_TIENDA,
   TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS,
@@ -35,6 +37,27 @@ export interface TiendaCerca {
   distanciaKm?: number;
 }
 
+type ProductoVendedorCerca = ProductoTarjetaBusqueda;
+
+type EstadoProductosVendedor = {
+  productos: ProductoVendedorCerca[];
+  cargando: boolean;
+  error: string | null;
+};
+
+const SELECT_PRODUCTOS_VENDEDOR_CERCA = `
+  id,
+  nombre,
+  descripcion,
+  precio_usd,
+  moneda,
+  marca,
+  modelo,
+  anio,
+  imagen_url,
+  imagenes_extra
+`;
+
 /** Distancia aproximada en km entre dos puntos (fórmula de Haversine) */
 function distanciaKm(
   lat1: number,
@@ -56,6 +79,7 @@ function distanciaKm(
 }
 
 export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCercaDeMiProps) {
+  const { user } = useAuth();
   const [tiendas, setTiendas] = useState<TiendaCerca[]>([]);
   const [cargando, setCargando] = useState(true);
   const [cargandoMas, setCargandoMas] = useState(false);
@@ -68,6 +92,9 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [gpsObteniendo, setGpsObteniendo] = useState(false);
   const [mensaje, setMensaje] = useState('');
+  const [productosPorTienda, setProductosPorTienda] = useState<Record<string, EstadoProductosVendedor>>({});
+  const [tiendaProductosAbiertaId, setTiendaProductosAbiertaId] = useState<string | null>(null);
+  const [productoExpandidoId, setProductoExpandidoId] = useState<string | null>(null);
 
   const construirQueryTiendas = () => {
     let query = supabase
@@ -240,6 +267,9 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
     setHayMas(false);
     setUbicado(false);
     setError(null);
+    setProductosPorTienda({});
+    setTiendaProductosAbiertaId(null);
+    setProductoExpandidoId(null);
   }, [vertical]);
 
   const cerrarOverlayVendedores = () => {
@@ -264,7 +294,64 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
   };
 
   const abrirContactar = (t: TiendaCerca) => {
+    if (!user) return;
     setContactarTienda(t);
+  };
+
+  const tiendaProductosAbierta = tiendaProductosAbiertaId
+    ? listaMostrar.find((t) => t.id === tiendaProductosAbiertaId) ?? null
+    : null;
+
+  const cargarProductosDeVendedor = async (t: TiendaCerca) => {
+    if (tiendaProductosAbiertaId === t.id) {
+      setTiendaProductosAbiertaId(null);
+      setProductoExpandidoId(null);
+      return;
+    }
+
+    setTiendaProductosAbiertaId(t.id);
+    setProductoExpandidoId(null);
+
+    const estadoActual = productosPorTienda[t.id];
+    if (estadoActual && !estadoActual.error) return;
+
+    setProductosPorTienda((prev) => ({
+      ...prev,
+      [t.id]: { productos: prev[t.id]?.productos ?? [], cargando: true, error: null },
+    }));
+
+    const { data, error } = await supabase
+      .from('productos')
+      .select(SELECT_PRODUCTOS_VENDEDOR_CERCA)
+      .eq('tienda_id', t.id)
+      .eq('activo', true)
+      .eq('aprobacion_publica', 'aprobado')
+      .eq('vertical', vertical)
+      .order('nombre', { ascending: true })
+      .order('id', { ascending: true });
+
+    if (error) {
+      setProductosPorTienda((prev) => ({
+        ...prev,
+        [t.id]: {
+          productos: [],
+          cargando: false,
+          error: error.message || 'No se pudieron cargar los productos de este vendedor.',
+        },
+      }));
+      return;
+    }
+
+    setProductosPorTienda((prev) => ({
+      ...prev,
+      [t.id]: {
+        productos: ((data ?? []) as ProductoVendedorCerca[]).filter(
+          (p) => p && typeof p.id === 'string'
+        ),
+        cargando: false,
+        error: null,
+      },
+    }));
   };
 
   const urlWhatsAppContactarVendedor =
@@ -383,6 +470,11 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
                     Listado ordenado del más cercano al más lejano según tu ubicación.
                   </p>
                 )}
+                {!user && (
+                  <p className="busqueda-repuestos-login-aviso">
+                    Debes iniciar sesión o registrarte para contactar vendedores.
+                  </p>
+                )}
                 {cargando ? (
                   <p className="vendedores-cerca-cargando">Cargando vendedores…</p>
                 ) : error ? (
@@ -394,39 +486,51 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
                 ) : (
                   <>
                     <div className="vendedores-cerca-grid">
-                      {listaMostrar.map((t) => (
-                        <article key={t.id} className="vendedores-cerca-card">
-                          <div className="vendedores-cerca-card-cuerpo">
-                            <div className="vendedores-cerca-card-info">
-                              <h4 className="vendedores-cerca-card-nombre">{nombreTienda(t)}</h4>
-                              <div className="vendedores-cerca-card-meta">
-                                {(t.ciudad || t.estado) && (
-                                  <span className="vendedores-cerca-card-ubicacion">
-                                    {[t.ciudad, t.estado].filter(Boolean).join(', ')}
-                                  </span>
-                                )}
-                                {t.distanciaKm != null && (
-                                  <span className="vendedores-cerca-card-distancia">
-                                    {t.distanciaKm.toFixed(1)} km
-                                  </span>
-                                )}
-                                {!t.distanciaKm && (
-                                  <span className="vendedores-cerca-card-subtitulo">Vendedor de repuestos</span>
-                                )}
+                      {listaMostrar.map((t) => {
+                        return (
+                          <article key={t.id} className="vendedores-cerca-card">
+                            <div className="vendedores-cerca-card-cuerpo">
+                              <div className="vendedores-cerca-card-info">
+                                <h4 className="vendedores-cerca-card-nombre">{nombreTienda(t)}</h4>
+                                <div className="vendedores-cerca-card-meta">
+                                  {(t.ciudad || t.estado) && (
+                                    <span className="vendedores-cerca-card-ubicacion">
+                                      {[t.ciudad, t.estado].filter(Boolean).join(', ')}
+                                    </span>
+                                  )}
+                                  {t.distanciaKm != null && (
+                                    <span className="vendedores-cerca-card-distancia">
+                                      {t.distanciaKm.toFixed(1)} km
+                                    </span>
+                                  )}
+                                  {!t.distanciaKm && (
+                                    <span className="vendedores-cerca-card-subtitulo">Vendedor de repuestos</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="vendedores-cerca-card-botones">
+                                <button
+                                  type="button"
+                                  className="vendedores-cerca-card-btn"
+                                  onClick={() => abrirContactar(t)}
+                                  disabled={!user}
+                                  title={!user ? 'Inicia sesión para contactar vendedores' : undefined}
+                                >
+                                  Contactar vendedor
+                                </button>
+                                <button
+                                  type="button"
+                                  className="vendedores-cerca-card-btn vendedores-cerca-card-btn-productos"
+                                  onClick={() => void cargarProductosDeVendedor(t)}
+                                  aria-expanded={tiendaProductosAbiertaId === t.id}
+                                >
+                                  Ver productos de este vendedor
+                                </button>
                               </div>
                             </div>
-                            <div className="vendedores-cerca-card-botones">
-                              <button
-                                type="button"
-                                className="vendedores-cerca-card-btn"
-                                onClick={() => abrirContactar(t)}
-                              >
-                                Contactar vendedor
-                              </button>
-                            </div>
-                          </div>
-                        </article>
-                      ))}
+                          </article>
+                        );
+                      })}
                     </div>
                     {hayMas && (
                       <div className="busqueda-repuestos-cargar-mas">
@@ -444,6 +548,66 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
                 )}
               </div>
             </div>
+            {tiendaProductosAbierta && (
+              <div
+                className="vendedores-cerca-productos-overlay"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="vendedores-cerca-productos-titulo"
+                onClick={() => {
+                  setTiendaProductosAbiertaId(null);
+                  setProductoExpandidoId(null);
+                }}
+              >
+                <div
+                  className="vendedores-cerca-productos-panel"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="vendedores-cerca-productos-panel-header">
+                    <h4 id="vendedores-cerca-productos-titulo">
+                      Productos de {nombreTienda(tiendaProductosAbierta)}
+                    </h4>
+                    <button
+                      type="button"
+                      className="resultados-busqueda-pagina-panel-cerrar"
+                      onClick={() => {
+                        setTiendaProductosAbiertaId(null);
+                        setProductoExpandidoId(null);
+                      }}
+                    >
+                      Volver a vendedores
+                    </button>
+                  </div>
+                  <div className="vendedores-cerca-productos-panel-scroll">
+                    {productosPorTienda[tiendaProductosAbierta.id]?.cargando ? (
+                      <p className="vendedores-cerca-productos-mensaje">Cargando productos…</p>
+                    ) : productosPorTienda[tiendaProductosAbierta.id]?.error ? (
+                      <p className="vendedores-cerca-productos-mensaje error">
+                        {productosPorTienda[tiendaProductosAbierta.id].error}
+                      </p>
+                    ) : (productosPorTienda[tiendaProductosAbierta.id]?.productos ?? []).length === 0 ? (
+                      <p className="vendedores-cerca-productos-mensaje">
+                        Este vendedor no tiene productos publicados en este momento.
+                      </p>
+                    ) : (
+                      <div className="vendedores-cerca-productos-grid">
+                        {(productosPorTienda[tiendaProductosAbierta.id]?.productos ?? []).map((p) => (
+                          <TarjetaProductoBusqueda
+                            key={p.id}
+                            producto={p}
+                            vertical={vertical}
+                            expandida={productoExpandidoId === p.id}
+                            onExpand={() => setProductoExpandidoId(p.id)}
+                            onContraer={() => setProductoExpandidoId(null)}
+                            onContactar={() => abrirContactar(tiendaProductosAbierta)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
