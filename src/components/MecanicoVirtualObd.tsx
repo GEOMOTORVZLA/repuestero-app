@@ -1,16 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { CODIGOS_OBD_COMUNES, buscarCodigoObd, type CodigoObd } from '../data/codigosObd';
 import { MARCAS_MODELOS } from '../data/marcasModelos';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
-import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
+import { VERTICAL_AUTO, VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import { mensajeWhatsappVendedorProducto, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
 import { TarjetaProductoBusqueda, type ProductoTarjetaBusqueda } from './TarjetaProductoBusqueda';
 import './MecanicoVirtualObd.css';
 
 interface MecanicoVirtualObdProps {
   vertical?: VerticalVehiculo;
+  /** Landing: +1 al abrir modal IA, -1 al cerrar (stack por si hubiera varios) */
+  onIaModalCapaDelta?: (delta: number) => void;
 }
 
 interface ProductoMecanicoVirtual extends ProductoTarjetaBusqueda {
@@ -132,7 +135,11 @@ function esCodigoObdValido(valor: string): boolean {
   return /^[PBCU][0-9A-F]{4}$/.test(valor);
 }
 
-export function MecanicoVirtualObd({ vertical = VERTICAL_AUTO }: MecanicoVirtualObdProps) {
+export function MecanicoVirtualObd({
+  vertical = VERTICAL_AUTO,
+  onIaModalCapaDelta,
+}: MecanicoVirtualObdProps) {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [modalAbierto, setModalAbierto] = useState(false);
   const [avisoLogin, setAvisoLogin] = useState<string | null>(null);
@@ -162,6 +169,15 @@ export function MecanicoVirtualObd({ vertical = VERTICAL_AUTO }: MecanicoVirtual
     () => (marcaVehiculo ? MARCAS_MODELOS[marcaVehiculo] ?? [] : []),
     [marcaVehiculo]
   );
+
+  const rutaInicioLanding = vertical === VERTICAL_MOTO ? '/motos' : '/';
+
+  useEffect(() => {
+    if (!onIaModalCapaDelta) return;
+    if (!modalAbierto) return;
+    onIaModalCapaDelta(1);
+    return () => onIaModalCapaDelta(-1);
+  }, [modalAbierto, onIaModalCapaDelta]);
 
   const consultarCodigo = async (codigoRaw: string) => {
     const codigo = normalizarCodigoObd(codigoRaw);
@@ -221,7 +237,7 @@ export function MecanicoVirtualObd({ vertical = VERTICAL_AUTO }: MecanicoVirtual
     await consultarCodigo(codigoManual);
   };
 
-  const consultarSintomas = async (e: React.FormEvent<HTMLFormElement>) => {
+  const consultarSintomas = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setCodigoSeleccionado('');
     setCodigoManual('');
@@ -346,6 +362,11 @@ export function MecanicoVirtualObd({ vertical = VERTICAL_AUTO }: MecanicoVirtual
     setModalAbierto(false);
   };
 
+  const volverAlInicio = () => {
+    cerrarModal();
+    navigate(rutaInicioLanding);
+  };
+
   const abrirAsistente = () => {
     if (!user) {
       setAvisoLogin('Debes iniciar sesión o registrarte para usar el asistente de IA.');
@@ -360,29 +381,27 @@ export function MecanicoVirtualObd({ vertical = VERTICAL_AUTO }: MecanicoVirtual
       {avisoLogin && <p className="mecanico-virtual-login-aviso">{avisoLogin}</p>}
 
       <div className="mecanico-virtual-card">
-        <div className="mecanico-virtual-resumen">
+        <button
+          type="button"
+          className="mecanico-virtual-resumen landing-ia-tarjeta-cerrada"
+          onClick={abrirAsistente}
+          aria-label="Abrir consulta de falla con IA"
+        >
           <img
             src="/mecanico.png"
             alt=""
-            className="mecanico-virtual-imagen"
-            width={112}
-            height={112}
+            className="mecanico-virtual-imagen landing-ia-tarjeta-imagen"
+            width={56}
+            height={56}
             loading="lazy"
             decoding="async"
           />
-          <div className="mecanico-virtual-resumen-texto">
+          <div className="mecanico-virtual-resumen-texto landing-ia-tarjeta-texto-solo-titulo">
             <h2 id="mecanico-virtual-titulo" className="landing-seccion-titulo">
               Consulta tu falla con nuestra IA
             </h2>
-            <p>
-              Identifica posibles causas con el código OBDII de tu scanner o describiendo los
-              síntomas, y busca repuestos relacionados en Geomotor.
-            </p>
-            <button type="button" onClick={abrirAsistente}>
-              Consultar
-            </button>
           </div>
-        </div>
+        </button>
       </div>
 
       {modalAbierto && (
@@ -404,8 +423,8 @@ export function MecanicoVirtualObd({ vertical = VERTICAL_AUTO }: MecanicoVirtual
             <div className="mecanico-virtual-modal-scroll">
               <div className="mecanico-virtual-intro">
                 <p>
-                  Indica la marca y modelo del vehículo. Puedes consultar por código OBDII o describir
-                  los síntomas si no tienes scanner.
+                  Indica la marca y modelo del vehículo. Puedes consultar por código OBDII o describir los
+                  síntomas si no tienes scanner.
                 </p>
               </div>
 
@@ -594,6 +613,11 @@ export function MecanicoVirtualObd({ vertical = VERTICAL_AUTO }: MecanicoVirtual
                 </div>
               )}
             </div>
+            <div className="mecanico-virtual-modal-pie">
+              <button type="button" className="mecanico-virtual-modal-volver" onClick={volverAlInicio}>
+                Volver
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -646,3 +670,5 @@ export function MecanicoVirtualObd({ vertical = VERTICAL_AUTO }: MecanicoVirtual
     </section>
   );
 }
+
+export default MecanicoVirtualObd;

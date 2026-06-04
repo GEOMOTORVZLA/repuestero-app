@@ -265,6 +265,148 @@
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
+.dashboard-kpi-grid-hint {
+  margin: 0 0 0.65rem;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+button.dashboard-kpi-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: none;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  /* WebView Android: evita retraso de doble toque y mejora entrega del click */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(30, 58, 95, 0.12);
+  /* Área mínima cómoda para dedo */
+  min-height: 3.25rem;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* El hit-test debe ser del botón, no del <p> interno (en algunos WebView el click no sube bien) */
+button.dashboard-kpi-card .dashboard-kpi-label,
+button.dashboard-kpi-card .dashboard-kpi-valor,
+button.dashboard-kpi-card .dashboard-kpi-hint {
+  pointer-events: none;
+}
+
+button.dashboard-kpi-card.dashboard-kpi-card--alerta {
+  border: 1px solid #f6ad55;
+}
+
+button.dashboard-kpi-card.dashboard-kpi-card--clickable:hover {
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+  transform: translateY(-1px);
+}
+
+button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
+  outline: 2px solid #3182ce;
+  outline-offset: 2px;
+}
+
+.dashboard-kpi-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.dashboard-kpi-modal-panel {
+  background: #fff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 960px;
+  margin: 1.5rem auto 2rem;
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.18);
+}
+
+.dashboard-kpi-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.dashboard-kpi-modal-titulo {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.dashboard-kpi-modal-cerrar {
+  flex-shrink: 0;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  cursor: pointer;
+  color: #334155;
+}
+
+.dashboard-kpi-modal-cerrar:hover {
+  background: #e2e8f0;
+}
+
+.dashboard-kpi-modal-body {
+  padding: 1rem 1.15rem;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.dashboard-kpi-modal-meta {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.dashboard-kpi-modal-aviso {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a5f;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.dashboard-kpi-modal-table-wrap {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.dashboard-kpi-modal-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  padding: 0.75rem 1.15rem;
+  border-top: 1px solid #e2e8f0;
+  background: #fafafa;
+  border-radius: 0 0 12px 12px;
+}
+
 .dashboard-kpi-label {
   margin: 0 0 0.25rem;
   font-size: 0.8rem;
@@ -394,6 +536,14 @@
   gap: 1rem 1.5rem;
   align-items: flex-end;
   margin-bottom: 0.75rem;
+}
+
+.dashboard-admin-filtros-productos-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
 }
 
 .dashboard-admin-filtro-vertical {
@@ -625,6 +775,11 @@
   gap: 0.5rem;
   align-items: center;
   margin: 0 0 0.85rem;
+}
+
+.dashboard-admin-bulk-productos-toolbar .dashboard-admin-filtro-vertical {
+  margin: 0;
+  min-width: min(100%, 20rem);
 }
 
 .dashboard-admin-fotos-masivas {

@@ -9,6 +9,7 @@ import { SelectorTipoRegistro } from './components/SelectorTipoRegistro';
 import type { TipoRegistro } from './components/SelectorTipoRegistro';
 import { FormRegistro } from './components/FormRegistro';
 import { PoliticaDivulgacionDatos } from './components/PoliticaDivulgacionDatos';
+import { EliminacionCuenta } from './components/EliminacionCuenta';
 import { Dashboard } from './components/Dashboard';
 import { verticalDesdePathname, rutaInicioVertical } from './utils/verticalVehiculo';
 import { leerYConsumirMensajeAuthFlash } from './services/ensureNegocioTrasRegistro';
@@ -247,6 +248,8 @@ export default function App() {
       <Route path="/motos" element={<AppShell />} />
       <Route path="/legal/politica-divulgacion-datos" element={<PoliticaDivulgacionDatos />} />
       <Route path="/motos/legal/politica-divulgacion-datos" element={<PoliticaDivulgacionDatos />} />
+      <Route path="/legal/eliminacion-cuenta" element={<EliminacionCuenta />} />
+      <Route path="/motos/legal/eliminacion-cuenta" element={<EliminacionCuenta />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

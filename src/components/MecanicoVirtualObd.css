@@ -17,16 +17,16 @@
 }
 
 .mecanico-virtual--moto .mecanico-virtual-card {
-  background: linear-gradient(135deg, #431407 0%, #9a3412 58%, #c2410c 100%);
-  border-color: #9a3412;
+  background: linear-gradient(145deg, #0a0a0a 0%, #171717 45%, #262626 100%);
+  border-color: #404040;
 }
 
 .mecanico-virtual--moto .mecanico-virtual-moto-card {
   overflow: hidden !important;
-  background: linear-gradient(135deg, #431407 0%, #9a3412 58%, #c2410c 100%) !important;
-  border: 1px solid #9a3412 !important;
+  background: linear-gradient(145deg, #0a0a0a 0%, #171717 45%, #262626 100%) !important;
+  border: 1px solid #404040 !important;
   border-radius: 16px !important;
-  box-shadow: 0 14px 34px rgba(67, 20, 7, 0.2) !important;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32) !important;
   padding: 0 !important;
 }
 
@@ -99,7 +99,7 @@
 }
 
 .mecanico-virtual--moto .mecanico-virtual-resumen-texto p {
-  color: #ffedd5 !important;
+  color: #d4d4d4 !important;
 }
 
 .mecanico-virtual-resumen-texto button {
@@ -128,6 +128,20 @@
 .mecanico-virtual-resumen-texto .mecanico-virtual-resumen-btn:hover {
   background: #ffedd5 !important;
   border-color: #ffedd5 !important;
+}
+
+.mecanico-virtual--moto .mecanico-virtual-resumen-texto .mecanico-virtual-resumen-btn {
+  color: #171717 !important;
+}
+
+.mecanico-virtual--moto .mecanico-virtual-resumen-texto .mecanico-virtual-resumen-btn:hover {
+  background: #f5f5f5 !important;
+  border-color: #e5e5e5 !important;
+}
+
+.mecanico-virtual--moto .mecanico-virtual-resumen-texto button:hover {
+  background: #f5f5f5 !important;
+  border-color: #e5e5e5 !important;
 }
 
 .mecanico-virtual-login-aviso {
@@ -246,6 +260,32 @@
 
 .mecanico-virtual-modal-header button:hover {
   background: #2c5282;
+}
+
+.mecanico-virtual-modal-pie {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.mecanico-virtual-modal-volver {
+  border: none;
+  border-radius: 8px;
+  background: #1e3a5f;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 0.48rem 0.8rem;
+  transition: background 0.2s ease;
+}
+
+.mecanico-virtual-modal-volver:hover {
+  background: #2c5282;
+  color: #fff;
 }
 
 .mecanico-virtual-modal-scroll {
@@ -690,4 +730,495 @@
   .mecanico-virtual-modal-header button {
     width: 100%;
   }
+
+  .mecanico-virtual-modal-pie {
+    padding: 0.65rem 0.75rem 0.85rem;
+  }
+
+  .mecanico-virtual-modal-pie .mecanico-virtual-modal-volver {
+    width: 100%;
+  }
+}
+
+@media (max-width: 900px) {
+  .landing-ia-doble {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    padding: 0 0.65rem;
+  }
+
+  .landing-ia-doble .landing-ia-tarjeta-cerrada,
+  .landing-ia-doble .landing-ia-tarjeta-cerrada.mecanico-virtual-moto-resumen {
+    min-height: 3.35rem !important;
+  }
+}
+
+/* Dos tarjetas de IA en la landing (falla OBD/moto + identificación por foto Vision) */
+.landing-ia-doble {
+  position: relative;
+  z-index: 2;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 0.5rem;
+  row-gap: 0.5rem;
+  align-items: stretch;
+  padding: 0 0.75rem;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.landing-ia-doble .mecanico-virtual {
+  max-width: none;
+  margin: 0;
+  border-bottom: none;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.45rem 0;
+}
+
+.landing-ia-doble .mecanico-virtual-card {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100%;
+}
+
+/* Tarjeta “Identifica tu repuesto” — paleta distinta al mecánico virtual */
+.identificar-repuesto-vision-card {
+  background: linear-gradient(135deg, #042f2e 0%, #0f766e 52%, #14b8a6 100%) !important;
+  border-color: #0f766e !important;
+}
+
+/* Tarjeta cerrada: imagen ~50%, solo título, toda la superficie clicable */
+.landing-ia-tarjeta-cerrada {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: center;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  box-sizing: border-box;
+  border: none;
+  border-radius: 16px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.landing-ia-tarjeta-cerrada:hover {
+  filter: brightness(1.04);
+}
+
+.landing-ia-tarjeta-cerrada:focus {
+  outline: none;
+}
+
+.landing-ia-tarjeta-cerrada:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.65);
+  outline-offset: 2px;
+}
+
+.landing-ia-doble .landing-ia-tarjeta-imagen.mecanico-virtual-imagen {
+  width: 56px !important;
+  height: 56px !important;
+  max-width: 56px !important;
+  max-height: 56px !important;
+  min-width: 56px !important;
+  min-height: 56px !important;
+}
+
+.landing-ia-doble .landing-ia-tarjeta-cerrada.mecanico-virtual-moto-resumen {
+  grid-template-columns: 56px minmax(0, 1fr) !important;
+  padding: 0.55rem 0.75rem !important;
+  align-items: center;
+}
+
+@media (min-width: 901px) {
+  .landing-ia-doble .landing-ia-tarjeta-cerrada.mecanico-virtual-moto-resumen {
+    min-height: 0 !important;
+  }
+}
+
+.landing-ia-tarjeta-texto-solo-titulo {
+  gap: 0 !important;
+  justify-items: start !important;
+  align-self: center;
+  min-width: 0;
+}
+
+/* Unifica título en tarjetas IA (evita 1.4rem del h2 genérico y padding distinto) */
+.landing-ia-doble .mecanico-virtual h2.landing-seccion-titulo {
+  margin: 0;
+  padding: 0;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  font-size: clamp(0.78rem, 2vw, 0.92rem);
+  line-height: 1.22;
+  font-weight: 700;
+  text-align: left;
+  letter-spacing: -0.02em;
+}
+
+.landing-ia-modal-enunciado {
+  margin: 0 0 0.9rem;
+  padding: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #334155;
+  max-width: 640px;
+}
+
+.identificar-repuesto-vision--moto .identificar-repuesto-vision-card {
+  background: linear-gradient(145deg, #52525b 0%, #71717a 48%, #a1a1aa 100%) !important;
+  border-color: #71717a !important;
+}
+
+.identificar-repuesto-vision-btn {
+  margin-top: 0.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  background: #fff;
+  color: #0f766e;
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 900;
+  padding: 0.58rem 1.05rem;
+}
+
+.identificar-repuesto-vision--moto .identificar-repuesto-vision-btn {
+  color: #3f3f46;
+}
+
+.identificar-repuesto-vision-btn:hover {
+  filter: brightness(1.03);
+}
+
+/* Modal identificación por imagen: mismos botones que el modal del mecánico virtual */
+.identificar-repuesto-vision-modal-panel .mecanico-virtual-modal-header button {
+  border: none;
+  border-radius: 8px;
+  background: #1e3a5f;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 0.48rem 0.8rem;
+  transition: background 0.2s ease;
+}
+
+.identificar-repuesto-vision-modal-panel .mecanico-virtual-modal-header button:hover {
+  background: #2c5282;
+  color: #fff;
+}
+
+.identificar-repuesto-vision-requisitos {
+  max-width: 640px;
+  margin: 0 auto 0.75rem;
+}
+
+.identificar-repuesto-vision-requisitos-titulo {
+  margin: 0 0 0.55rem;
+  color: #1e293b;
+  font-size: 0.94rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.identificar-repuesto-vision-requisitos-lista {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: #475569;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  text-align: left;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.identificar-repuesto-vision-foto-bloque {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+}
+
+.identificar-repuesto-vision-input-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.identificar-repuesto-vision-foto-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  justify-content: center;
+  width: 100%;
+}
+
+.identificar-repuesto-vision-ayuda-analizar {
+  margin: 0.15rem 0 0;
+  text-align: center;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.identificar-repuesto-vision-accion-foto {
+  min-width: 8.5rem;
+  min-height: 40px;
+  border: none;
+  border-radius: 8px;
+  padding: 0.58rem 1.15rem;
+  font-size: 0.86rem;
+  font-weight: 800;
+  background: #1e3a5f;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  white-space: nowrap;
+}
+
+.identificar-repuesto-vision-accion-foto:hover {
+  background: #2c5282;
+  color: #fff;
+}
+
+.identificar-repuesto-vision-modal-panel .identificar-repuesto-vision-acciones {
+  justify-content: center;
+}
+
+.identificar-repuesto-vision-btn-accion {
+  min-width: 8.5rem;
+  min-height: 40px;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  font-weight: 800;
+  padding: 0.58rem 1.1rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  white-space: nowrap;
+}
+
+.identificar-repuesto-vision-btn-accion--primario {
+  border: none;
+  background: #1e3a5f;
+  color: #fff;
+}
+
+.identificar-repuesto-vision-btn-accion--primario:hover:not(:disabled) {
+  background: #2c5282;
+  color: #fff;
+}
+
+.identificar-repuesto-vision-btn-accion--secundario {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #1e3a5f;
+  font-weight: 800;
+}
+
+.identificar-repuesto-vision-btn-accion--secundario:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #1e3a5f;
+}
+
+.identificar-repuesto-vision-btn-accion:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.identificar-repuesto-vision-modal-panel .identificar-repuesto-vision-cta-geomotor {
+  justify-content: center;
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0.65rem;
+}
+
+.identificar-repuesto-vision-modal-panel .identificar-repuesto-vision-cta-geomotor button {
+  width: auto;
+  min-width: 12rem;
+}
+
+/* Anteriores reglas de file input sueltos (sustituidos por botones cámara / subir) */
+.identificar-repuesto-vision-file {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.identificar-repuesto-vision-file input[type='file'] {
+  font-size: 0.82rem;
+}
+
+.identificar-repuesto-vision-archivo {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.identificar-repuesto-vision-preview {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  max-width: 100%;
+}
+
+.identificar-repuesto-vision-preview img {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  background: #f8fafc;
+}
+
+.identificar-repuesto-vision-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.identificar-repuesto-vision-etiquetas {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.88rem;
+}
+
+.identificar-repuesto-vision-ocr pre {
+  margin: 0.5rem 0 0;
+  padding: 0.65rem 0.75rem;
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.identificar-repuesto-vision-terminos {
+  margin: 0.65rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.identificar-repuesto-vision-busqueda-bloque {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.identificar-repuesto-vision-interpretacion {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.identificar-repuesto-vision-interpretacion-titulo {
+  margin: 0;
+  color: #0f172a;
+  font-size: calc(1.05rem * 1.15);
+  font-weight: 800;
+  text-align: center;
+}
+
+.identificar-repuesto-vision-campo {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.identificar-repuesto-vision-campo-label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
+}
+
+.identificar-repuesto-vision-campo-texto {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: #1e293b;
+  white-space: pre-wrap;
+}
+
+.identificar-repuesto-vision-campo-texto--ref {
+  font-family: ui-monospace, monospace;
+  font-size: 0.86rem;
+  background: #f8fafc;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  white-space: pre-wrap;
+}
+
+.identificar-repuesto-vision-confianza {
+  margin: 0;
+  font-size: 0.84rem;
+  color: #64748b;
+}
+
+.identificar-repuesto-vision-nota {
+  margin: 0;
+  font-size: 0.84rem;
+  color: #334155;
+  font-style: italic;
+  line-height: 1.45;
+}
+
+.identificar-repuesto-vision-sin-resumen {
+  margin: 0 0 0.75rem;
+  padding: 0.65rem 0.75rem;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  color: #78350f;
+  line-height: 1.45;
+}
+
+.identificar-repuesto-vision-detalles-tecnico {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.86rem;
+}
+
+.identificar-repuesto-vision-detalles-tecnico summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: #475569;
+  padding: 0.25rem 0;
+}
+
+.identificar-repuesto-vision-detalles-nota {
+  margin: 0.5rem 0 0.35rem;
+  font-size: 0.8rem;
+  color: #64748b;
 }

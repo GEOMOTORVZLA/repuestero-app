@@ -1,7 +1,7 @@
 {
   "name": "repuestero-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,14 +9,18 @@
     "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
     "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug",
+    "android:apk:release": "npm run android:sync && cd android && gradlew.bat assembleRelease",
+    "android:bundle:release": "npm run android:sync && cd android && gradlew.bat bundleRelease",
     "android:assets": "capacitor-assets generate --android",
     "ios:sync": "npm run build && cap sync ios",
     "ios:open": "cap open ios",
     "ios:assets": "capacitor-assets generate --ios",
     "lint": "eslint .",
     "preview": "vite preview",
-    "supabase:deploy-notify": "supabase functions deploy notify-registro",
-    "supabase:deploy-mecanico": "supabase functions deploy mecanico-virtual-obd"
+    "supabase:deploy-notify": "npx supabase functions deploy notify-registro",
+    "supabase:deploy-mecanico": "npx supabase functions deploy mecanico-virtual-obd",
+    "supabase:deploy-vision": "node scripts/deploy-vision.mjs",
+    "check-encoding": "node scripts/check-src-encoding.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",
@@ -44,6 +48,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "jimp": "^1.6.0",
+    "supabase": "^2.98.2",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.0",
     "vite": "^7.3.1"

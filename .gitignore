@@ -32,7 +32,11 @@ public/client_secret*.json
 *.sln
 *.sw?
 
-.vercel
+# Firma Android (Play Console) — no versionar
+android/keystore.properties
+android/key.properties
+android/*.jks
+android/*.keystore
 
 # Supabase CLI local
 supabase/.temp/

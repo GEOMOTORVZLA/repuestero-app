@@ -142,6 +142,10 @@ CREATE TRIGGER productos_aprobacion_guard
   FOR EACH ROW EXECUTE FUNCTION public.trg_productos_aprobacion();
 
 -- 6) RLS: lectura pública restringida; dueño sigue viendo lo suyo; admin ve todo
+-- Sin esto, las políticas existen pero PostgreSQL no las aplica (Advisor: "RLS disabled in public").
+ALTER TABLE public.productos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tiendas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.talleres ENABLE ROW LEVEL SECURITY;
 
 -- PRODUCTOS
 DROP POLICY IF EXISTS "Publico puede leer productos para busqueda" ON public.productos;

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { MARCAS_MOTOS, getModelosPorMarcaMoto } from '../data/marcasMotos';
@@ -151,7 +152,12 @@ function productoCoincideConTerminosRepuesto(
   });
 }
 
-export function MecanicoVirtualMoto() {
+export function MecanicoVirtualMoto({
+  onIaModalCapaDelta,
+}: {
+  onIaModalCapaDelta?: (delta: number) => void;
+} = {}) {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [modalAbierto, setModalAbierto] = useState(false);
   const [avisoLogin, setAvisoLogin] = useState<string | null>(null);
@@ -177,6 +183,18 @@ export function MecanicoVirtualMoto() {
     const actual = new Date().getFullYear();
     return Array.from({ length: actual - 1980 + 1 }, (_, i) => String(actual - i));
   }, []);
+
+  useEffect(() => {
+    if (!onIaModalCapaDelta) return;
+    if (!modalAbierto) return;
+    onIaModalCapaDelta(1);
+    return () => onIaModalCapaDelta(-1);
+  }, [modalAbierto, onIaModalCapaDelta]);
+
+  const volverAlInicio = () => {
+    setModalAbierto(false);
+    navigate('/motos');
+  };
 
   const consultarIa = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -314,33 +332,27 @@ export function MecanicoVirtualMoto() {
       {avisoLogin && <p className="mecanico-virtual-login-aviso">{avisoLogin}</p>}
 
       <div className="mecanico-virtual-card mecanico-virtual-moto-card">
-        <div className="mecanico-virtual-resumen mecanico-virtual-moto-resumen">
+        <button
+          type="button"
+          className="mecanico-virtual-resumen mecanico-virtual-moto-resumen landing-ia-tarjeta-cerrada"
+          onClick={abrirAsistente}
+          aria-label="Abrir consulta de falla de moto con IA"
+        >
           <img
             src="/Motor.png"
             alt=""
-            className="mecanico-virtual-imagen"
-            width={112}
-            height={112}
+            className="mecanico-virtual-imagen landing-ia-tarjeta-imagen"
+            width={56}
+            height={56}
             loading="lazy"
             decoding="async"
           />
-          <div className="mecanico-virtual-resumen-texto">
+          <div className="mecanico-virtual-resumen-texto landing-ia-tarjeta-texto-solo-titulo">
             <h2 id="mecanico-virtual-moto-titulo" className="landing-seccion-titulo mecanico-virtual-moto-titulo">
               Consulta la falla de tu moto con nuestra IA
             </h2>
-            <p>
-              Describe el síntoma de tu moto, agrega marca y modelo, y la IA te orienta sobre
-              posibles causas y repuestos relacionados.
-            </p>
-            <button
-              type="button"
-              className="mecanico-virtual-resumen-btn"
-              onClick={abrirAsistente}
-            >
-              Consultar
-            </button>
           </div>
-        </div>
+        </button>
       </div>
 
       {modalAbierto && (
@@ -360,10 +372,14 @@ export function MecanicoVirtualMoto() {
             </div>
 
             <div className="mecanico-virtual-modal-scroll">
+              <p className="landing-ia-modal-enunciado">
+                Describe el síntoma de tu moto, agrega marca y modelo, y la IA te orienta sobre posibles
+                causas y repuestos relacionados.
+              </p>
               <div className="mecanico-virtual-intro">
                 <p>
-                  En motos el diagnóstico puede depender mucho de la marca y del sistema. Puedes
-                  escribir un código si lo tienes, pero también basta con describir el síntoma.
+                  En motos el diagnóstico puede depender mucho de la marca y del sistema. Puedes escribir un
+                  código si lo tienes, pero también basta con describir el síntoma.
                 </p>
               </div>
 
@@ -565,6 +581,11 @@ export function MecanicoVirtualMoto() {
                   </div>
                 </div>
               )}
+            </div>
+            <div className="mecanico-virtual-modal-pie">
+              <button type="button" className="mecanico-virtual-modal-volver" onClick={volverAlInicio}>
+                Volver
+              </button>
             </div>
           </div>
         </div>

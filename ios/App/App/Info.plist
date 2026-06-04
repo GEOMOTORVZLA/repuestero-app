@@ -51,10 +51,10 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.geomotorvzla.app.oauth</string>
+			<string>com.geomotor.app.oauth</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.geomotorvzla.app</string>
+				<string>com.geomotor.app</string>
 			</array>
 		</dict>
 	</array>

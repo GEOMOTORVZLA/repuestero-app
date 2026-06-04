@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Geomotor</string>
     <string name="title_activity_main">Geomotor</string>
-    <string name="package_name">com.geomotorvzla.app</string>
-    <string name="custom_url_scheme">com.geomotorvzla.app</string>
+    <string name="package_name">com.geomotor.app</string>
+    <string name="custom_url_scheme">com.geomotor.app</string>
 </resources>

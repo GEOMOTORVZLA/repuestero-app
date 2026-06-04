@@ -27,7 +27,7 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
-const OAUTH_NATIVE_REDIRECT = 'com.geomotorvzla.app://auth/callback';
+const OAUTH_NATIVE_REDIRECT = 'com.geomotor.app://auth/callback';
 
 function esAppNativa(): boolean {
   return Capacitor.isNativePlatform();

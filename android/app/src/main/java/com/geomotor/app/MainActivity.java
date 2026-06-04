@@ -1,4 +1,4 @@
-package com.geomotorvzla.app;
+package com.geomotor.app;
 
 import com.getcapacitor.BridgeActivity;
 

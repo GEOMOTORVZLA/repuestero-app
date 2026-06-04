@@ -25,7 +25,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="com.geomotorvzla.app" android:host="auth" android:path="/callback" />
+                <data android:scheme="com.geomotor.app" android:host="auth" android:path="/callback" />
             </intent-filter>
         </activity>
 

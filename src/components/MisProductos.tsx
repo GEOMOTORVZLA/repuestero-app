@@ -82,6 +82,56 @@ type FiltroEstadoProductoGestion =
   | 'stock_vencido'
   | 'sin_fecha_stock';
 
+type FiltroVerticalMisProductos = 'todos' | VerticalVehiculo;
+
+const PRODUCTOS_VENDEDOR_SELECT =
+  'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, aprobacion_publica, created_at, stock_confirmado_at, pausado_por_stock_vencido, vertical';
+
+const PRODUCTOS_VENDEDOR_PAGE = 1000;
+
+/** Carga todos los productos de las tiendas del usuario (paginado; PostgREST limita ~1000 por solicitud). */
+async function fetchProductosDelVendedor(
+  userId: string
+): Promise<{ productos: ProductoPanel[]; error: string | null }> {
+  const { data: tiendas, error: errTiendas } = await withRetry(() =>
+    supabase.from('tiendas').select('id').eq('user_id', userId)
+  );
+
+  if (errTiendas) {
+    return { productos: [], error: errTiendas.message || 'Error al cargar tus tiendas.' };
+  }
+
+  if (!tiendas || tiendas.length === 0) {
+    return { productos: [], error: null };
+  }
+
+  const tiendaIds = tiendas.map((t) => t.id);
+  const acumulado: ProductoPanel[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data: productosData, error: errProd } = await withRetry(() =>
+      supabase
+        .from('productos')
+        .select(PRODUCTOS_VENDEDOR_SELECT)
+        .in('tienda_id', tiendaIds)
+        .order('nombre')
+        .range(from, from + PRODUCTOS_VENDEDOR_PAGE - 1)
+    );
+
+    if (errProd) {
+      return { productos: [], error: errProd.message || 'Error al cargar tus productos.' };
+    }
+
+    const batch = (productosData ?? []) as ProductoPanel[];
+    acumulado.push(...batch);
+    if (batch.length < PRODUCTOS_VENDEDOR_PAGE) break;
+    from += PRODUCTOS_VENDEDOR_PAGE;
+  }
+
+  return { productos: acumulado, error: null };
+}
+
 function diasDesdeFechaISO(fechaIso: string | null | undefined): number | null {
   if (!fechaIso) return null;
   const ts = Date.parse(fechaIso);
@@ -132,9 +182,17 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
   const [fotosMasivasSeleccionados, setFotosMasivasSeleccionados] = useState<string[]>([]);
   const [aplicandoFotosMasivas, setAplicandoFotosMasivas] = useState(false);
   const [mensajeFotosMasivas, setMensajeFotosMasivas] = useState<string | null>(null);
+  /** Texto de búsqueda en el control (borrador). */
   const [busquedaProductosInput, setBusquedaProductosInput] = useState('');
+  /** Filtros aplicados al listado (tras «Aplicar filtros»). */
   const [busquedaProductos, setBusquedaProductos] = useState('');
   const [filtroEstadoProductos, setFiltroEstadoProductos] = useState<FiltroEstadoProductoGestion>('todos');
+  const [filtroEstadoProductosDraft, setFiltroEstadoProductosDraft] =
+    useState<FiltroEstadoProductoGestion>('todos');
+  const [filtroVerticalProductos, setFiltroVerticalProductos] = useState<FiltroVerticalMisProductos>('todos');
+  const [filtroVerticalProductosDraft, setFiltroVerticalProductosDraft] =
+    useState<FiltroVerticalMisProductos>('todos');
+  const [cargandoFiltrosProductos, setCargandoFiltrosProductos] = useState(false);
 
   useEffect(() => {
     let cancelado = false;
@@ -147,39 +205,14 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
       }
 
       try {
-        // Primero buscamos las tiendas asociadas a este usuario.
-        const { data: tiendas, error: errTiendas } = await withRetry(() =>
-          supabase.from('tiendas').select('id').eq('user_id', user.id)
-        );
-
-        if (errTiendas) {
-          throw new Error(errTiendas.message || 'Error al cargar tus tiendas.');
-        }
-
-        if (!tiendas || tiendas.length === 0) {
-          if (!cancelado) setProductos([]);
+        const { productos: lista, error: errMsg } = await fetchProductosDelVendedor(user.id);
+        if (cancelado) return;
+        if (errMsg) {
+          setProductos([]);
+          setError(errMsg);
           return;
         }
-
-        const tiendaIds = tiendas.map((t) => t.id);
-
-        const { data: productosData, error: errProd } = await withRetry(() =>
-          supabase
-            .from('productos')
-            .select(
-              'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, aprobacion_publica, created_at, stock_confirmado_at, pausado_por_stock_vencido, vertical'
-            )
-            .in('tienda_id', tiendaIds)
-            .order('nombre')
-        );
-
-        if (errProd) {
-          throw new Error(errProd.message || 'Error al cargar tus productos.');
-        }
-
-        if (!cancelado) {
-          setProductos((productosData ?? []) as ProductoPanel[]);
-        }
+        setProductos(lista);
       } catch (e) {
         if (!cancelado) {
           const msg =
@@ -265,25 +298,77 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
 
   const productosVisibles = useMemo(
     () =>
-      productos.filter(
-        (p) =>
+      productos.filter((p) => {
+        const vertOk =
+          filtroVerticalProductos === 'todos' || (p.vertical ?? 'auto') === filtroVerticalProductos;
+        return (
+          vertOk &&
           productoCoincideBusqueda(p, busquedaProductos) &&
           productoCoincideEstado(p, filtroEstadoProductos)
-      ),
-    [productos, busquedaProductos, filtroEstadoProductos]
+        );
+      }),
+    [productos, busquedaProductos, filtroEstadoProductos, filtroVerticalProductos]
   );
 
   if (!user) {
     return null;
   }
 
-  const aplicarBusquedaProductos = () => {
+  const aplicarFiltrosMisProductos = async () => {
+    if (!user) return;
     setBusquedaProductos(busquedaProductosInput.trim());
+    setFiltroEstadoProductos(filtroEstadoProductosDraft);
+    setFiltroVerticalProductos(filtroVerticalProductosDraft);
+    setCargandoFiltrosProductos(true);
+    setError(null);
+    try {
+      const { productos: lista, error: errMsg } = await fetchProductosDelVendedor(user.id);
+      if (errMsg) {
+        setProductos([]);
+        setError(errMsg);
+        return;
+      }
+      setProductos(lista);
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : 'No se pudo cargar tus productos. Revisa la conexión e intenta de nuevo.';
+      setProductos([]);
+      setError(msg);
+    } finally {
+      setCargandoFiltrosProductos(false);
+    }
   };
 
-  const limpiarBusquedaProductos = () => {
+  const restablecerFiltrosMisProductos = async () => {
+    if (!user) return;
     setBusquedaProductosInput('');
+    setFiltroEstadoProductosDraft('todos');
+    setFiltroVerticalProductosDraft('todos');
     setBusquedaProductos('');
+    setFiltroEstadoProductos('todos');
+    setFiltroVerticalProductos('todos');
+    setCargandoFiltrosProductos(true);
+    setError(null);
+    try {
+      const { productos: lista, error: errMsg } = await fetchProductosDelVendedor(user.id);
+      if (errMsg) {
+        setProductos([]);
+        setError(errMsg);
+        return;
+      }
+      setProductos(lista);
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : 'No se pudo cargar tus productos. Revisa la conexión e intenta de nuevo.';
+      setProductos([]);
+      setError(msg);
+    } finally {
+      setCargandoFiltrosProductos(false);
+    }
   };
 
   const productosObjetivoFotosMasivas =
@@ -513,46 +598,51 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
       {alertaStock}
       <section className="mis-productos-filtros" aria-label="Buscar y filtrar productos">
         <div>
-          <p className="mis-productos-ajuste-masivo-titulo">Buscar en mis productos</p>
+          <p className="mis-productos-ajuste-masivo-titulo">Buscar y filtrar mis productos</p>
           <p className="mis-productos-ajuste-masivo-descripcion">
-            Ubica productos por nombre, descripción, marca, modelo, año, categoría o precio.
+            Elige criterios y pulsa <strong>Aplicar filtros</strong> para actualizar el listado (también puedes pulsar
+            Intro en la búsqueda). Así se vuelven a cargar todos tus artículos desde el servidor y se evita el límite
+            por defecto de mil filas.
           </p>
         </div>
-        <div className="mis-productos-filtros-grid">
-          <form
-            className="mis-productos-filtros-busqueda"
-            onSubmit={(e) => {
-              e.preventDefault();
-              aplicarBusquedaProductos();
-            }}
-          >
-            <label>
-              Buscar producto
-              <input
-                type="search"
-                value={busquedaProductosInput}
-                onChange={(e) => setBusquedaProductosInput(e.target.value)}
-                placeholder="Ej: amortiguador x1, batería, Cherokee..."
-              />
-            </label>
-            <button type="submit" className="mis-productos-btn-primario">
-              Buscar
-            </button>
-            {busquedaProductos && (
-              <button
-                type="button"
-                className="mis-productos-btn-secundario"
-                onClick={limpiarBusquedaProductos}
-              >
-                Limpiar
-              </button>
-            )}
-          </form>
+        <form
+          className="mis-productos-filtros-grid"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void aplicarFiltrosMisProductos();
+          }}
+        >
+          <label>
+            Buscar producto
+            <input
+              type="search"
+              value={busquedaProductosInput}
+              onChange={(e) => setBusquedaProductosInput(e.target.value)}
+              placeholder="Ej: amortiguador x1, batería, Cherokee..."
+            />
+          </label>
+          <label>
+            Vertical
+            <select
+              value={filtroVerticalProductosDraft}
+              onChange={(e) =>
+                setFiltroVerticalProductosDraft(e.target.value as FiltroVerticalMisProductos)
+              }
+              disabled={cargandoFiltrosProductos}
+            >
+              <option value="todos">Todos (auto y moto)</option>
+              <option value="auto">Solo automóvil</option>
+              <option value="moto">Solo moto</option>
+            </select>
+          </label>
           <label>
             Estado del artículo
             <select
-              value={filtroEstadoProductos}
-              onChange={(e) => setFiltroEstadoProductos(e.target.value as FiltroEstadoProductoGestion)}
+              value={filtroEstadoProductosDraft}
+              onChange={(e) =>
+                setFiltroEstadoProductosDraft(e.target.value as FiltroEstadoProductoGestion)
+              }
+              disabled={cargandoFiltrosProductos}
             >
               <option value="todos">Todos los productos</option>
               <option value="activos">Activos</option>
@@ -562,9 +652,28 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
               <option value="sin_fecha_stock">Sin fecha de stock</option>
             </select>
           </label>
+        </form>
+        <div className="mis-productos-filtros-acciones">
+          <button
+            type="button"
+            className="mis-productos-btn-primario"
+            disabled={cargandoFiltrosProductos || cargando}
+            onClick={() => void aplicarFiltrosMisProductos()}
+          >
+            {cargandoFiltrosProductos ? 'Cargando catálogo…' : 'Aplicar filtros'}
+          </button>
+          <button
+            type="button"
+            className="mis-productos-btn-secundario"
+            disabled={cargandoFiltrosProductos || cargando}
+            onClick={() => void restablecerFiltrosMisProductos()}
+          >
+            Restablecer filtros
+          </button>
         </div>
         <p className="mis-productos-filtros-resumen">
-          Mostrando {productosVisibles.length} de {productos.length} producto(s).
+          Mostrando {productosVisibles.length} de {productos.length} producto(s) cargados que coinciden con los
+          filtros aplicados.
         </p>
       </section>
       <section className="mis-productos-ajuste-masivo" aria-label="Ajuste masivo de precios">

@@ -154,6 +154,78 @@ $$;
 
 grant execute on function public.admin_set_producto_activo(uuid, boolean) to authenticated;
 
+-- Activar / pausar muchos productos en una sola llamada (panel admin, listado filtrado).
+create or replace function public.admin_set_productos_activo_bulk(
+  p_producto_ids uuid[],
+  p_activo boolean
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  n int := 0;
+begin
+  if not exists (
+    select 1
+    from auth.users me
+    where me.id = auth.uid()
+      and coalesce(me.raw_app_meta_data ->> 'role', '') = 'admin'
+  ) then
+    raise exception 'No autorizado';
+  end if;
+
+  if p_producto_ids is null or coalesce(cardinality(p_producto_ids), 0) = 0 then
+    return 0;
+  end if;
+
+  update public.productos
+  set activo = p_activo
+  where id = any (p_producto_ids);
+
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+grant execute on function public.admin_set_productos_activo_bulk(uuid[], boolean) to authenticated;
+
+-- Eliminar productos por ids (admin). Respeta FKs en tablas hijas con ON DELETE CASCADE.
+create or replace function public.admin_eliminar_productos(
+  p_producto_ids uuid[]
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  n int := 0;
+begin
+  if not exists (
+    select 1
+    from auth.users me
+    where me.id = auth.uid()
+      and coalesce(me.raw_app_meta_data ->> 'role', '') = 'admin'
+  ) then
+    raise exception 'No autorizado';
+  end if;
+
+  if p_producto_ids is null or coalesce(cardinality(p_producto_ids), 0) = 0 then
+    return 0;
+  end if;
+
+  delete from public.productos
+  where id = any (p_producto_ids);
+
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+grant execute on function public.admin_eliminar_productos(uuid[]) to authenticated;
+
 create or replace function public.admin_set_tienda_bloqueada(
   p_tienda_id uuid,
   p_bloqueada boolean
@@ -180,6 +252,34 @@ end;
 $$;
 
 grant execute on function public.admin_set_tienda_bloqueada(uuid, boolean) to authenticated;
+
+-- Fecha de fin de membresía (tras pago u operación manual). Solo rol admin.
+create or replace function public.admin_set_tienda_membresia_hasta(
+  p_tienda_id uuid,
+  p_membresia_hasta date
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not exists (
+    select 1
+    from auth.users me
+    where me.id = auth.uid()
+      and coalesce(me.raw_app_meta_data ->> 'role', '') = 'admin'
+  ) then
+    raise exception 'No autorizado';
+  end if;
+
+  update public.tiendas
+  set membresia_hasta = p_membresia_hasta
+  where id = p_tienda_id;
+end;
+$$;
+
+grant execute on function public.admin_set_tienda_membresia_hasta(uuid, date) to authenticated;
 
 create or replace function public.admin_set_taller_bloqueado(
   p_taller_id uuid,
@@ -277,6 +377,9 @@ $$;
 
 grant execute on function public.admin_set_comprador_suspendido_membresia(uuid, boolean) to authenticated;
 
+-- === Panel admin: en Supabase → SQL Editor, copia el bloque que empieza en
+--     "-- KPIs del resumen..." y termina en "NOTIFY pgrst, 'reload schema';" inclusiva. ===
+
 -- KPIs del resumen sin cargar miles de filas al navegador
 create or replace function public.admin_dashboard_counts()
 returns json
@@ -306,6 +409,16 @@ begin
   return json_build_object(
     'usuarios_total', (select count(*)::int from auth.users),
     'vendedores_total', (select count(*)::int from public.tiendas),
+    'vendedores_suspendidos_impago', (
+      select count(*)::int
+      from public.tiendas t
+      where coalesce(t.aprobacion_estado, 'aprobado') = 'aprobado'
+        and (
+          coalesce(t.bloqueado, false) = true
+          or t.membresia_hasta is null
+          or t.membresia_hasta < current_date
+        )
+    ),
     'talleres_total', (select count(*)::int from public.talleres),
     'compradores_total', compradores_ct::int,
     'productos_total', (select count(*)::int from public.productos),

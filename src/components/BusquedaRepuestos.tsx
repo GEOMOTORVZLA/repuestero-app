@@ -92,12 +92,20 @@ function comillasFiltroPostgrest(valor: string): string {
   return valor;
 }
 
+/** Quita comillas y marcas tipográficas pegadas al pegar desde catálogos/WhatsApp (evita ilike imposibles). */
+function limpiarTokenTermino(raw: string): string {
+  return raw
+    .replace(/^[\s"'«»\u2018\u2019\u201C\u201D\u201E\u201A\u00B4`„‚]+/u, '')
+    .replace(/[\s"'«»\u2018\u2019\u201C\u201D\u201E\u201A\u00B4`„‚]+$/u, '')
+    .trim();
+}
+
 function terminosBusqueda(texto: string): string[] {
   const vistos = new Set<string>();
   return texto
     .trim()
     .split(/\s+/)
-    .map((t) => t.trim())
+    .map((t) => limpiarTokenTermino(t.trim()))
     .filter((t) => t.length >= 2)
     .filter((t) => {
       const k = t.toLocaleLowerCase();
@@ -197,6 +205,8 @@ export interface BusquedaRepuestosProps {
   productoIdDesdeEnlace?: string | null;
   /** Botón volver (página de resultados) */
   onVolver?: () => void;
+  /** Landing: mientras un modal de IA está abierto, el bloque de búsqueda pasa detrás del overlay */
+  compactDetrasCapaIa?: boolean;
 }
 
 export function BusquedaRepuestos({
@@ -206,6 +216,7 @@ export function BusquedaRepuestos({
   initialTexto = '',
   productoIdDesdeEnlace = null,
   onVolver,
+  compactDetrasCapaIa = false,
 }: BusquedaRepuestosProps) {
   const { user } = useAuth();
   const esCompacto = variant === 'compact';
@@ -882,7 +893,9 @@ export function BusquedaRepuestos({
 
   return (
     <section
-      className={`busqueda-repuestos ${esCompacto ? 'busqueda-repuestos--compact' : 'busqueda-repuestos--pagina'}`}
+      className={`busqueda-repuestos ${esCompacto ? 'busqueda-repuestos--compact' : 'busqueda-repuestos--pagina'}${
+        esCompacto && compactDetrasCapaIa ? ' busqueda-repuestos--compact-detras-ia' : ''
+      }`}
       id={esCompacto ? 'buscar' : undefined}
     >
       {esCompacto ? (

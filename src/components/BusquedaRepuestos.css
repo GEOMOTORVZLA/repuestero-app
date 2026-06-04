@@ -8,9 +8,17 @@
 }
 
 .busqueda-repuestos--compact {
+  /* Por encima de .landing-ia-doble para que la lista de sugerencias no quede tapada por las tarjetas IA */
+  position: relative;
+  z-index: 10;
   padding: 1.75rem 1.5rem 2rem;
   border-bottom: 1px solid #e2e8f0;
   box-shadow: none;
+}
+
+/* Mientras un modal de IA está abierto: el overlay vive dentro de .landing-ia-doble (z 2), hay que bajar el buscador */
+.busqueda-repuestos--compact.busqueda-repuestos--compact-detras-ia {
+  z-index: 0;
 }
 
 .busqueda-repuestos--pagina {

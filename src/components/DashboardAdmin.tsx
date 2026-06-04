@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../supabaseClient';
 import {
@@ -15,6 +15,39 @@ import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import './Dashboard.css';
 
 const ADMIN_LIST_LIMIT = 250;
+/** Filas máximas en el modal de detalle KPI (evita DOM enorme con miles de productos). */
+const ADMIN_KPI_MODAL_ROWS = 250;
+
+type AdminKpiDetalle =
+  | 'usuarios_total'
+  | 'vendedores_total'
+  | 'vendedores_suspendidos_impago'
+  | 'talleres_total'
+  | 'compradores_total'
+  | 'productos_activos'
+  | 'productos_pausados'
+  | 'productos_total'
+  | 'catalogo_auto'
+  | 'catalogo_moto'
+  | 'vendedores_pendientes'
+  | 'talleres_pendientes'
+  | 'productos_pendientes_web';
+
+const KPI_DETALLE_TITULO: Record<AdminKpiDetalle, string> = {
+  usuarios_total: 'Usuarios (total)',
+  vendedores_total: 'Vendedores — tiendas (total)',
+  vendedores_suspendidos_impago: 'Vendedores suspendidos por impago',
+  talleres_total: 'Talleres (total)',
+  compradores_total: 'Compradores (total)',
+  productos_activos: 'Productos activos',
+  productos_pausados: 'Productos pausados',
+  productos_total: 'Total productos',
+  catalogo_auto: 'Catálogo automóvil',
+  catalogo_moto: 'Catálogo motocicleta',
+  vendedores_pendientes: 'Vendedores por autorizar — tiendas',
+  talleres_pendientes: 'Talleres por autorizar',
+  productos_pendientes_web: 'Productos por autorizar (web)',
+};
 
 /** Escapa % y _ para patrones ILIKE en filtros .or() de PostgREST */
 function escapeIlikePatron(s: string): string {
@@ -23,9 +56,38 @@ function escapeIlikePatron(s: string): string {
 
 type AdminTab = 'resumen' | 'usuarios' | 'productos' | 'vendedores' | 'talleres' | 'compradores';
 
+const KPI_DETALLE_IR_TAB: Partial<Record<AdminKpiDetalle, AdminTab>> = {
+  usuarios_total: 'usuarios',
+  vendedores_total: 'vendedores',
+  vendedores_suspendidos_impago: 'vendedores',
+  talleres_total: 'talleres',
+  compradores_total: 'compradores',
+  productos_activos: 'productos',
+  productos_pausados: 'productos',
+  productos_total: 'productos',
+  catalogo_auto: 'productos',
+  catalogo_moto: 'productos',
+  vendedores_pendientes: 'vendedores',
+  talleres_pendientes: 'talleres',
+  productos_pendientes_web: 'productos',
+};
+
+function etiquetaPestañaAdmin(t: AdminTab): string {
+  const m: Record<AdminTab, string> = {
+    resumen: 'Inicio admin',
+    usuarios: 'Usuarios',
+    productos: 'Productos',
+    vendedores: 'Vendedores',
+    talleres: 'Talleres',
+    compradores: 'Compradores',
+  };
+  return m[t];
+}
+
 type AdminKpis = {
   usuarios_total: number;
   vendedores_total: number;
+  vendedores_suspendidos_impago?: number;
   talleres_total: number;
   compradores_total: number;
   productos_total: number;
@@ -46,6 +108,9 @@ type FiltroEstadoProductoGestion =
   | 'proximos_stock'
   | 'stock_vencido'
   | 'sin_fecha_stock';
+
+/** Acciones masivas del panel admin sobre productosFiltrados */
+type AccionMasivaProductosAdmin = '' | 'activar' | 'pausar' | 'eliminar';
 
 type AdminUsuario = {
   user_id: string;
@@ -106,7 +171,49 @@ type AdminTienda = {
   bloqueado: boolean | null;
   aprobacion_estado?: string | null;
   created_at?: string | null;
+  membresia_hasta?: string | null;
 };
+
+/**
+ * Membresía vencida o sin fecha (comparación por calendario local).
+ * Evita el desfase de `new Date('YYYY-MM-DD')` que interpreta UTC y cambia el día en VE.
+ */
+function membresiaVencidaOSinFecha(membresiaHasta: string | null | undefined, ahora: Date = new Date()): boolean {
+  if (membresiaHasta == null || String(membresiaHasta).trim() === '') return true;
+  const s = String(membresiaHasta).trim();
+  const parts = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  let fin: Date;
+  if (parts) {
+    fin = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
+  } else {
+    fin = new Date(s);
+    if (Number.isNaN(fin.getTime())) return true;
+    fin = new Date(fin.getFullYear(), fin.getMonth(), fin.getDate());
+  }
+  const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+  return fin < hoy;
+}
+
+/** Tienda aprobada: sin visibilidad pública por impago (bloqueo admin o membresía no vigente), alineado con políticas RLS. */
+function tiendaSuspendidaPorImpago(t: AdminTienda): boolean {
+  if ((t.aprobacion_estado ?? 'aprobado') !== 'aprobado') return false;
+  if (t.bloqueado === true) return true;
+  return membresiaVencidaOSinFecha(t.membresia_hasta);
+}
+
+/** Texto en la tabla de vendedores: alineado con la misma lógica que el KPI «suspendidos por impago». */
+function etiquetaVisibilidadWebTienda(v: AdminTienda): { texto: string; clase: 'ok' | 'warn' } {
+  if ((v.aprobacion_estado ?? 'aprobado') !== 'aprobado') {
+    return { texto: '—', clase: 'ok' };
+  }
+  if (v.bloqueado === true) {
+    return { texto: 'Suspendida (bloqueo admin)', clase: 'warn' };
+  }
+  if (membresiaVencidaOSinFecha(v.membresia_hasta)) {
+    return { texto: 'Sin membresía vigente (no publica)', clase: 'warn' };
+  }
+  return { texto: 'Publicable en web', clase: 'ok' };
+}
 
 type AdminTaller = {
   id: string;
@@ -135,6 +242,26 @@ function fmtFecha(v?: string | null) {
   } catch {
     return v;
   }
+}
+
+/** Reciente primero (fechas ISO). */
+function cmpIsoDesc(a?: string | null, b?: string | null) {
+  const ta = a ? Date.parse(a) : 0;
+  const tb = b ? Date.parse(b) : 0;
+  return tb - ta;
+}
+
+/** Fecha local YYYY-MM-DD, N días desde hoy (para renovar membresía desde el panel). */
+function fechaLocalDesdeHoy(dias: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + dias);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function capFilasKpiModal<T>(arr: T[]): { rows: T[]; total: number; trunc: number } {
+  const total = arr.length;
+  if (total <= ADMIN_KPI_MODAL_ROWS) return { rows: arr, total, trunc: 0 };
+  return { rows: arr.slice(0, ADMIN_KPI_MODAL_ROWS), total, trunc: total - ADMIN_KPI_MODAL_ROWS };
 }
 
 function etiquetaAprobacion(estado: string | null | undefined) {
@@ -194,17 +321,32 @@ function semaforoStockGestion(p: {
   return { clase: 'vencido', texto: `Vencido (${dias})` };
 }
 
+/** Columnas del listado admin de productos (compartido entre páginas de carga). */
+const ADMIN_PRODUCTOS_SELECT =
+  'id, nombre, descripcion, comentarios, tienda_id, categoria, marca, modelo, anio, precio_usd, moneda, activo, aprobacion_publica, imagen_url, imagenes_extra, created_at, stock_confirmado_at, pausado_por_stock_vencido, vertical, tiendas(id, nombre, nombre_comercial)';
+
+const ADMIN_PRODUCTOS_PAGE = 1000;
+
 export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: DashboardAdminProps) {
   const { user, signOut } = useAuth();
+  const defaultVerticalFiltro: 'todos' | 'auto' | 'moto' =
+    verticalEntrada === 'moto' ? 'moto' : 'todos';
   const [tab, setTab] = useState<AdminTab>('resumen');
-  const [adminFiltroVertical, setAdminFiltroVertical] = useState<'todos' | 'auto' | 'moto'>(() =>
-    verticalEntrada === 'moto' ? 'moto' : 'todos'
-  );
+  const [adminFiltroVertical, setAdminFiltroVertical] = useState<'todos' | 'auto' | 'moto'>(defaultVerticalFiltro);
   /** id de tienda = vendedor en catálogo */
   const [adminFiltroVendedorTiendaId, setAdminFiltroVendedorTiendaId] = useState('');
   const [busquedaProductosAdmin, setBusquedaProductosAdmin] = useState('');
   const [filtroEstadoProductosAdmin, setFiltroEstadoProductosAdmin] =
     useState<FiltroEstadoProductoGestion>('todos');
+  /** Valores en los controles; los filtros del listado solo cambian al pulsar «Aplicar filtros». */
+  const [adminFiltroVerticalDraft, setAdminFiltroVerticalDraft] =
+    useState<'todos' | 'auto' | 'moto'>(defaultVerticalFiltro);
+  const [adminFiltroVendedorTiendaIdDraft, setAdminFiltroVendedorTiendaIdDraft] = useState('');
+  const [busquedaProductosAdminDraft, setBusquedaProductosAdminDraft] = useState('');
+  const [filtroEstadoProductosAdminDraft, setFiltroEstadoProductosAdminDraft] =
+    useState<FiltroEstadoProductoGestion>('todos');
+  const [cargandoFiltrosProductos, setCargandoFiltrosProductos] = useState(false);
+  const [bulkProductosAccion, setBulkProductosAccion] = useState<AccionMasivaProductosAdmin>('');
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
@@ -224,16 +366,61 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [fotosMasivasSeleccionados, setFotosMasivasSeleccionados] = useState<string[]>([]);
   const [mensajeFotosMasivas, setMensajeFotosMasivas] = useState<string | null>(null);
   const [fotoActivaAdminProducto, setFotoActivaAdminProducto] = useState<Record<string, number>>({});
+  const [kpiDetalle, setKpiDetalle] = useState<AdminKpiDetalle | null>(null);
+  /** Listado completo para el modal «suspendidos por impago» (el KPI cuenta todo el sistema; esto evita depender de las 250 filas del tab). */
+  const [listaSuspendidasImpagoModal, setListaSuspendidasImpagoModal] = useState<AdminTienda[] | null>(null);
+  const [errListaSuspendidasImpagoModal, setErrListaSuspendidasImpagoModal] = useState<string | null>(null);
+  /** Listado KPI modal «productos pausados» (misma lógica que SQL: activo distinto de true). */
+  const [listaProductosPausadosModal, setListaProductosPausadosModal] = useState<AdminProducto[] | null>(null);
+  const [errListaProductosPausadosModal, setErrListaProductosPausadosModal] = useState<string | null>(null);
 
-  const cargarProductos = async () => {
-    const pRes = await supabase
-      .from('productos')
-      .select(
-        'id, nombre, descripcion, comentarios, tienda_id, categoria, marca, modelo, anio, precio_usd, moneda, activo, aprobacion_publica, imagen_url, imagenes_extra, created_at, stock_confirmado_at, pausado_por_stock_vencido, vertical, tiendas(id, nombre, nombre_comercial)'
-      )
-      .order('created_at', { ascending: false });
-    if (pRes.error) setError(pRes.error.message);
-    setProductos((pRes.data ?? []) as AdminProducto[]);
+  const cargarProductos = async (opts?: { conIndicadorFiltros?: boolean }) => {
+    const conIndicador = opts?.conIndicadorFiltros === true;
+    if (conIndicador) setCargandoFiltrosProductos(true);
+    const acumulado: AdminProducto[] = [];
+    let from = 0;
+    try {
+      while (true) {
+        const pRes = await supabase
+          .from('productos')
+          .select(ADMIN_PRODUCTOS_SELECT)
+          .order('created_at', { ascending: false })
+          .range(from, from + ADMIN_PRODUCTOS_PAGE - 1);
+        if (pRes.error) {
+          setError(pRes.error.message);
+          break;
+        }
+        const batch = (pRes.data ?? []) as AdminProducto[];
+        acumulado.push(...batch);
+        if (batch.length < ADMIN_PRODUCTOS_PAGE) break;
+        from += ADMIN_PRODUCTOS_PAGE;
+      }
+      setProductos(acumulado);
+    } finally {
+      if (conIndicador) setCargandoFiltrosProductos(false);
+    }
+  };
+
+  const aplicarFiltrosProductosAdmin = async () => {
+    setBusquedaProductosAdmin(busquedaProductosAdminDraft);
+    setAdminFiltroVendedorTiendaId(adminFiltroVendedorTiendaIdDraft);
+    setAdminFiltroVertical(adminFiltroVerticalDraft);
+    setFiltroEstadoProductosAdmin(filtroEstadoProductosAdminDraft);
+    setError(null);
+    await cargarProductos({ conIndicadorFiltros: true });
+  };
+
+  const restablecerFiltrosProductosAdmin = async () => {
+    setBusquedaProductosAdminDraft('');
+    setAdminFiltroVendedorTiendaIdDraft('');
+    setAdminFiltroVerticalDraft(defaultVerticalFiltro);
+    setFiltroEstadoProductosAdminDraft('todos');
+    setBusquedaProductosAdmin('');
+    setAdminFiltroVendedorTiendaId('');
+    setAdminFiltroVertical(defaultVerticalFiltro);
+    setFiltroEstadoProductosAdmin('todos');
+    setError(null);
+    await cargarProductos({ conIndicadorFiltros: true });
   };
 
   const cargarKpis = async () => {
@@ -275,7 +462,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     let q = supabase
       .from('tiendas')
       .select(
-        'id, user_id, nombre, nombre_comercial, rif, telefono, estado, ciudad, bloqueado, aprobacion_estado, created_at'
+        'id, user_id, nombre, nombre_comercial, rif, telefono, estado, ciudad, bloqueado, aprobacion_estado, created_at, membresia_hasta'
       )
       .order('created_at', { ascending: false })
       .limit(ADMIN_LIST_LIMIT);
@@ -360,9 +547,81 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     return () => window.clearTimeout(tm);
   }, [busquedaTalleres, tab]);
 
+  useEffect(() => {
+    if (!kpiDetalle) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setKpiDetalle(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [kpiDetalle]);
+
+  useEffect(() => {
+    if (kpiDetalle !== 'vendedores_suspendidos_impago') {
+      setListaSuspendidasImpagoModal(null);
+      setErrListaSuspendidasImpagoModal(null);
+      return;
+    }
+    let cancelled = false;
+    setListaSuspendidasImpagoModal(null);
+    setErrListaSuspendidasImpagoModal(null);
+    void (async () => {
+      const ahora = new Date();
+      const hoyStr = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(
+        ahora.getDate()
+      ).padStart(2, '0')}`;
+      const res = await supabase
+        .from('tiendas')
+        .select(
+          'id, user_id, nombre, nombre_comercial, rif, telefono, estado, ciudad, bloqueado, aprobacion_estado, created_at, membresia_hasta'
+        )
+        .or('aprobacion_estado.eq.aprobado,aprobacion_estado.is.null')
+        .or(`bloqueado.eq.true,membresia_hasta.is.null,membresia_hasta.lt.${hoyStr}`)
+        .order('created_at', { ascending: false });
+      if (cancelled) return;
+      if (res.error) {
+        setErrListaSuspendidasImpagoModal(res.error.message);
+        return;
+      }
+      const rows = (res.data ?? []) as AdminTienda[];
+      setListaSuspendidasImpagoModal(rows.filter((t) => tiendaSuspendidaPorImpago(t)));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [kpiDetalle]);
+
+  useEffect(() => {
+    if (kpiDetalle !== 'productos_pausados') {
+      setListaProductosPausadosModal(null);
+      setErrListaProductosPausadosModal(null);
+      return;
+    }
+    let cancelled = false;
+    setListaProductosPausadosModal(null);
+    setErrListaProductosPausadosModal(null);
+    void (async () => {
+      const res = await supabase
+        .from('productos')
+        .select(ADMIN_PRODUCTOS_SELECT)
+        .or('activo.is.null,activo.eq.false')
+        .order('created_at', { ascending: false });
+      if (cancelled) return;
+      if (res.error) {
+        setErrListaProductosPausadosModal(res.error.message);
+        return;
+      }
+      const rows = (res.data ?? []) as AdminProducto[];
+      setListaProductosPausadosModal(rows.filter((p) => p.activo !== true));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [kpiDetalle]);
+
   const totalProductos = kpis?.productos_total ?? productos.length;
   const productosActivos = kpis?.productos_activos ?? productos.filter((p) => p.activo).length;
-  const productosPausados = kpis?.productos_pausados ?? productos.filter((p) => p.activo === false).length;
+  const productosPausados = kpis?.productos_pausados ?? productos.filter((p) => p.activo !== true).length;
   const productosCountAuto = kpis?.productos_auto ?? productos.filter((p) => (p.vertical ?? 'auto') === 'auto').length;
   const productosCountMoto = kpis?.productos_moto ?? productos.filter((p) => p.vertical === 'moto').length;
 
@@ -386,10 +645,10 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       const semaforo = semaforoStockGestion(p);
       const estadoOk =
         filtroEstadoProductosAdmin === 'todos' ||
-        (filtroEstadoProductosAdmin === 'activos' && p.activo !== false) ||
-        (filtroEstadoProductosAdmin === 'pausados' && p.activo === false) ||
+        (filtroEstadoProductosAdmin === 'activos' && p.activo === true) ||
+        (filtroEstadoProductosAdmin === 'pausados' && p.activo !== true) ||
         (filtroEstadoProductosAdmin === 'proximos_stock' &&
-          p.activo !== false &&
+          p.activo === true &&
           (semaforo.clase === 'amarillo' || semaforo.clase === 'rojo')) ||
         (filtroEstadoProductosAdmin === 'stock_vencido' && semaforo.clase === 'vencido') ||
         (filtroEstadoProductosAdmin === 'sin_fecha_stock' && semaforo.clase === 'sin-fecha');
@@ -464,6 +723,40 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const productosPendientesWeb = kpis?.productos_pendientes_web ?? productos.filter(
     (p) => (p.aprobacion_publica ?? 'aprobado') === 'pendiente'
   ).length;
+  const vendedoresSuspendidosImpago =
+    kpis?.vendedores_suspendidos_impago ?? vendedores.filter(tiendaSuspendidaPorImpago).length;
+
+  const listasKpiResumen = useMemo(() => {
+    const u = [...usuarios].sort((a, b) => cmpIsoDesc(a.creado_en, b.creado_en));
+    const v = [...vendedores].sort((a, b) => cmpIsoDesc(a.created_at, b.created_at));
+    const t = [...talleres].sort((a, b) => cmpIsoDesc(a.created_at, b.created_at));
+    const c = [...compradores].sort((a, b) => cmpIsoDesc(a.creado_en, b.creado_en));
+    const pReciente = [...productos].sort((a, b) => cmpIsoDesc(a.created_at, b.created_at));
+    const pActivos = pReciente.filter((p) => p.activo);
+    const pPausados = pReciente.filter((p) => p.activo !== true);
+    const pAuto = pReciente.filter((p) => (p.vertical ?? 'auto') === 'auto');
+    const pMoto = pReciente.filter((p) => p.vertical === 'moto');
+    const pPendWeb = pReciente.filter((p) => (p.aprobacion_publica ?? 'aprobado') === 'pendiente');
+    const vPend = v.filter((x) => (x.aprobacion_estado ?? 'aprobado') === 'pendiente');
+    const vSuspendImpago = v.filter((x) => tiendaSuspendidaPorImpago(x));
+    const tPend = t.filter((x) => (x.aprobacion_estado ?? 'aprobado') === 'pendiente');
+    return {
+      u,
+      v,
+      t,
+      c,
+      pReciente,
+      pActivos,
+      pPausados,
+      pAuto,
+      pMoto,
+      pPendWeb,
+      vPend,
+      vSuspendImpago,
+      tPend,
+    };
+  }, [usuarios, vendedores, talleres, compradores, productos]);
+
   const email = user?.email ?? '';
 
   const setProductoActivo = async (productoId: string, activo: boolean) => {
@@ -480,6 +773,76 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     setAccionando(null);
   };
 
+  const ejecutarAccionMasivaProductosFiltrados = async (accion: AccionMasivaProductosAdmin) => {
+    if (!accion) return;
+    const ids = productosFiltrados.map((p) => p.id);
+    if (ids.length === 0) {
+      setError('No hay productos en el listado filtrado.');
+      return;
+    }
+
+    const etiqueta =
+      accion === 'activar'
+        ? `activar ${ids.length} producto(s) filtrado(s)`
+        : accion === 'pausar'
+          ? `pausar ${ids.length} producto(s) filtrado(s)`
+          : `ELIMINAR DEFINITIVAMENTE ${ids.length} producto(s) filtrado(s)`;
+
+    if (
+      !window.confirm(
+        accion === 'eliminar'
+          ? `¿Confirmas ${etiqueta}? Esta acción no se puede deshacer desde el panel.`
+          : `¿${etiqueta.charAt(0).toUpperCase() + etiqueta.slice(1)}?`
+      )
+    ) {
+      return;
+    }
+
+    setAccionando('bulk-productos-masivo');
+    setError(null);
+
+    try {
+      if (accion === 'eliminar') {
+        const { data, error: rpcError } = await supabase.rpc('admin_eliminar_productos', {
+          p_producto_ids: ids,
+        });
+        if (rpcError) throw rpcError;
+        const n = typeof data === 'number' ? data : ids.length;
+        setProductos((prev) => prev.filter((p) => !ids.includes(p.id)));
+        void cargarKpis();
+        if (n < ids.length) {
+          setError(`Solo se eliminaron ${n} de ${ids.length} producto(s). Revisa permisos o restricciones en BD.`);
+        }
+      } else {
+        const activo = accion === 'activar';
+        const { data, error: rpcError } = await supabase.rpc('admin_set_productos_activo_bulk', {
+          p_producto_ids: ids,
+          p_activo: activo,
+        });
+        if (rpcError) throw rpcError;
+        const n = typeof data === 'number' ? data : ids.length;
+        setProductos((prev) =>
+          prev.map((p) => (ids.includes(p.id) ? { ...p, activo } : p))
+        );
+        void cargarKpis();
+        if (n < ids.length) {
+          setError(`Solo se actualizaron ${n} de ${ids.length} producto(s). ¿Ejecutaste supabase-admin-panel.sql con las funciones bulk?`);
+        }
+      }
+      setBulkProductosAccion('');
+    } catch (e) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message: string }).message)
+          : 'Error en acción masiva.';
+      setError(
+        `${msg} Si ves “function does not exist”, ejecuta en Supabase el bloque admin_set_productos_activo_bulk y admin_eliminar_productos de supabase-admin-panel.sql.`
+      );
+    } finally {
+      setAccionando(null);
+    }
+  };
+
   const setTiendaBloqueada = async (tiendaId: string, bloqueado: boolean) => {
     setAccionando(`tienda-${tiendaId}`);
     const { error: rpcError } = await supabase.rpc('admin_set_tienda_bloqueada', {
@@ -490,6 +853,26 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       setError(`No se pudo actualizar el vendedor: ${rpcError.message}`);
     } else {
       setVendedores((prev) => prev.map((t) => (t.id === tiendaId ? { ...t, bloqueado } : t)));
+      void cargarKpis();
+    }
+    setAccionando(null);
+  };
+
+  const setTiendaMembresiaHasta = async (tiendaId: string, membresiaHasta: string) => {
+    setAccionando(`membresia-${tiendaId}`);
+    const { error: rpcError } = await supabase.rpc('admin_set_tienda_membresia_hasta', {
+      p_tienda_id: tiendaId,
+      p_membresia_hasta: membresiaHasta,
+    });
+    if (rpcError) {
+      setError(
+        `No se pudo actualizar la membresía: ${rpcError.message}. ¿Ejecutaste en Supabase el bloque admin que define admin_set_tienda_membresia_hasta (supabase-admin-panel.sql)?`
+      );
+    } else {
+      setVendedores((prev) =>
+        prev.map((t) => (t.id === tiendaId ? { ...t, membresia_hasta: membresiaHasta } : t))
+      );
+      void cargarKpis();
     }
     setAccionando(null);
   };
@@ -840,6 +1223,348 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     setAccionando(null);
   };
 
+  const irATabDesdeKpi = (t: AdminTab) => {
+    setTab(t);
+    setKpiDetalle(null);
+  };
+
+  const notaCargaVsKpi = (kpiTotal: number | undefined, cargados: number, limite: number, etiqueta: string) => {
+    if (kpiTotal == null) return null;
+    if (cargados < kpiTotal) {
+      return (
+        <p className="dashboard-kpi-modal-aviso">
+          Total en sistema (KPI): <strong>{kpiTotal}</strong> {etiqueta}. Este panel cargó{' '}
+          <strong>{cargados}</strong> (máx. {limite} en listados). Usa la pestaña correspondiente y búsquedas para
+          ver el resto.
+        </p>
+      );
+    }
+    return null;
+  };
+
+  const truncNotice = (trunc: number) =>
+    trunc > 0 ? (
+      <p className="dashboard-kpi-modal-aviso">
+        Mostrando las primeras <strong>{ADMIN_KPI_MODAL_ROWS}</strong> filas (recientes primero). Quedan{' '}
+        <strong>{trunc}</strong> sin listar aquí — abre la pestaña para gestionar o filtrar.
+      </p>
+    ) : null;
+
+  function tablaTiendas(lista: AdminTienda[], vacio: string) {
+    const { rows, total, trunc } = capFilasKpiModal(lista);
+    if (total === 0) return <p className="dashboard-texto-placeholder">{vacio}</p>;
+    return (
+      <>
+        {truncNotice(trunc)}
+        <div className="dashboard-kpi-modal-table-wrap">
+          <table className="dashboard-admin-table">
+            <thead>
+              <tr>
+                <th>Nombre comercial</th>
+                <th>RIF</th>
+                <th>Ciudad</th>
+                <th>Aprobación</th>
+                <th>Bloqueado</th>
+                <th>Membresía hasta</th>
+                <th>Alta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((v) => (
+                <tr key={v.id}>
+                  <td>{v.nombre_comercial?.trim() || v.nombre || '—'}</td>
+                  <td>{v.rif || '—'}</td>
+                  <td>{v.ciudad || '—'}</td>
+                  <td>{etiquetaAprobacion(v.aprobacion_estado)}</td>
+                  <td>{v.bloqueado ? 'Sí' : 'No'}</td>
+                  <td>
+                    {v.membresia_hasta
+                      ? new Date(v.membresia_hasta).toLocaleDateString('es-VE')
+                      : '—'}
+                  </td>
+                  <td>{fmtFecha(v.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="dashboard-kpi-modal-meta">Registros en esta vista: {total}</p>
+      </>
+    );
+  }
+
+  function tablaTalleres(lista: AdminTaller[], vacio: string) {
+    const { rows, total, trunc } = capFilasKpiModal(lista);
+    if (total === 0) return <p className="dashboard-texto-placeholder">{vacio}</p>;
+    return (
+      <>
+        {truncNotice(trunc)}
+        <div className="dashboard-kpi-modal-table-wrap">
+          <table className="dashboard-admin-table">
+            <thead>
+              <tr>
+                <th>Nombre comercial</th>
+                <th>Teléfono</th>
+                <th>Ciudad</th>
+                <th>Aprobación</th>
+                <th>Bloqueado</th>
+                <th>Alta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((t) => (
+                <tr key={t.id}>
+                  <td>{t.nombre_comercial?.trim() || t.nombre || '—'}</td>
+                  <td>{t.telefono || '—'}</td>
+                  <td>{t.ciudad || '—'}</td>
+                  <td>{etiquetaAprobacion(t.aprobacion_estado)}</td>
+                  <td>{t.bloqueado ? 'Sí' : 'No'}</td>
+                  <td>{fmtFecha(t.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="dashboard-kpi-modal-meta">Registros en esta vista: {total}</p>
+      </>
+    );
+  }
+
+  function tablaProductos(lista: AdminProducto[], vacio: string) {
+    const { rows, total, trunc } = capFilasKpiModal(lista);
+    if (total === 0) return <p className="dashboard-texto-placeholder">{vacio}</p>;
+    return (
+      <>
+        {truncNotice(trunc)}
+        <div className="dashboard-kpi-modal-table-wrap">
+          <table className="dashboard-admin-table">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Marca</th>
+                <th>Vertical</th>
+                <th>Activo</th>
+                <th>Aprob. web</th>
+                <th>Vendedor</th>
+                <th>Alta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.nombre}</td>
+                  <td>{p.marca || '—'}</td>
+                  <td>{p.vertical ?? 'auto'}</td>
+                  <td>{p.activo ? 'Sí' : 'No'}</td>
+                  <td>{etiquetaAprobacion(p.aprobacion_publica)}</td>
+                  <td>{etiquetaVendedorDesdeProducto(p, vendedores)}</td>
+                  <td>{fmtFecha(p.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="dashboard-kpi-modal-meta">Registros en esta vista: {total}</p>
+      </>
+    );
+  }
+
+  function cuerpoDetalleKpi(): ReactNode {
+    if (!kpiDetalle) return null;
+    const L = listasKpiResumen;
+
+    switch (kpiDetalle) {
+      case 'usuarios_total': {
+        const { rows, total, trunc } = capFilasKpiModal(L.u);
+        return (
+          <>
+            {notaCargaVsKpi(kpis?.usuarios_total, usuarios.length, ADMIN_LIST_LIMIT, 'usuarios')}
+            {total === 0 ? (
+              <p className="dashboard-texto-placeholder">No hay usuarios en el listado cargado.</p>
+            ) : (
+              <>
+                {truncNotice(trunc)}
+                <div className="dashboard-kpi-modal-table-wrap">
+                  <table className="dashboard-admin-table">
+                    <thead>
+                      <tr>
+                        <th>Correo</th>
+                        <th>Tipo</th>
+                        <th>Rol</th>
+                        <th>User ID</th>
+                        <th>Creado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((u) => (
+                        <tr key={u.user_id}>
+                          <td>{u.email || '—'}</td>
+                          <td>{u.tipo_cuenta || '—'}</td>
+                          <td>{u.role || '—'}</td>
+                          <td>{u.user_id}</td>
+                          <td>{fmtFecha(u.creado_en)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="dashboard-kpi-modal-meta">Filas mostradas: {rows.length}</p>
+              </>
+            )}
+          </>
+        );
+      }
+      case 'vendedores_total':
+        return (
+          <>
+            {notaCargaVsKpi(kpis?.vendedores_total, vendedores.length, ADMIN_LIST_LIMIT, 'tiendas / vendedores')}
+            {tablaTiendas(L.v, 'No hay tiendas en el listado cargado.')}
+          </>
+        );
+      case 'vendedores_suspendidos_impago': {
+        const cargandoSuspendidas =
+          listaSuspendidasImpagoModal === null && errListaSuspendidasImpagoModal == null;
+        const listaMostrar =
+          errListaSuspendidasImpagoModal != null ? L.vSuspendImpago : (listaSuspendidasImpagoModal ?? []);
+        return (
+          <>
+            <p className="dashboard-kpi-modal-meta" style={{ marginBottom: '0.75rem' }}>
+              Tiendas <strong>aprobadas</strong> que no cumplen condiciones de publicación en la web: bloqueo por admin
+              (Suspender por impago) o <strong>sin membresía vigente</strong> (fecha pasada o sin fecha).
+            </p>
+            {cargandoSuspendidas && (
+              <p className="dashboard-texto-placeholder">Cargando listado completo desde el servidor…</p>
+            )}
+            {errListaSuspendidasImpagoModal != null && (
+              <p className="dashboard-kpi-modal-aviso">
+                No se pudo cargar el listado completo: {errListaSuspendidasImpagoModal}. Se muestran solo las tiendas
+                ya cargadas en esta sesión ({L.vSuspendImpago.length}).
+              </p>
+            )}
+            {!cargandoSuspendidas &&
+              kpis?.vendedores_suspendidos_impago != null &&
+              listaMostrar.length !== kpis.vendedores_suspendidos_impago && (
+                <p className="dashboard-kpi-modal-aviso">
+                  El KPI indica <strong>{kpis.vendedores_suspendidos_impago}</strong> y este listado muestra{' '}
+                  <strong>{listaMostrar.length}</strong>. Si persiste, revisa la función SQL{' '}
+                  <code>admin_dashboard_counts</code> y el filtro de tiendas aprobadas en código.
+                </p>
+              )}
+            {!cargandoSuspendidas &&
+              tablaTiendas(
+                listaMostrar,
+                errListaSuspendidasImpagoModal != null
+                  ? 'No hay coincidencias en el listado de respaldo.'
+                  : 'No hay vendedores en esta categoría.'
+              )}
+          </>
+        );
+      }
+      case 'talleres_total':
+        return (
+          <>
+            {notaCargaVsKpi(kpis?.talleres_total, talleres.length, ADMIN_LIST_LIMIT, 'talleres')}
+            {tablaTalleres(L.t, 'No hay talleres en el listado cargado.')}
+          </>
+        );
+      case 'compradores_total': {
+        const { rows, total, trunc } = capFilasKpiModal(L.c);
+        return (
+          <>
+            {notaCargaVsKpi(kpis?.compradores_total, compradores.length, ADMIN_LIST_LIMIT, 'compradores')}
+            {total === 0 ? (
+              <p className="dashboard-texto-placeholder">No hay compradores en el listado cargado.</p>
+            ) : (
+              <>
+                {truncNotice(trunc)}
+                <div className="dashboard-kpi-modal-table-wrap">
+                  <table className="dashboard-admin-table">
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th>RIF</th>
+                        <th>Teléfono</th>
+                        <th>Ciudad</th>
+                        <th>Memb. suspendida</th>
+                        <th>Alta</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((c) => (
+                        <tr key={c.user_id}>
+                          <td>{c.nombre_comercial?.trim() || c.nombre || '—'}</td>
+                          <td>{c.rif || '—'}</td>
+                          <td>{c.telefono || '—'}</td>
+                          <td>{c.ciudad || '—'}</td>
+                          <td>{c.suspendido_membresia ? 'Sí' : 'No'}</td>
+                          <td>{fmtFecha(c.creado_en)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="dashboard-kpi-modal-meta">Registros en esta vista: {total}</p>
+              </>
+            )}
+          </>
+        );
+      }
+      case 'productos_activos':
+        return tablaProductos(L.pActivos, 'No hay productos activos en el catálogo cargado.');
+      case 'productos_pausados': {
+        const cargandoPausados =
+          listaProductosPausadosModal === null && errListaProductosPausadosModal == null;
+        const listaMostrar =
+          errListaProductosPausadosModal != null ? L.pPausados : (listaProductosPausadosModal ?? []);
+        return (
+          <>
+            <p className="dashboard-kpi-modal-meta" style={{ marginBottom: '0.75rem' }}>
+              Productos con <strong>activo</strong> en falso o sin valor (igual que el KPI en base de datos).
+            </p>
+            {cargandoPausados && (
+              <p className="dashboard-texto-placeholder">Cargando productos pausados desde el servidor…</p>
+            )}
+            {errListaProductosPausadosModal != null && (
+              <p className="dashboard-kpi-modal-aviso">
+                No se pudo cargar el listado completo: {errListaProductosPausadosModal}. Se muestran solo los del
+                catálogo ya cargado ({L.pPausados.length}).
+              </p>
+            )}
+            {!cargandoPausados &&
+              kpis?.productos_pausados != null &&
+              listaMostrar.length !== kpis.productos_pausados && (
+                <p className="dashboard-kpi-modal-aviso">
+                  El KPI indica <strong>{kpis.productos_pausados}</strong> y este listado muestra{' '}
+                  <strong>{listaMostrar.length}</strong>. Revisa <code>admin_dashboard_counts</code> y permisos RLS.
+                </p>
+              )}
+            {!cargandoPausados &&
+              tablaProductos(
+                listaMostrar,
+                errListaProductosPausadosModal != null
+                  ? 'No hay productos pausados en el listado de respaldo.'
+                  : 'No hay productos pausados.'
+              )}
+          </>
+        );
+      }
+      case 'productos_total':
+        return tablaProductos(L.pReciente, 'No hay productos en el catálogo cargado.');
+      case 'catalogo_auto':
+        return tablaProductos(L.pAuto, 'No hay productos de automóvil en el catálogo cargado.');
+      case 'catalogo_moto':
+        return tablaProductos(L.pMoto, 'No hay productos de moto en el catálogo cargado.');
+      case 'vendedores_pendientes':
+        return tablaTiendas(L.vPend, 'No hay tiendas pendientes de autorización.');
+      case 'talleres_pendientes':
+        return tablaTalleres(L.tPend, 'No hay talleres pendientes de autorización.');
+      case 'productos_pendientes_web':
+        return tablaProductos(L.pPendWeb, 'No hay productos pendientes de aprobación para la web.');
+      default:
+        return null;
+    }
+  }
+
   return (
     <div className="dashboard">
       <aside className="dashboard-sidebar">
@@ -883,28 +1608,112 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
               {tab === 'resumen' && (
                 <section className="dashboard-seccion">
                   <h2 className="dashboard-seccion-titulo">Resumen global</h2>
+                  <p className="dashboard-kpi-grid-hint">Pulsa una tarjeta para ver el listado detallado (datos ya cargados en esta sesión).</p>
                   <div className="dashboard-kpi-grid">
-                    <div className="dashboard-kpi-card"><p className="dashboard-kpi-label">Usuarios (total)</p><p className="dashboard-kpi-valor">{kpis?.usuarios_total ?? usuarios.length}</p></div>
-                    <div className="dashboard-kpi-card"><p className="dashboard-kpi-label">Vendedores (total)</p><p className="dashboard-kpi-valor">{kpis?.vendedores_total ?? vendedores.length}</p></div>
-                    <div className="dashboard-kpi-card"><p className="dashboard-kpi-label">Talleres (total)</p><p className="dashboard-kpi-valor">{kpis?.talleres_total ?? talleres.length}</p></div>
-                    <div className="dashboard-kpi-card"><p className="dashboard-kpi-label">Compradores (total)</p><p className="dashboard-kpi-valor">{kpis?.compradores_total ?? compradores.length}</p></div>
-                    <div className="dashboard-kpi-card"><p className="dashboard-kpi-label">Productos activos</p><p className="dashboard-kpi-valor">{productosActivos}</p></div>
-                    <div className="dashboard-kpi-card"><p className="dashboard-kpi-label">Productos pausados</p><p className="dashboard-kpi-valor">{productosPausados}</p></div>
-                    <div className="dashboard-kpi-card"><p className="dashboard-kpi-label">Total productos</p><p className="dashboard-kpi-valor">{totalProductos}</p></div>
-                    <div className="dashboard-kpi-card"><p className="dashboard-kpi-label">Catálogo auto</p><p className="dashboard-kpi-valor">{productosCountAuto}</p></div>
-                    <div className="dashboard-kpi-card"><p className="dashboard-kpi-label">Catálogo moto</p><p className="dashboard-kpi-valor">{productosCountMoto}</p></div>
-                    <div className="dashboard-kpi-card dashboard-kpi-card--alerta">
+                    <button
+                      type="button"
+                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                      onClick={() => setKpiDetalle('usuarios_total')}
+                    >
+                      <p className="dashboard-kpi-label">Usuarios (total)</p>
+                      <p className="dashboard-kpi-valor">{kpis?.usuarios_total ?? usuarios.length}</p>
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                      onClick={() => setKpiDetalle('vendedores_total')}
+                    >
+                      <p className="dashboard-kpi-label">Vendedores (total)</p>
+                      <p className="dashboard-kpi-valor">{kpis?.vendedores_total ?? vendedores.length}</p>
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
+                      onClick={() => setKpiDetalle('vendedores_suspendidos_impago')}
+                    >
+                      <p className="dashboard-kpi-label">Vendedores suspendidos por impago</p>
+                      <p className="dashboard-kpi-valor">{vendedoresSuspendidosImpago}</p>
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                      onClick={() => setKpiDetalle('talleres_total')}
+                    >
+                      <p className="dashboard-kpi-label">Talleres (total)</p>
+                      <p className="dashboard-kpi-valor">{kpis?.talleres_total ?? talleres.length}</p>
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                      onClick={() => setKpiDetalle('compradores_total')}
+                    >
+                      <p className="dashboard-kpi-label">Compradores (total)</p>
+                      <p className="dashboard-kpi-valor">{kpis?.compradores_total ?? compradores.length}</p>
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                      onClick={() => setKpiDetalle('productos_activos')}
+                    >
+                      <p className="dashboard-kpi-label">Productos activos</p>
+                      <p className="dashboard-kpi-valor">{productosActivos}</p>
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                      onClick={() => setKpiDetalle('productos_pausados')}
+                    >
+                      <p className="dashboard-kpi-label">Productos pausados</p>
+                      <p className="dashboard-kpi-valor">{productosPausados}</p>
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                      onClick={() => setKpiDetalle('productos_total')}
+                    >
+                      <p className="dashboard-kpi-label">Total productos</p>
+                      <p className="dashboard-kpi-valor">{totalProductos}</p>
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                      onClick={() => setKpiDetalle('catalogo_auto')}
+                    >
+                      <p className="dashboard-kpi-label">Catálogo auto</p>
+                      <p className="dashboard-kpi-valor">{productosCountAuto}</p>
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                      onClick={() => setKpiDetalle('catalogo_moto')}
+                    >
+                      <p className="dashboard-kpi-label">Catálogo moto</p>
+                      <p className="dashboard-kpi-valor">{productosCountMoto}</p>
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
+                      onClick={() => setKpiDetalle('vendedores_pendientes')}
+                    >
                       <p className="dashboard-kpi-label">Vendedores por autorizar</p>
                       <p className="dashboard-kpi-valor">{tiendasPendientes}</p>
-                    </div>
-                    <div className="dashboard-kpi-card dashboard-kpi-card--alerta">
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
+                      onClick={() => setKpiDetalle('talleres_pendientes')}
+                    >
                       <p className="dashboard-kpi-label">Talleres por autorizar</p>
                       <p className="dashboard-kpi-valor">{talleresPendientes}</p>
-                    </div>
-                    <div className="dashboard-kpi-card dashboard-kpi-card--alerta">
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
+                      onClick={() => setKpiDetalle('productos_pendientes_web')}
+                    >
                       <p className="dashboard-kpi-label">Productos por autorizar (web)</p>
                       <p className="dashboard-kpi-valor">{productosPendientesWeb}</p>
-                    </div>
+                    </button>
                   </div>
                   <p className="dashboard-texto-placeholder" style={{ marginTop: '0.5rem' }}>
                     Revisa las pestañas <strong>Vendedores</strong>, <strong>Talleres</strong> y <strong>Productos</strong>{' '}
@@ -1026,8 +1835,14 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       <input
                         id="admin-buscar-productos"
                         type="search"
-                        value={busquedaProductosAdmin}
-                        onChange={(e) => setBusquedaProductosAdmin(e.target.value)}
+                        value={busquedaProductosAdminDraft}
+                        onChange={(e) => setBusquedaProductosAdminDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            void aplicarFiltrosProductosAdmin();
+                          }
+                        }}
                         placeholder="Nombre, descripción, marca, modelo, vendedor..."
                       />
                     </div>
@@ -1035,8 +1850,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       <label htmlFor="admin-filtro-vendedor-productos">Vendedor</label>
                       <select
                         id="admin-filtro-vendedor-productos"
-                        value={adminFiltroVendedorTiendaId}
-                        onChange={(e) => setAdminFiltroVendedorTiendaId(e.target.value)}
+                        value={adminFiltroVendedorTiendaIdDraft}
+                        onChange={(e) => setAdminFiltroVendedorTiendaIdDraft(e.target.value)}
                       >
                         <option value="">Todos los vendedores</option>
                         {vendedoresParaFiltroProductos.map((v) => (
@@ -1050,8 +1865,10 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       <label htmlFor="admin-filtro-vertical">Vertical</label>
                       <select
                         id="admin-filtro-vertical"
-                        value={adminFiltroVertical}
-                        onChange={(e) => setAdminFiltroVertical(e.target.value as 'todos' | 'auto' | 'moto')}
+                        value={adminFiltroVerticalDraft}
+                        onChange={(e) =>
+                          setAdminFiltroVerticalDraft(e.target.value as 'todos' | 'auto' | 'moto')
+                        }
                       >
                         <option value="todos">Todos</option>
                         <option value="auto">Solo automóvil</option>
@@ -1062,9 +1879,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       <label htmlFor="admin-filtro-estado-productos">Estado del artículo</label>
                       <select
                         id="admin-filtro-estado-productos"
-                        value={filtroEstadoProductosAdmin}
+                        value={filtroEstadoProductosAdminDraft}
                         onChange={(e) =>
-                          setFiltroEstadoProductosAdmin(e.target.value as FiltroEstadoProductoGestion)
+                          setFiltroEstadoProductosAdminDraft(e.target.value as FiltroEstadoProductoGestion)
                         }
                       >
                         <option value="todos">Todos los productos</option>
@@ -1076,9 +1893,61 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </select>
                     </div>
                   </div>
+                  <div className="dashboard-admin-filtros-productos-acciones">
+                    <button
+                      type="button"
+                      className="dashboard-admin-btn ok"
+                      disabled={cargandoFiltrosProductos || cargando}
+                      onClick={() => void aplicarFiltrosProductosAdmin()}
+                    >
+                      {cargandoFiltrosProductos ? 'Cargando catálogo…' : 'Aplicar filtros'}
+                    </button>
+                    <button
+                      type="button"
+                      className="dashboard-admin-btn"
+                      disabled={cargandoFiltrosProductos || cargando}
+                      onClick={() => void restablecerFiltrosProductosAdmin()}
+                    >
+                      Restablecer filtros
+                    </button>
+                  </div>
                   <p className="dashboard-admin-productos-hint">
-                    Mostrando {productosFiltrados.length} de {productos.length} producto(s) según búsqueda y filtros.
+                    El listado usa los valores de arriba solo después de pulsar «Aplicar filtros» (también Enter en
+                    la búsqueda). Mostrando {productosFiltrados.length} de {productos.length} producto(s) cargados
+                    que coinciden con los filtros aplicados.
                   </p>
+                  <div className="dashboard-admin-acciones-masivas dashboard-admin-bulk-productos-toolbar">
+                    <label htmlFor="admin-bulk-productos-accion" className="dashboard-admin-filtro-vertical">
+                      Acción masiva (sobre el listado filtrado)
+                      <select
+                        id="admin-bulk-productos-accion"
+                        value={bulkProductosAccion}
+                        onChange={(e) =>
+                          setBulkProductosAccion(e.target.value as AccionMasivaProductosAdmin)
+                        }
+                        disabled={accionando === 'bulk-productos-masivo'}
+                      >
+                        <option value="">— Elegir —</option>
+                        <option value="activar">Activar todos los filtrados</option>
+                        <option value="pausar">Pausar todos los filtrados</option>
+                        <option value="eliminar">Eliminar todos los filtrados (irreversible)</option>
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="dashboard-admin-btn ok"
+                      disabled={
+                        accionando === 'bulk-productos-masivo' ||
+                        !bulkProductosAccion ||
+                        productosFiltrados.length === 0
+                      }
+                      onClick={() => void ejecutarAccionMasivaProductosFiltrados(bulkProductosAccion)}
+                    >
+                      {accionando === 'bulk-productos-masivo'
+                        ? 'Procesando…'
+                        : `Ejecutar (${productosFiltrados.length})`}
+                    </button>
+                  </div>
                   <p className="dashboard-admin-productos-hint">
                     Cada fila muestra las miniaturas de la foto principal y las adicionales. Pulsa una imagen para
                     abrirla en tamaño completo en otra pestaña y verificar el contenido antes de autorizar.
@@ -1198,7 +2067,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       className="dashboard-admin-btn ok"
                       disabled={
                         productosPendientesFiltrados.length === 0 ||
-                        accionando === 'bulk-productos-aprobar'
+                        accionando === 'bulk-productos-aprobar' ||
+                        accionando === 'bulk-productos-masivo'
                       }
                       onClick={() => void aprobarProductosPendientesVisibles()}
                     >
@@ -1326,7 +2196,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                   <button
                                     type="button"
                                     className="dashboard-admin-btn ok"
-                                    disabled={accionando === `aprob-prod-${p.id}`}
+                                    disabled={accionando === `aprob-prod-${p.id}` || accionando === 'bulk-productos-masivo'}
                                     onClick={() => void setProductoAprobacionWeb(p.id, 'aprobado')}
                                   >
                                     Autorizar web
@@ -1336,7 +2206,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                   <button
                                     type="button"
                                     className="dashboard-admin-btn danger"
-                                    disabled={accionando === `aprob-prod-${p.id}`}
+                                    disabled={accionando === `aprob-prod-${p.id}` || accionando === 'bulk-productos-masivo'}
                                     onClick={() => void setProductoAprobacionWeb(p.id, 'rechazado')}
                                   >
                                     Rechazar web
@@ -1346,7 +2216,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                   <button
                                     type="button"
                                     className="dashboard-admin-btn warn"
-                                    disabled={accionando === `aprob-prod-${p.id}`}
+                                    disabled={accionando === `aprob-prod-${p.id}` || accionando === 'bulk-productos-masivo'}
                                     onClick={() => void setProductoAprobacionWeb(p.id, 'pendiente')}
                                   >
                                     Dejar pendiente
@@ -1370,7 +2240,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                 <button
                                   type="button"
                                   className="dashboard-admin-btn warn"
-                                  disabled={accionando === `producto-${p.id}`}
+                                  disabled={accionando === `producto-${p.id}` || accionando === 'bulk-productos-masivo'}
                                   onClick={() => void setProductoActivo(p.id, false)}
                                 >
                                   Pausar
@@ -1379,7 +2249,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                 <button
                                   type="button"
                                   className="dashboard-admin-btn ok"
-                                  disabled={accionando === `producto-${p.id}`}
+                                  disabled={accionando === `producto-${p.id}` || accionando === 'bulk-productos-masivo'}
                                   onClick={() => void setProductoActivo(p.id, true)}
                                 >
                                   Activar
@@ -1413,7 +2283,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       spellCheck={false}
                     />
                     <span className="dashboard-admin-busqueda-hint">
-                      Hasta {ADMIN_LIST_LIMIT} filas. <strong>Suspender por impago</strong> usa el mismo bloqueo que ya tenías (tienda no publicable).
+                      Hasta {ADMIN_LIST_LIMIT} filas. <strong>Suspender por impago</strong> es bloqueo admin. Si el
+                      vendedor ya pagó y solo faltaba fecha, usa <strong>+30 días</strong> o <strong>+1 año</strong>{' '}
+                      en Acciones.
                     </span>
                   </div>
                   <div className="dashboard-admin-acciones-masivas">
@@ -1439,7 +2311,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           <th>Estado</th>
                           <th>Ciudad</th>
                           <th>Autorización web</th>
-                          <th>Bloqueo</th>
+                          <th>Visibilidad web</th>
+                          <th>Membresía hasta</th>
                           <th>User ID</th>
                           <th>Acciones</th>
                         </tr>
@@ -1447,6 +2320,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       <tbody>
                         {vendedores.map((v) => {
                           const ap = claseAprobacion(v.aprobacion_estado);
+                          const visWeb = etiquetaVisibilidadWebTienda(v);
                           return (
                           <tr key={v.id}>
                             <td>{v.nombre_comercial || v.nombre || '—'}</td>
@@ -1496,31 +2370,64 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                               </div>
                             </td>
                             <td>
-                              <span className={`dashboard-admin-status ${v.bloqueado ? 'warn' : 'ok'}`}>
-                                {v.bloqueado ? 'Suspendido (impago u otro)' : 'Membresía activa'}
-                              </span>
+                              <span className={`dashboard-admin-status ${visWeb.clase}`}>{visWeb.texto}</span>
+                            </td>
+                            <td>
+                              {v.membresia_hasta
+                                ? new Date(v.membresia_hasta).toLocaleDateString('es-VE')
+                                : '—'}
                             </td>
                             <td>{v.user_id}</td>
                             <td>
-                              {v.bloqueado ? (
-                                <button
-                                  type="button"
-                                  className="dashboard-admin-btn ok"
-                                  disabled={accionando === `tienda-${v.id}`}
-                                  onClick={() => void setTiendaBloqueada(v.id, false)}
-                                >
-                                  Reactivar membresía
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="dashboard-admin-btn danger"
-                                  disabled={accionando === `tienda-${v.id}`}
-                                  onClick={() => void setTiendaBloqueada(v.id, true)}
-                                >
-                                  Suspender por impago
-                                </button>
-                              )}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                {v.bloqueado ? (
+                                  <button
+                                    type="button"
+                                    className="dashboard-admin-btn ok"
+                                    disabled={accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`}
+                                    onClick={() => void setTiendaBloqueada(v.id, false)}
+                                  >
+                                    Quitar bloqueo admin
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="dashboard-admin-btn danger"
+                                    disabled={accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`}
+                                    onClick={() => void setTiendaBloqueada(v.id, true)}
+                                  >
+                                    Suspender por impago
+                                  </button>
+                                )}
+                                {(v.aprobacion_estado ?? 'aprobado') === 'aprobado' &&
+                                  membresiaVencidaOSinFecha(v.membresia_hasta) && (
+                                    <div className="dashboard-admin-acciones-mini" style={{ flexWrap: 'wrap' }}>
+                                      <span style={{ width: '100%', fontSize: '0.85em', opacity: 0.9 }}>
+                                        Tras pago (nueva vigencia):
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="dashboard-admin-btn ok"
+                                        disabled={
+                                          accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`
+                                        }
+                                        onClick={() => void setTiendaMembresiaHasta(v.id, fechaLocalDesdeHoy(30))}
+                                      >
+                                        +30 días
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="dashboard-admin-btn ok"
+                                        disabled={
+                                          accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`
+                                        }
+                                        onClick={() => void setTiendaMembresiaHasta(v.id, fechaLocalDesdeHoy(365))}
+                                      >
+                                        +1 año
+                                      </button>
+                                    </div>
+                                  )}
+                              </div>
                             </td>
                           </tr>
                           );
@@ -1753,6 +2660,45 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
             </>
           )}
         </main>
+        {kpiDetalle && (
+          <div
+            className="dashboard-kpi-modal-backdrop"
+            role="presentation"
+            onClick={() => setKpiDetalle(null)}
+          >
+            <div
+              className="dashboard-kpi-modal-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="dashboard-kpi-modal-titulo"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="dashboard-kpi-modal-header">
+                <h3 id="dashboard-kpi-modal-titulo" className="dashboard-kpi-modal-titulo">
+                  {KPI_DETALLE_TITULO[kpiDetalle]}
+                </h3>
+                <button type="button" className="dashboard-kpi-modal-cerrar" onClick={() => setKpiDetalle(null)}>
+                  Cerrar
+                </button>
+              </div>
+              <div className="dashboard-kpi-modal-body">{cuerpoDetalleKpi()}</div>
+              <div className="dashboard-kpi-modal-footer">
+                {KPI_DETALLE_IR_TAB[kpiDetalle] && (
+                  <button
+                    type="button"
+                    className="dashboard-btn-accion"
+                    onClick={() => irATabDesdeKpi(KPI_DETALLE_IR_TAB[kpiDetalle]!)}
+                  >
+                    Ir a «{etiquetaPestañaAdmin(KPI_DETALLE_IR_TAB[kpiDetalle]!)}»
+                  </button>
+                )}
+                <button type="button" className="dashboard-btn-inicio" onClick={() => setKpiDetalle(null)}>
+                  Solo cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -7,7 +7,8 @@ import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import { BusquedaRepuestos } from './BusquedaRepuestos';
 import { MecanicoVirtualMoto } from './MecanicoVirtualMoto';
-import { MecanicoVirtualObd } from './MecanicoVirtualObd';
+import MecanicoVirtualObd from './MecanicoVirtualObd';
+import { IdentificarRepuestoVision } from './IdentificarRepuestoVision';
 import { VendedoresCercaDeMi } from './VendedoresCercaDeMi';
 import { ListaRepuestosPorCategoria } from './ListaRepuestosPorCategoria';
 import { IconoCategoria } from './IconosCategorias';
@@ -87,6 +88,11 @@ export function Landing({
     texto: '',
   });
   const [busquedaRepuestosMountKey, setBusquedaRepuestosMountKey] = useState(0);
+  /** Modales de IA viven bajo .landing-ia-doble (z menor); sin esto el buscador queda encima del overlay. */
+  const [landingIaModalCapas, setLandingIaModalCapas] = useState(0);
+  const iaModalCapaDelta = useCallback((d: number) => {
+    setLandingIaModalCapas((n) => Math.max(0, n + d));
+  }, []);
 
   const abrirPaginaBusquedaRepuestos = (texto: string) => {
     setBusquedaRepuestosMountKey((k) => k + 1);
@@ -126,6 +132,7 @@ export function Landing({
     setVistaBusquedaRepuestos({ activa: false, texto: '' });
     setCategoriaSeleccionada(null);
     setBusquedaRepuestosMountKey((k) => k + 1);
+    setLandingIaModalCapas(0);
   }, [vertical]);
 
   /** Abrir búsqueda al entrar con ?repuesto=uuid (enlace compartido). */
@@ -248,14 +255,23 @@ export function Landing({
 
       {!vistaBusquedaRepuestos.activa && (
         <BusquedaRepuestos
+          key={`compact-${vertical}-${busquedaRepuestosMountKey}`}
           vertical={vertical}
           variant="compact"
+          compactDetrasCapaIa={landingIaModalCapas > 0}
           onIrAResultados={({ texto }) => abrirPaginaBusquedaRepuestos(texto)}
         />
       )}
 
       {!vistaBusquedaRepuestos.activa && (
-        esMoto ? <MecanicoVirtualMoto /> : <MecanicoVirtualObd vertical={vertical} />
+        <div className="landing-ia-doble" key={vertical}>
+          {esMoto ? (
+            <MecanicoVirtualMoto onIaModalCapaDelta={iaModalCapaDelta} />
+          ) : (
+            <MecanicoVirtualObd vertical={vertical} onIaModalCapaDelta={iaModalCapaDelta} />
+          )}
+          <IdentificarRepuestoVision vertical={vertical} onIaModalCapaDelta={iaModalCapaDelta} />
+        </div>
       )}
 
       <VendedoresCercaDeMi vertical={vertical} />
