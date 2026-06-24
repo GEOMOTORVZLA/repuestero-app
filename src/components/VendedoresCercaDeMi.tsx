@@ -808,10 +808,10 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
                       Volver a vendedores
                     </button>
                   </div>
-                  <div className="vendedores-cerca-productos-panel-scroll">
-                    {!estadoProductosVendedorAbierto?.cargando &&
-                      !estadoProductosVendedorAbierto?.error &&
-                      productosTiendaAbierta.length > 0 && (
+                  {!estadoProductosVendedorAbierto?.cargando &&
+                    !estadoProductosVendedorAbierto?.error &&
+                    productosTiendaAbierta.length > 0 && (
+                      <div className="vendedores-cerca-productos-panel-busqueda-wrap">
                         <div className="vendedores-cerca-productos-busqueda">
                           <h5 className="vendedores-cerca-productos-busqueda-titulo">
                             BUSCA LOS PRODUCTOS SOLO DE ESTE VENDEDOR
@@ -869,7 +869,7 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
                                 }
                               />
                               {sugerenciasVendedorAbiertas && sugerenciasVendedor.length > 0 && (
-                                <div className="busqueda-repuestos-sugerencias-bloque busqueda-repuestos-sugerencias-bloque--compact">
+                                <div className="busqueda-repuestos-sugerencias-bloque busqueda-repuestos-sugerencias-bloque--compact vendedores-cerca-productos-sugerencias">
                                   <ul
                                     id="vendedores-cerca-sugerencias-lista"
                                     className="busqueda-repuestos-sugerencias"
@@ -935,7 +935,9 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
                             </p>
                           )}
                         </div>
-                      )}
+                      </div>
+                    )}
+                  <div className="vendedores-cerca-productos-panel-scroll">
                     {estadoProductosVendedorAbierto?.cargando ? (
                       <p className="vendedores-cerca-productos-mensaje">Cargando productos…</p>
                     ) : estadoProductosVendedorAbierto?.error ? (
