@@ -618,6 +618,22 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   font-weight: 700;
 }
 
+.dashboard-admin-table tr.dashboard-admin-row-impago td {
+  background: #fff7ed;
+}
+
+.dashboard-admin-table tr.dashboard-admin-row-impago:hover td {
+  background: #ffedd5;
+}
+
+.dashboard-admin-vendedor-impago-aviso {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #9a3412;
+  font-weight: 600;
+}
+
 .dashboard-admin-status {
   display: inline-block;
   border-radius: 999px;

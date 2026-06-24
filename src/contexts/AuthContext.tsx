@@ -11,6 +11,7 @@ import {
   marcarIntentoLoginPassword,
   rechazarGoogleSiNoHayRegistroGeomotor,
 } from '../services/ensureNegocioTrasRegistro';
+import { authEmailRedirectTo, OAUTH_NATIVE_REDIRECT } from '../utils/authRedirect';
 
 interface AuthContextType {
   user: User | null;
@@ -27,7 +28,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
-const OAUTH_NATIVE_REDIRECT = 'com.geomotor.app://auth/callback';
 
 function esAppNativa(): boolean {
   return Capacitor.isNativePlatform();
@@ -205,14 +205,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: authEmailRedirectTo(),
+      },
+    });
     return { error: error?.message ?? null };
   };
 
   const resetPassword = async (email: string) => {
-    const redirectTo = new URL(window.location.pathname, window.location.origin).href;
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo,
+      redirectTo: authEmailRedirectTo(),
     });
     return { error: error?.message ?? null };
   };
@@ -229,7 +234,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       /* Misma URL actual (sin #) para volver del OAuth con la sesión activa */
       const redirectTo = esAppNativa()
         ? OAUTH_NATIVE_REDIRECT
-        : new URL(window.location.pathname, window.location.origin).href;
+        : authEmailRedirectTo();
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

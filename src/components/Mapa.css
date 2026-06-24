@@ -104,6 +104,13 @@
   gap: 0.35rem;
 }
 
+.mapa-leyenda-aviso {
+  flex: 1 1 100%;
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
 .mapa-info-window {
   display: inline-flex;
   align-items: center;

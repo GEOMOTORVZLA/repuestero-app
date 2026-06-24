@@ -5,3 +5,9 @@ enabled = true
 
 [functions.notify-registro]
 verify_jwt = false
+
+[functions.identificar-repuesto-vision]
+verify_jwt = true
+
+[functions.mecanico-virtual-obd]
+verify_jwt = true

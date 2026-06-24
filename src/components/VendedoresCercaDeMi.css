@@ -475,12 +475,106 @@
   color: #1e3a5f;
 }
 
+.vendedores-cerca-productos-contador {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #4a5568;
+}
+
 .vendedores-cerca-productos-panel-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: 0.85rem;
   background: #f8fafc;
+}
+
+.vendedores-cerca-productos-busqueda {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.vendedores-cerca-productos-busqueda-titulo {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #1e3a5f;
+  text-align: center;
+}
+
+.vendedores-cerca-productos-busqueda-label {
+  margin-bottom: 0.45rem;
+}
+
+/* Input y botón en la misma fila: el desplegable de sugerencias solo cubre el campo, no el botón */
+.vendedores-cerca-productos-busqueda-fila {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+/* Misma tipografía que la barra compacta de la landing (solo en este panel) */
+.vendedores-cerca-productos-busqueda-fila .busqueda-repuestos-texto-inner--compact input {
+  min-height: 2.35rem;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.55rem;
+}
+
+.vendedores-cerca-productos-busqueda-fila .busqueda-repuestos-btn--compact {
+  min-height: 2.35rem;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+@media (min-width: 640px) {
+  .vendedores-cerca-productos-busqueda-fila .busqueda-repuestos-texto-inner--compact input {
+    min-height: 2.65rem;
+    font-size: 1rem;
+    padding: 0.65rem 0.9rem;
+  }
+
+  .vendedores-cerca-productos-busqueda-fila .busqueda-repuestos-btn--compact {
+    min-height: 2.65rem;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.875rem;
+  }
+}
+
+.vendedores-cerca-productos-busqueda-fila .busqueda-repuestos-texto-inner--compact input:focus {
+  outline: none;
+  border-color: var(--form-focus-color, #1e3a5f);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 0 0 2px rgba(30, 58, 95, 0.22);
+}
+
+.vendedores-cerca-productos-busqueda-aviso {
+  margin: 0.65rem 0 0;
+  font-size: 0.875rem;
+  color: #b45309;
+}
+
+.vendedores-cerca-productos-busqueda-resultados {
+  margin: 0.65rem 0 0;
+  font-size: 0.875rem;
+  color: #4a5568;
+}
+
+.vendedores-cerca-productos-busqueda-limpiar {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #1e3a5f;
+  font-size: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.vendedores-cerca-productos-busqueda-limpiar:hover {
+  color: #2c5282;
 }
 
 /* Modal mapa ubicación */

@@ -46,6 +46,13 @@ export const ESPECIALIDADES_TALLER = [
   'Camiones',
   'Tapicería automotriz',
   'Aire acondicionado',
+  'Autolavados',
+  'Reparación de computadoras',
+  'Codificación de llaves',
+  'Instalación de sonido',
+  'Alineación y balanceo de cauchos',
+  'Reparación de chasis y compacto',
+  'Reparación de mecanismos eleva vidrios',
 ] as const;
 
 /** Especialidades del taller para vertical motos */

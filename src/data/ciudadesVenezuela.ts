@@ -31,7 +31,8 @@ export const ESTADOS_VENEZUELA = [
 
 /** Ciudades/municipios por estado (capitales y principales localidades) */
 export const CIUDADES_POR_ESTADO: Record<string, string[]> = {
-  'Distrito Capital': ['Libertador', 'Caracas'],
+  /** Caracas = DC en lenguaje cotidiano; Libertador es su municipio (no se lista aparte). */
+  'Distrito Capital': ['Caracas'],
   Amazonas: ['Puerto Ayacucho', 'San Carlos de Río Negro', 'Maroa', 'San Juan de Manapiare', 'Isla Ratón', 'San Fernando de Atabapo', 'La Esmeralda'],
   Anzoátegui: ['Barcelona', 'Puerto La Cruz', 'Lechería', 'El Tigre', 'Anaco', 'Cantaura', 'Pariaguán', 'Guanta', 'Píritu', 'Aragua de Barcelona', 'Clarines', 'San José de Guanipa'],
   Apure: ['San Fernando de Apure', 'Elorza', 'Guasdualito', 'Biruaca', 'Achaguas', 'San Juan de Payara'],
@@ -60,4 +61,15 @@ export const CIUDADES_POR_ESTADO: Record<string, string[]> = {
 /** Obtener ciudades de un estado */
 export function getCiudadesPorEstado(estado: string): string[] {
   return CIUDADES_POR_ESTADO[estado] ?? [];
+}
+
+/**
+ * Valores a consultar en BD al filtrar por ciudad (incluye alias históricos).
+ * Ej.: Caracas agrupa registros guardados como "Libertador".
+ */
+export function valoresCiudadFiltroBd(estado: string, ciudad: string): string[] {
+  if (estado === 'Distrito Capital' && ciudad === 'Caracas') {
+    return ['Caracas', 'Libertador'];
+  }
+  return [ciudad];
 }

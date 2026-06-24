@@ -21,6 +21,7 @@ import {
   POLITICA_DIVULGACION_VERSION,
   RUTA_POLITICA_DIVULGACION_DATOS,
 } from '../constants/politicaDivulgacionDatos';
+import { authEmailRedirectTo, mensajeErrorCorreoAuth } from '../utils/authRedirect';
 
 const MARCAS_TALLER = [
   'Multimarca',
@@ -52,7 +53,6 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
   const [tipoRif, setTipoRif] = useState<string>(TIPOS_RIF[0]);
   const [numeroRif, setNumeroRif] = useState('');
   const [email, setEmail] = useState('');
-  const [ramoEspecifico, setRamoEspecifico] = useState('');
   const [especialidadesTaller, setEspecialidadesTaller] = useState<string[]>([]);
   const [marcaTaller, setMarcaTaller] = useState(MARCAS_TALLER[0]);
   const [acercaDeTaller, setAcercaDeTaller] = useState('');
@@ -256,7 +256,6 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
                 estado: estadoTaller.trim() || null,
                 ciudad: ciudadTaller.trim() || null,
                   telefono: telefonoCompletoMeta,
-                  ramo: ramoEspecifico.trim() || null,
                   latitud: latMeta,
                   longitud: lngMeta,
                 },
@@ -264,21 +263,17 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
             : {};
 
     setCargando(true);
-    const { data: signUpData, error } = await supabase.auth.signUp(
-      {
-        email: email.trim(),
-        password,
-        options: {
-          data: signupMetadata,
-        },
-      } as any
-    );
+    const { data: signUpData, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: signupMetadata,
+        emailRedirectTo: authEmailRedirectTo(),
+      },
+    });
     if (error) {
       setCargando(false);
-      const msg = error.message?.toLowerCase().includes('rate limit')
-        ? 'Se enviaron demasiados correos en poco tiempo. Espera unos minutos e intenta de nuevo.'
-        : error.message;
-      setMensaje(msg);
+      setMensaje(mensajeErrorCorreoAuth(error.message));
       return;
     }
     // Permitir login con Google solo a correos previamente registrados en Geomotor.
@@ -296,8 +291,8 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
       setCargando(false);
       setMensaje(
         tipo === 'vendedor' || tipo === 'taller'
-          ? 'Cuenta creada. Confirma tu correo y entra con tu usuario y clave: tu negocio quedará registrado automáticamente con los mismos datos que ya ingresaste (no hace falta volver a llenar el perfil).'
-          : 'Cuenta creada. Confirma tu correo y luego inicia sesión.'
+          ? 'Te enviamos un correo de confirmación. Ábrelo y pulsa el enlace; luego inicia sesión con tu usuario y clave. Tu negocio se registrará automáticamente con los datos que ya ingresaste.'
+          : 'Te enviamos un correo de confirmación. Ábrelo y pulsa el enlace; después inicia sesión con tu usuario y clave.'
       );
       return;
     }
@@ -446,7 +441,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           </div>
 
           <div className="form-registro-campo form-registro-telefono">
-            <label>Teléfono empresa</label>
+            <label>{tipo === 'usuario' ? 'Teléfono particular' : 'Teléfono empresa'}</label>
             <div className="form-registro-telefono-tipo">
               <button
                 type="button"
@@ -613,17 +608,6 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
             </>
           ) : (
             <>
-              <div className="form-registro-campo">
-                <label htmlFor="ramo">Ramo específico</label>
-                <input
-                  id="ramo"
-                  type="text"
-                  value={ramoEspecifico}
-                  onChange={(e) => setRamoEspecifico(e.target.value)}
-                  placeholder="Ej: Repuestos automotrices, Lubricantes"
-                  disabled={cargando}
-                />
-              </div>
               <div className="form-registro-campo">
                 <label htmlFor="estadoGeneral">Estado</label>
                 <select

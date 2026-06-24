@@ -1,5 +1,5 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js';
-import { getTipoPanelUsuario } from '../utils/cuentaTipo';
+import { esPanelNegocio } from '../utils/cuentaTipo';
 import { esMonedaBolivar, etiquetaMoneda } from '../utils/monedaProducto';
 import { formatearPrecioProducto } from '../utils/precioProducto';
 
@@ -10,7 +10,7 @@ export async function usuarioDebeRegistrarHistorialContactos(
   supabase: SupabaseClient,
   user: User
 ): Promise<boolean> {
-  if (getTipoPanelUsuario(user) === 'vendedor_taller') return false;
+  if (esPanelNegocio(user)) return false;
   const { data: tiendas } = await supabase.from('tiendas').select('id').eq('user_id', user.id).limit(1);
   if (tiendas?.length) return false;
   const { data: talleres } = await supabase.from('talleres').select('id').eq('user_id', user.id).limit(1);

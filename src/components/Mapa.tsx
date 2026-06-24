@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useLoadScript, GoogleMap, Autocomplete, Marker } from '@react-google-maps/api';
 import { supabase } from '../supabaseClient';
 import { verticalDesdePathname } from '../utils/verticalVehiculo';
+import { MAPA_MAX_PUNTOS_POR_TIPO } from '../constants/limitesConsultaPublica';
 import { normalizeEspecialidadesTallerDb } from '../utils/tallerEspecialidades';
 import './Mapa.css';
 
@@ -45,6 +46,7 @@ export function Mapa() {
   const [seleccionado, setSeleccionado] = useState<PuntoMapa | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsError, setGpsError] = useState<string>('');
+  const [mapaLimiteAlcanzado, setMapaLimiteAlcanzado] = useState(false);
   const mapRef = useRef<google.maps.Map | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
@@ -56,22 +58,30 @@ export function Mapa() {
   });
 
   const cargarPuntos = useCallback(async () => {
+    const limite = MAPA_MAX_PUNTOS_POR_TIPO;
     const [resTalleres, resTiendas] = await Promise.all([
       supabase
         .from('talleres')
         .select('id, nombre, nombre_comercial, latitud, longitud, especialidad, telefono')
         .eq('vertical', vertical)
         .not('latitud', 'is', null)
-        .not('longitud', 'is', null),
+        .not('longitud', 'is', null)
+        .order('nombre_comercial', { ascending: true, nullsFirst: false })
+        .order('nombre', { ascending: true, nullsFirst: false })
+        .order('id', { ascending: true })
+        .range(0, limite),
       supabase
         .from('tiendas')
         .select('id, nombre, latitud, longitud')
         .eq('vertical', vertical)
         .not('latitud', 'is', null)
-        .not('longitud', 'is', null),
+        .not('longitud', 'is', null)
+        .order('nombre', { ascending: true, nullsFirst: false })
+        .order('id', { ascending: true })
+        .range(0, limite),
     ]);
 
-    const talleres = (resTalleres.data ?? []) as Array<{
+    const rawTalleres = (resTalleres.data ?? []) as Array<{
       id: string;
       nombre: string | null;
       nombre_comercial: string | null;
@@ -80,12 +90,16 @@ export function Mapa() {
       especialidad?: string[] | string | null;
       telefono?: string | null;
     }>;
-    const tiendas = (resTiendas.data ?? []) as Array<{
+    const rawTiendas = (resTiendas.data ?? []) as Array<{
       id: string;
       nombre: string | null;
       latitud: number;
       longitud: number;
     }>;
+    const truncadoTalleres = rawTalleres.length > limite;
+    const truncadoTiendas = rawTiendas.length > limite;
+    const talleres = truncadoTalleres ? rawTalleres.slice(0, limite) : rawTalleres;
+    const tiendas = truncadoTiendas ? rawTiendas.slice(0, limite) : rawTiendas;
 
     const pts: PuntoMapa[] = [
       ...talleres.map((t) => ({
@@ -109,6 +123,7 @@ export function Mapa() {
       })),
     ];
     setPuntos(pts);
+    setMapaLimiteAlcanzado(truncadoTalleres || truncadoTiendas);
   }, [vertical]);
 
   useEffect(() => {
@@ -278,6 +293,12 @@ export function Mapa() {
       <div className="mapa-leyenda">
         <span><strong style={{ color: '#111111' }}>●</strong> Vendedor / Tienda</span>
         <span><strong style={{ color: '#1e5bff' }}>●</strong> Taller</span>
+        {mapaLimiteAlcanzado && (
+          <span className="mapa-leyenda-aviso" role="status">
+            Mostrando hasta {MAPA_MAX_PUNTOS_POR_TIPO} vendedores y {MAPA_MAX_PUNTOS_POR_TIPO} talleres en el mapa.
+            Usa la búsqueda por zona para ver más.
+          </span>
+        )}
       </div>
     </div>
   );

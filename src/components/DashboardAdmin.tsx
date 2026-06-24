@@ -17,6 +17,8 @@ import './Dashboard.css';
 const ADMIN_LIST_LIMIT = 250;
 /** Filas máximas en el modal de detalle KPI (evita DOM enorme con miles de productos). */
 const ADMIN_KPI_MODAL_ROWS = 250;
+const ADMIN_TIENDAS_SELECT =
+  'id, user_id, nombre, nombre_comercial, rif, telefono, estado, ciudad, bloqueado, aprobacion_estado, created_at, membresia_hasta';
 
 type AdminKpiDetalle =
   | 'usuarios_total'
@@ -175,30 +177,52 @@ type AdminTienda = {
 };
 
 /**
- * Membresía vencida o sin fecha (comparación por calendario local).
- * Evita el desfase de `new Date('YYYY-MM-DD')` que interpreta UTC y cambia el día en VE.
+ * Fecha calendario YYYY-MM-DD en UTC (misma base que Postgres CURRENT_DATE en Supabase).
+ */
+function fechaCalendarioUtc(d: Date = new Date()): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+function extraerFechaCalendarioMembresia(membresiaHasta: string): string | null {
+  const parts = String(membresiaHasta).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!parts) return null;
+  return `${parts[1]}-${parts[2]}-${parts[3]}`;
+}
+
+/**
+ * Membresía vencida o sin fecha. Alineado con RLS/KPI SQL:
+ * `membresia_hasta IS NULL OR membresia_hasta < CURRENT_DATE`.
  */
 function membresiaVencidaOSinFecha(membresiaHasta: string | null | undefined, ahora: Date = new Date()): boolean {
   if (membresiaHasta == null || String(membresiaHasta).trim() === '') return true;
-  const s = String(membresiaHasta).trim();
-  const parts = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  let fin: Date;
-  if (parts) {
-    fin = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
-  } else {
-    fin = new Date(s);
-    if (Number.isNaN(fin.getTime())) return true;
-    fin = new Date(fin.getFullYear(), fin.getMonth(), fin.getDate());
-  }
-  const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
-  return fin < hoy;
+  const fechaMem = extraerFechaCalendarioMembresia(String(membresiaHasta));
+  if (!fechaMem) return true;
+  return fechaMem < fechaCalendarioUtc(ahora);
+}
+
+function tiendaBloqueadaPorAdmin(t: AdminTienda): boolean {
+  return t.bloqueado === true;
 }
 
 /** Tienda aprobada: sin visibilidad pública por impago (bloqueo admin o membresía no vigente), alineado con políticas RLS. */
 function tiendaSuspendidaPorImpago(t: AdminTienda): boolean {
   if ((t.aprobacion_estado ?? 'aprobado') !== 'aprobado') return false;
-  if (t.bloqueado === true) return true;
+  if (tiendaBloqueadaPorAdmin(t)) return true;
   return membresiaVencidaOSinFecha(t.membresia_hasta);
+}
+
+/** Columna «Estado pago» en vendedores: debe coincidir con el KPI suspendidos. */
+function etiquetaEstadoImpagoTienda(v: AdminTienda): { texto: string; clase: 'ok' | 'rechazado' } {
+  if (!tiendaSuspendidaPorImpago(v)) {
+    return { texto: 'Al día', clase: 'ok' };
+  }
+  if (tiendaBloqueadaPorAdmin(v)) {
+    return { texto: 'Suspendido — bloqueo admin', clase: 'rechazado' };
+  }
+  if (v.membresia_hasta == null || String(v.membresia_hasta).trim() === '') {
+    return { texto: 'Suspendido — sin fecha membresía', clase: 'rechazado' };
+  }
+  return { texto: 'Suspendido — membresía vencida', clase: 'rechazado' };
 }
 
 /** Texto en la tabla de vendedores: alineado con la misma lógica que el KPI «suspendidos por impago». */
@@ -206,13 +230,34 @@ function etiquetaVisibilidadWebTienda(v: AdminTienda): { texto: string; clase: '
   if ((v.aprobacion_estado ?? 'aprobado') !== 'aprobado') {
     return { texto: '—', clase: 'ok' };
   }
-  if (v.bloqueado === true) {
-    return { texto: 'Suspendida (bloqueo admin)', clase: 'warn' };
+  if (tiendaBloqueadaPorAdmin(v)) {
+    return { texto: 'Oculta (bloqueo admin)', clase: 'warn' };
   }
   if (membresiaVencidaOSinFecha(v.membresia_hasta)) {
-    return { texto: 'Sin membresía vigente (no publica)', clase: 'warn' };
+    return { texto: 'Oculta (sin membresía vigente)', clase: 'warn' };
   }
-  return { texto: 'Publicable en web', clase: 'ok' };
+  return { texto: 'Visible en web', clase: 'ok' };
+}
+
+/** Listado suspendidos por impago: RPC admin; si falla el RPC, filtra tiendas vía RLS admin. */
+async function fetchTiendasSuspendidasImpago(limit = 2000): Promise<{
+  data: AdminTienda[];
+  rpcError: string | null;
+}> {
+  const res = await supabase.rpc('admin_list_tiendas_suspendidas_impago', { p_limit: limit });
+  if (!res.error) {
+    return { data: (res.data ?? []) as AdminTienda[], rpcError: null };
+  }
+  const fb = await supabase
+    .from('tiendas')
+    .select(ADMIN_TIENDAS_SELECT)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (fb.error) {
+    return { data: [], rpcError: res.error.message || fb.error.message };
+  }
+  const rows = ((fb.data ?? []) as AdminTienda[]).filter(tiendaSuspendidaPorImpago);
+  return { data: rows, rpcError: res.error.message };
 }
 
 type AdminTaller = {
@@ -244,6 +289,17 @@ function fmtFecha(v?: string | null) {
   }
 }
 
+/** Fecha membresía YYYY-MM-DD sin desfase UTC en la tabla admin. */
+function fmtMembresiaHasta(v?: string | null) {
+  if (!v) return '—';
+  const parts = String(v).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (parts) {
+    const d = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
+    return d.toLocaleDateString('es-VE');
+  }
+  return fmtFecha(v);
+}
+
 /** Reciente primero (fechas ISO). */
 function cmpIsoDesc(a?: string | null, b?: string | null) {
   const ta = a ? Date.parse(a) : 0;
@@ -251,11 +307,11 @@ function cmpIsoDesc(a?: string | null, b?: string | null) {
   return tb - ta;
 }
 
-/** Fecha local YYYY-MM-DD, N días desde hoy (para renovar membresía desde el panel). */
-function fechaLocalDesdeHoy(dias: number): string {
+/** Fecha membresía N días desde hoy UTC (misma base que CURRENT_DATE en Supabase). */
+function fechaMembresiaDesdeHoyUtc(dias: number): string {
   const d = new Date();
-  d.setDate(d.getDate() + dias);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  d.setUTCDate(d.getUTCDate() + dias);
+  return fechaCalendarioUtc(d);
 }
 
 function capFilasKpiModal<T>(arr: T[]): { rows: T[]; total: number; trunc: number } {
@@ -359,6 +415,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [busquedaUsuarios, setBusquedaUsuarios] = useState('');
   const [busquedaCompradores, setBusquedaCompradores] = useState('');
   const [busquedaVendedores, setBusquedaVendedores] = useState('');
+  const [filtroSoloSuspendidosImpago, setFiltroSoloSuspendidosImpago] = useState(false);
   const [busquedaTalleres, setBusquedaTalleres] = useState('');
   const [fotosMasivasTiendaId, setFotosMasivasTiendaId] = useState('');
   const [fotosMasivasAlcance, setFotosMasivasAlcance] = useState<'todos' | 'sin_foto' | 'seleccionados'>('sin_foto');
@@ -461,9 +518,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const cargarVendedores = async (buscar: string) => {
     let q = supabase
       .from('tiendas')
-      .select(
-        'id, user_id, nombre, nombre_comercial, rif, telefono, estado, ciudad, bloqueado, aprobacion_estado, created_at, membresia_hasta'
-      )
+      .select(ADMIN_TIENDAS_SELECT)
       .order('created_at', { ascending: false })
       .limit(ADMIN_LIST_LIMIT);
     const t = buscar.trim();
@@ -473,7 +528,30 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     }
     const vRes = await q;
     if (vRes.error) setError(vRes.error.message);
-    setVendedores((vRes.data ?? []) as AdminTienda[]);
+    let rows = (vRes.data ?? []) as AdminTienda[];
+
+    // Tiendas suspendidas pueden quedar fuera de las 250 filas recientes; el KPI las cuenta igual.
+    if (!t) {
+      const { data: suspendidas } = await fetchTiendasSuspendidasImpago(2000);
+      if (suspendidas.length) {
+        for (const tienda of suspendidas) {
+          const idx = rows.findIndex((r) => r.id === tienda.id);
+          if (idx >= 0) {
+            rows[idx] = { ...rows[idx], ...tienda };
+          } else {
+            rows.push(tienda);
+          }
+        }
+        rows.sort((a, b) => {
+          const sa = tiendaSuspendidaPorImpago(a) ? 0 : 1;
+          const sb = tiendaSuspendidaPorImpago(b) ? 0 : 1;
+          if (sa !== sb) return sa - sb;
+          return cmpIsoDesc(a.created_at, b.created_at);
+        });
+      }
+    }
+
+    setVendedores(rows);
   };
 
   const cargarTalleres = async (buscar: string) => {
@@ -566,25 +644,13 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     setListaSuspendidasImpagoModal(null);
     setErrListaSuspendidasImpagoModal(null);
     void (async () => {
-      const ahora = new Date();
-      const hoyStr = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(
-        ahora.getDate()
-      ).padStart(2, '0')}`;
-      const res = await supabase
-        .from('tiendas')
-        .select(
-          'id, user_id, nombre, nombre_comercial, rif, telefono, estado, ciudad, bloqueado, aprobacion_estado, created_at, membresia_hasta'
-        )
-        .or('aprobacion_estado.eq.aprobado,aprobacion_estado.is.null')
-        .or(`bloqueado.eq.true,membresia_hasta.is.null,membresia_hasta.lt.${hoyStr}`)
-        .order('created_at', { ascending: false });
+      const { data, rpcError } = await fetchTiendasSuspendidasImpago(2000);
       if (cancelled) return;
-      if (res.error) {
-        setErrListaSuspendidasImpagoModal(res.error.message);
+      if (data.length === 0 && rpcError) {
+        setErrListaSuspendidasImpagoModal(rpcError);
         return;
       }
-      const rows = (res.data ?? []) as AdminTienda[];
-      setListaSuspendidasImpagoModal(rows.filter((t) => tiendaSuspendidaPorImpago(t)));
+      setListaSuspendidasImpagoModal(data);
     })();
     return () => {
       cancelled = true;
@@ -632,6 +698,25 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       return la.localeCompare(lb, 'es');
     });
   }, [vendedores]);
+
+  const vendedoresVisibles = useMemo(() => {
+    let list = [...vendedores];
+    if (filtroSoloSuspendidosImpago) {
+      list = list.filter(tiendaSuspendidaPorImpago);
+    }
+    list.sort((a, b) => {
+      const sa = tiendaSuspendidaPorImpago(a) ? 0 : 1;
+      const sb = tiendaSuspendidaPorImpago(b) ? 0 : 1;
+      if (sa !== sb) return sa - sb;
+      return cmpIsoDesc(a.created_at, b.created_at);
+    });
+    return list;
+  }, [vendedores, filtroSoloSuspendidosImpago]);
+
+  const vendedoresSuspendidosEnLista = useMemo(
+    () => vendedores.filter(tiendaSuspendidaPorImpago).length,
+    [vendedores]
+  );
 
   const productosFiltrados = useMemo(() => {
     const texto = busquedaProductosAdmin.trim().toLocaleLowerCase('es');
@@ -1223,7 +1308,11 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     setAccionando(null);
   };
 
-  const irATabDesdeKpi = (t: AdminTab) => {
+  const irATabDesdeKpi = (t: AdminTab, desdeKpi?: AdminKpiDetalle | null) => {
+    if (desdeKpi === 'vendedores_suspendidos_impago') {
+      setFiltroSoloSuspendidosImpago(true);
+      setBusquedaVendedores('');
+    }
     setTab(t);
     setKpiDetalle(null);
   };
@@ -1278,9 +1367,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                   <td>{etiquetaAprobacion(v.aprobacion_estado)}</td>
                   <td>{v.bloqueado ? 'Sí' : 'No'}</td>
                   <td>
-                    {v.membresia_hasta
-                      ? new Date(v.membresia_hasta).toLocaleDateString('es-VE')
-                      : '—'}
+                    {fmtMembresiaHasta(v.membresia_hasta)}
                   </td>
                   <td>{fmtFecha(v.created_at)}</td>
                 </tr>
@@ -1446,8 +1533,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
               listaMostrar.length !== kpis.vendedores_suspendidos_impago && (
                 <p className="dashboard-kpi-modal-aviso">
                   El KPI indica <strong>{kpis.vendedores_suspendidos_impago}</strong> y este listado muestra{' '}
-                  <strong>{listaMostrar.length}</strong>. Si persiste, revisa la función SQL{' '}
-                  <code>admin_dashboard_counts</code> y el filtro de tiendas aprobadas en código.
+                  <strong>{listaMostrar.length}</strong>. Ejecuta en Supabase el bloque SQL del panel admin
+                  (funciones <code>tienda_suspendida_por_impago</code> y{' '}
+                  <code>admin_list_tiendas_suspendidas_impago</code>) y recarga la página.
                 </p>
               )}
             {!cargandoSuspendidas &&
@@ -2283,12 +2371,21 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       spellCheck={false}
                     />
                     <span className="dashboard-admin-busqueda-hint">
-                      Hasta {ADMIN_LIST_LIMIT} filas. <strong>Suspender por impago</strong> es bloqueo admin. Si el
-                      vendedor ya pagó y solo faltaba fecha, usa <strong>+30 días</strong> o <strong>+1 año</strong>{' '}
-                      en Acciones.
+                      Hasta {ADMIN_LIST_LIMIT} filas recientes + suspendidos por impago. Los suspendidos aparecen
+                      primero (fila naranja). Para reactivar: <strong>+30 días</strong> / <strong>+1 año</strong>{' '}
+                      tras el pago, o <strong>Quitar bloqueo admin</strong> si lo suspendiste manualmente.
                     </span>
                   </div>
                   <div className="dashboard-admin-acciones-masivas">
+                    <button
+                      type="button"
+                      className={`dashboard-admin-btn ${filtroSoloSuspendidosImpago ? 'warn' : ''}`}
+                      onClick={() => setFiltroSoloSuspendidosImpago((x) => !x)}
+                    >
+                      {filtroSoloSuspendidosImpago
+                        ? 'Ver todos los vendedores'
+                        : `Solo suspendidos por impago (${vendedoresSuspendidosEnLista})`}
+                    </button>
                     <button
                       type="button"
                       className="dashboard-admin-btn ok"
@@ -2311,6 +2408,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           <th>Estado</th>
                           <th>Ciudad</th>
                           <th>Autorización web</th>
+                          <th>Estado pago</th>
                           <th>Visibilidad web</th>
                           <th>Membresía hasta</th>
                           <th>User ID</th>
@@ -2318,11 +2416,25 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         </tr>
                       </thead>
                       <tbody>
-                        {vendedores.map((v) => {
+                        {vendedoresVisibles.length === 0 ? (
+                          <tr>
+                            <td colSpan={11} className="dashboard-texto-placeholder">
+                              {filtroSoloSuspendidosImpago
+                                ? 'Ningún vendedor suspendido en el listado cargado. Quita el filtro o recarga la pestaña.'
+                                : 'No hay vendedores en el listado.'}
+                            </td>
+                          </tr>
+                        ) : (
+                        vendedoresVisibles.map((v) => {
                           const ap = claseAprobacion(v.aprobacion_estado);
+                          const estadoImpago = etiquetaEstadoImpagoTienda(v);
                           const visWeb = etiquetaVisibilidadWebTienda(v);
+                          const suspendida = tiendaSuspendidaPorImpago(v);
                           return (
-                          <tr key={v.id}>
+                          <tr
+                            key={v.id}
+                            className={suspendida ? 'dashboard-admin-row-impago' : undefined}
+                          >
                             <td>{v.nombre_comercial || v.nombre || '—'}</td>
                             <td>{v.rif || '—'}</td>
                             <td>{v.telefono || '—'}</td>
@@ -2370,17 +2482,24 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                               </div>
                             </td>
                             <td>
-                              <span className={`dashboard-admin-status ${visWeb.clase}`}>{visWeb.texto}</span>
+                              <span className={`dashboard-admin-status ${estadoImpago.clase}`}>
+                                {estadoImpago.texto}
+                              </span>
                             </td>
                             <td>
-                              {v.membresia_hasta
-                                ? new Date(v.membresia_hasta).toLocaleDateString('es-VE')
-                                : '—'}
+                              <span className={`dashboard-admin-status ${visWeb.clase}`}>{visWeb.texto}</span>
                             </td>
+                            <td>{fmtMembresiaHasta(v.membresia_hasta)}</td>
                             <td>{v.user_id}</td>
                             <td>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                {v.bloqueado ? (
+                                {suspendida && (
+                                  <p className="dashboard-admin-vendedor-impago-aviso">
+                                    Sus productos están ocultos al público. Reactiva la membresía para que vuelvan a
+                                    publicarse.
+                                  </p>
+                                )}
+                                {tiendaBloqueadaPorAdmin(v) ? (
                                   <button
                                     type="button"
                                     className="dashboard-admin-btn ok"
@@ -2399,11 +2518,12 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                     Suspender por impago
                                   </button>
                                 )}
-                                {(v.aprobacion_estado ?? 'aprobado') === 'aprobado' &&
-                                  membresiaVencidaOSinFecha(v.membresia_hasta) && (
+                                {(v.aprobacion_estado ?? 'aprobado') === 'aprobado' && suspendida && (
                                     <div className="dashboard-admin-acciones-mini" style={{ flexWrap: 'wrap' }}>
                                       <span style={{ width: '100%', fontSize: '0.85em', opacity: 0.9 }}>
-                                        Tras pago (nueva vigencia):
+                                        {tiendaBloqueadaPorAdmin(v)
+                                          ? 'Tras pago, renueva membresía y quita el bloqueo:'
+                                          : 'Tras pago (nueva vigencia):'}
                                       </span>
                                       <button
                                         type="button"
@@ -2411,7 +2531,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                         disabled={
                                           accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`
                                         }
-                                        onClick={() => void setTiendaMembresiaHasta(v.id, fechaLocalDesdeHoy(30))}
+                                        onClick={() => void setTiendaMembresiaHasta(v.id, fechaMembresiaDesdeHoyUtc(30))}
                                       >
                                         +30 días
                                       </button>
@@ -2421,7 +2541,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                         disabled={
                                           accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`
                                         }
-                                        onClick={() => void setTiendaMembresiaHasta(v.id, fechaLocalDesdeHoy(365))}
+                                        onClick={() => void setTiendaMembresiaHasta(v.id, fechaMembresiaDesdeHoyUtc(365))}
                                       >
                                         +1 año
                                       </button>
@@ -2431,7 +2551,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             </td>
                           </tr>
                           );
-                        })}
+                        })
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -2687,7 +2808,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                   <button
                     type="button"
                     className="dashboard-btn-accion"
-                    onClick={() => irATabDesdeKpi(KPI_DETALLE_IR_TAB[kpiDetalle]!)}
+                    onClick={() => irATabDesdeKpi(KPI_DETALLE_IR_TAB[kpiDetalle]!, kpiDetalle)}
                   >
                     Ir a «{etiquetaPestañaAdmin(KPI_DETALLE_IR_TAB[kpiDetalle]!)}»
                   </button>

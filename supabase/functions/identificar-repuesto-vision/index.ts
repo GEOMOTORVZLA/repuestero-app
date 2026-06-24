@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { requireAuthenticatedUser } from "../_shared/requireAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1146,6 +1147,16 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Método no permitido." }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const auth = await requireAuthenticatedUser(req, { corsHeaders, maxPerHour: 5 });
+  if (auth instanceof Response) return auth;
 
   try {
     const apiKey = Deno.env.get("GOOGLE_CLOUD_VISION_API_KEY") ?? Deno.env.get("VISION_API_KEY");

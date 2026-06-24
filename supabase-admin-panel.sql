@@ -378,7 +378,87 @@ $$;
 grant execute on function public.admin_set_comprador_suspendido_membresia(uuid, boolean) to authenticated;
 
 -- === Panel admin: en Supabase → SQL Editor, copia el bloque que empieza en
---     "-- KPIs del resumen..." y termina en "NOTIFY pgrst, 'reload schema';" inclusiva. ===
+--     "-- Criterio único tienda suspendida..." y termina en "NOTIFY pgrst, 'reload schema';" inclusiva. ===
+
+-- Criterio único: tienda aprobada sin visibilidad pública por impago (KPI + listado admin).
+create or replace function public.tienda_suspendida_por_impago(
+  p_aprobacion_estado text,
+  p_bloqueado boolean,
+  p_membresia_hasta date
+)
+returns boolean
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce(p_aprobacion_estado, 'aprobado') = 'aprobado'
+    and (
+      coalesce(p_bloqueado, false) = true
+      or p_membresia_hasta is null
+      or p_membresia_hasta < current_date
+    );
+$$;
+
+grant execute on function public.tienda_suspendida_por_impago(text, boolean, date) to authenticated;
+
+-- Listado del modal KPI «vendedores suspendidos por impago» (misma lógica que admin_dashboard_counts).
+drop function if exists public.admin_list_tiendas_suspendidas_impago(int);
+
+create or replace function public.admin_list_tiendas_suspendidas_impago(
+  p_limit int default 500
+)
+returns table (
+  id uuid,
+  user_id uuid,
+  nombre text,
+  nombre_comercial text,
+  rif text,
+  telefono text,
+  estado text,
+  ciudad text,
+  bloqueado boolean,
+  aprobacion_estado text,
+  created_at timestamptz,
+  membresia_hasta date
+)
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  lim int := least(greatest(coalesce(p_limit, 500), 1), 2000);
+begin
+  if not exists (
+    select 1
+    from auth.users me
+    where me.id = auth.uid()
+      and coalesce(me.raw_app_meta_data ->> 'role', '') = 'admin'
+  ) then
+    raise exception 'No autorizado';
+  end if;
+
+  return query
+  select
+    t.id::uuid,
+    t.user_id::uuid,
+    t.nombre::text,
+    t.nombre_comercial::text,
+    t.rif::text,
+    t.telefono::text,
+    t.estado::text,
+    t.ciudad::text,
+    coalesce(t.bloqueado, false)::boolean,
+    coalesce(t.aprobacion_estado, 'aprobado')::text,
+    t.created_at::timestamptz,
+    t.membresia_hasta::date
+  from public.tiendas t
+  where public.tienda_suspendida_por_impago(t.aprobacion_estado, t.bloqueado, t.membresia_hasta)
+  order by t.created_at desc
+  limit lim;
+end;
+$$;
+
+grant execute on function public.admin_list_tiendas_suspendidas_impago(int) to authenticated;
 
 -- KPIs del resumen sin cargar miles de filas al navegador
 create or replace function public.admin_dashboard_counts()
@@ -412,12 +492,7 @@ begin
     'vendedores_suspendidos_impago', (
       select count(*)::int
       from public.tiendas t
-      where coalesce(t.aprobacion_estado, 'aprobado') = 'aprobado'
-        and (
-          coalesce(t.bloqueado, false) = true
-          or t.membresia_hasta is null
-          or t.membresia_hasta < current_date
-        )
+      where public.tienda_suspendida_por_impago(t.aprobacion_estado, t.bloqueado, t.membresia_hasta)
     ),
     'talleres_total', (select count(*)::int from public.talleres),
     'compradores_total', compradores_ct::int,

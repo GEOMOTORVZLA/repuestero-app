@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
-import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
+import { ESTADOS_VENEZUELA, getCiudadesPorEstado, valoresCiudadFiltroBd } from '../data/ciudadesVenezuela';
 import { ESPECIALIDADES_TALLER, ESPECIALIDADES_TALLER_MOTO } from '../data/registroVenezuela';
+import { PAGE_SIZE_TALLERES_BUSQUEDA } from '../constants/limitesConsultaPublica';
 import { normalizeEspecialidadesTallerDb } from '../utils/tallerEspecialidades';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
 import {
@@ -48,6 +49,8 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
   const [estado, setEstado] = useState('');
   const [ciudad, setCiudad] = useState('');
   const [talleres, setTalleres] = useState<Taller[]>([]);
+  const [hayMasTalleres, setHayMasTalleres] = useState(false);
+  const [cargandoMasTalleres, setCargandoMasTalleres] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [buscado, setBuscado] = useState(false);
   const [avisoSeleccionarEstado, setAvisoSeleccionarEstado] = useState(false);
@@ -60,8 +63,32 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
     setEspecialidad('');
     setBuscado(false);
     setTalleres([]);
+    setHayMasTalleres(false);
     setAvisoSeleccionarEstado(false);
   }, [vertical]);
+
+  const construirQueryTalleres = () => {
+    let query = supabase
+      .from('talleres')
+      .select(
+        'id, nombre, nombre_comercial, rif, especialidad, marca_vehiculo, acerca_de, estado, ciudad, telefono, email, direccion, latitud, longitud, metodos_pago'
+      )
+      .eq('vertical', vertical);
+
+    if (especialidad) {
+      query = query.contains('especialidad', [especialidad]);
+    }
+    query = query.eq('estado', estado);
+    if (ciudad) {
+      const ciudadesBd = valoresCiudadFiltroBd(estado, ciudad);
+      query = ciudadesBd.length === 1 ? query.eq('ciudad', ciudadesBd[0]) : query.in('ciudad', ciudadesBd);
+    }
+
+    return query
+      .order('nombre_comercial', { ascending: true, nullsFirst: false })
+      .order('nombre', { ascending: true, nullsFirst: false })
+      .order('id', { ascending: true });
+  };
 
   const buscar = async () => {
     onBuscar?.();
@@ -76,31 +103,44 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
 
     setAvisoSeleccionarEstado(false);
     setCargando(true);
+    setHayMasTalleres(false);
 
-    let query = supabase
-      .from('talleres')
-      .select(
-        'id, nombre, nombre_comercial, rif, especialidad, marca_vehiculo, acerca_de, estado, ciudad, telefono, email, direccion, latitud, longitud, metodos_pago'
-      )
-      .eq('vertical', vertical);
-
-    if (especialidad) {
-      query = query.contains('especialidad', [especialidad]);
-    }
-    query = query.eq('estado', estado);
-    if (ciudad) {
-      query = query.eq('ciudad', ciudad);
-    }
-
-    const { data, error } = await query;
+    const { data, error } = await construirQueryTalleres().range(0, PAGE_SIZE_TALLERES_BUSQUEDA);
 
     if (error) {
       setTalleres([]);
+      setHayMasTalleres(false);
       console.error('Error buscando talleres:', error);
     } else {
-      setTalleres((data ?? []) as Taller[]);
+      const filas = ((data ?? []) as Taller[]).filter((t) => t && typeof t.id === 'string');
+      const mas = filas.length > PAGE_SIZE_TALLERES_BUSQUEDA;
+      setTalleres(mas ? filas.slice(0, PAGE_SIZE_TALLERES_BUSQUEDA) : filas);
+      setHayMasTalleres(mas);
     }
     setCargando(false);
+  };
+
+  const cargarMasTalleres = async () => {
+    if (cargando || cargandoMasTalleres || !hayMasTalleres || !estado.trim()) return;
+    setCargandoMasTalleres(true);
+    const offset = talleres.length;
+    const { data, error } = await construirQueryTalleres().range(
+      offset,
+      offset + PAGE_SIZE_TALLERES_BUSQUEDA
+    );
+
+    if (error) {
+      console.error('Error cargando más talleres:', error);
+      setCargandoMasTalleres(false);
+      return;
+    }
+
+    const filas = ((data ?? []) as Taller[]).filter((t) => t && typeof t.id === 'string');
+    const mas = filas.length > PAGE_SIZE_TALLERES_BUSQUEDA;
+    const chunk = mas ? filas.slice(0, PAGE_SIZE_TALLERES_BUSQUEDA) : filas;
+    setTalleres((prev) => [...prev, ...chunk]);
+    setHayMasTalleres(mas);
+    setCargandoMasTalleres(false);
   };
 
   const nombreTaller = (t: Taller) => t.nombre_comercial || t.nombre || 'Sin nombre';
@@ -132,6 +172,7 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
   const cerrarPanelResultadosTalleres = useCallback(() => {
     setBuscado(false);
     setTalleres([]);
+    setHayMasTalleres(false);
     setAvisoSeleccionarEstado(false);
   }, []);
 
@@ -175,6 +216,7 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
               setEspecialidad(e.target.value);
               setBuscado(false);
               setTalleres([]);
+              setHayMasTalleres(false);
               setAvisoSeleccionarEstado(false);
             }}
           >
@@ -195,6 +237,7 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
               setAvisoSeleccionarEstado(false);
               setBuscado(false);
               setTalleres([]);
+              setHayMasTalleres(false);
             }}
           >
             <option value="">Selecciona el estado</option>
@@ -212,6 +255,7 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
               setCiudad(e.target.value);
               setBuscado(false);
               setTalleres([]);
+              setHayMasTalleres(false);
               setAvisoSeleccionarEstado(false);
             }}
             disabled={!estado}
@@ -323,6 +367,18 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
                       );
                     })}
                   </div>
+                  {hayMasTalleres && (
+                    <div className="vendedores-cerca-cargar-mas">
+                      <button
+                        type="button"
+                        className="vendedores-cerca-cargar-mas-btn"
+                        onClick={() => void cargarMasTalleres()}
+                        disabled={cargandoMasTalleres}
+                      >
+                        {cargandoMasTalleres ? 'Cargando…' : 'Ver más talleres'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

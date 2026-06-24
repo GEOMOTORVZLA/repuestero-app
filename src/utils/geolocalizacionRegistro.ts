@@ -157,14 +157,18 @@ function emparejarCiudadEnEstado(estado: string, ...candidatos: (string | undefi
     .map((x) => normalizarTextoUbicacion(x));
 
   for (const p of partes) {
+    const pCanon =
+      estado === 'Distrito Capital' && p === 'libertador' ? 'caracas' : p;
     for (const c of ciudades) {
-      if (normalizarTextoUbicacion(c) === p) return c;
+      if (normalizarTextoUbicacion(c) === pCanon) return c;
     }
   }
   for (const p of partes) {
+    const pCanon =
+      estado === 'Distrito Capital' && p === 'libertador' ? 'caracas' : p;
     for (const c of ciudades) {
       const nc = normalizarTextoUbicacion(c);
-      if (p.includes(nc) || nc.includes(p)) return c;
+      if (pCanon.includes(nc) || nc.includes(pCanon)) return c;
     }
   }
   return null;

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { permitirAccionCliente } from '../utils/rateLimitCliente';
+import { mensajeErrorCorreoAuth } from '../utils/authRedirect';
 import './Auth.css';
 
 interface AuthProps {
@@ -14,17 +15,7 @@ interface AuthProps {
 type ModoAuth = 'login' | 'registro' | 'recuperar' | 'restablecer';
 
 function traducirErrorAuth(error: string): string {
-  const normalizado = error.toLowerCase();
-  if (normalizado.includes('invalid login credentials')) {
-    return 'Correo o contraseña incorrectos. Si no recuerdas tu contraseña, usa "Olvidé mi contraseña".';
-  }
-  if (normalizado.includes('email not confirmed')) {
-    return 'Este correo aún no está habilitado para iniciar sesión. Contacta al administrador si ya completaste el registro.';
-  }
-  if (normalizado.includes('rate limit')) {
-    return 'Se enviaron demasiados correos en poco tiempo. Espera unos minutos e intenta de nuevo.';
-  }
-  return error;
+  return mensajeErrorCorreoAuth(error);
 }
 
 export function Auth({ onVolver, onIrARegistro, restablecerPassword = false, mensajeInicialError }: AuthProps) {
@@ -97,7 +88,9 @@ export function Auth({ onVolver, onIrARegistro, restablecerPassword = false, men
       }
 
       if (modo === 'registro') {
-        setMensaje('Cuenta creada. Revisa tu correo para confirmar, o inicia sesión si ya está activa.');
+        setMensaje(
+          'Te enviamos un correo de confirmación. Revisa tu bandeja (y spam), abre el enlace y luego inicia sesión.'
+        );
       } else if (modo === 'recuperar') {
         setMensaje('Te enviamos un enlace para restablecer tu contraseña. Revisa tu correo.');
       } else if (modo === 'restablecer') {

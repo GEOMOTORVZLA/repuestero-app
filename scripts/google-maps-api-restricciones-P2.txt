@@ -1,0 +1,55 @@
+P2 - Restringir VITE_GOOGLE_MAPS_API_KEY en Google Cloud Console
+================================================================
+
+Proyecto Geomotor | Clave usada en el cliente (Vite/Capacitor)
+APIs que usa la app: Maps JavaScript API + Places (Autocomplete en Mapa.tsx)
+
+PASO A PASO
+-----------
+1. Abre https://console.cloud.google.com/apis/credentials
+2. Selecciona el mismo proyecto donde creaste la API key de Maps.
+3. Clic en la API key que usas en VITE_GOOGLE_MAPS_API_KEY (y en Vercel).
+4. Restricciones de aplicacion -> Sitios web (referentes HTTP).
+5. Pega TODOS los referentes de la seccion "REFERENTES" mas abajo.
+6. Restricciones de API -> No restringir claves (NO) -> Limitar clave.
+7. Marca solo:
+   - Maps JavaScript API
+   - Places API
+   (Si Autocomplete falla, anade tambien "Geocoding API" como respaldo.)
+8. Guardar. Los cambios pueden tardar hasta 5 minutos.
+
+REFERENTES (copiar linea por linea)
+-----------------------------------
+https://geomotorvzla.com/*
+https://www.geomotorvzla.com/*
+http://localhost:5173/*
+http://127.0.0.1:5173/*
+https://localhost/*
+http://localhost/*
+https://repuestero-app.vercel.app/*
+https://*.vercel.app/*
+
+Nota APK (Capacitor): la app Android carga el bundle con origen https://localhost
+por eso https://localhost/* es obligatorio para que el mapa funcione en Play Store.
+
+No uses restriccion por IP para esta clave: las peticiones salen del navegador
+del usuario, no del servidor de Vercel.
+
+VERIFICACION
+------------
+Web produccion: https://geomotorvzla.com -> mapa / registro con GPS
+Local: npm run dev -> http://localhost:5173
+Si ves RefererNotAllowedMapError o REQUEST_DENIED: falta un referente de la lista.
+
+APK: instala el build release y abre pantalla de mapa o registro con ubicacion.
+
+SEGURIDAD EXTRA (recomendado en la misma consola)
+-------------------------------------------------
+- APIs y servicios -> Biblioteca: desactiva APIs que no uses.
+- Facturacion -> Presupuestos y alertas: alerta si superas umbral mensual.
+- NO rotules la clave en repos publicos; en Vercel solo como env de build.
+
+CLAVE DISTINTA PARA VISION
+--------------------------
+GOOGLE_CLOUD_VISION_API_KEY va en Supabase Secrets (Edge Function), NO en Vite.
+Restringe esa otra clave por API (Cloud Vision) y sin referentes web.
