@@ -432,6 +432,11 @@ function celdaTextoUnaLineaAdmin(texto: string | null | undefined) {
   );
 }
 
+function celdaEmailAdmin(texto: string | null | undefined) {
+  const valor = texto?.trim() || '—';
+  return <span className="dashboard-admin-email-texto">{valor}</span>;
+}
+
 /** Reciente primero (fechas ISO). */
 function cmpIsoDesc(a?: string | null, b?: string | null) {
   const ta = a ? Date.parse(a) : 0;
@@ -1769,8 +1774,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     <tbody>
                       {rows.map((u) => (
                         <tr key={u.user_id}>
-                          <td className="dashboard-admin-texto-td dashboard-admin-email-td">
-                            {celdaTextoUnaLineaAdmin(u.email)}
+                          <td className="dashboard-admin-email-td">
+                            {celdaEmailAdmin(u.email)}
                           </td>
                           <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.tipo_cuenta)}</td>
                           <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.role)}</td>
@@ -2175,8 +2180,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             accionando === `eliminar-${u.user_id}`;
                           return (
                             <tr key={u.user_id}>
-                              <td className="dashboard-admin-texto-td dashboard-admin-email-td">
-                                {celdaTextoUnaLineaAdmin(u.email)}
+                              <td className="dashboard-admin-email-td">
+                                {celdaEmailAdmin(u.email)}
                               </td>
                               <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.tipo_cuenta || 'sin tipo')}</td>
                               <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.role)}</td>
@@ -2769,8 +2774,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             </td>
                             <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(v.rif)}</td>
                             <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(v.telefono)}</td>
-                            <td className="dashboard-admin-texto-td dashboard-admin-email-td">
-                              {celdaTextoUnaLineaAdmin(emailNegocioAdmin(v, emailsPorUserId))}
+                            <td className="dashboard-admin-email-td">
+                              {celdaEmailAdmin(emailNegocioAdmin(v, emailsPorUserId))}
                             </td>
                             <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(v.estado)}</td>
                             <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(v.ciudad)}</td>
@@ -2988,8 +2993,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                               />
                             </td>
                             <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(t.telefono)}</td>
-                            <td className="dashboard-admin-texto-td dashboard-admin-email-td">
-                              {celdaTextoUnaLineaAdmin(emailNegocioAdmin(t, emailsPorUserId))}
+                            <td className="dashboard-admin-email-td">
+                              {celdaEmailAdmin(emailNegocioAdmin(t, emailsPorUserId))}
                             </td>
                             <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(t.estado)}</td>
                             <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(t.ciudad)}</td>
@@ -3165,8 +3170,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           const ocupado = accionando === `comp-memb-${c.user_id}`;
                           return (
                             <tr key={c.user_id}>
-                              <td className="dashboard-admin-texto-td dashboard-admin-email-td">
-                                {celdaTextoUnaLineaAdmin(c.email)}
+                              <td className="dashboard-admin-email-td">
+                                {celdaEmailAdmin(c.email)}
                               </td>
                               <td className="dashboard-admin-texto-td dashboard-admin-nombre-td">
                                 {celdaTextoUnaLineaAdmin(c.nombre_comercial || c.nombre)}

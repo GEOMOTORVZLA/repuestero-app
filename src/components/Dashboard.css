@@ -646,7 +646,18 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
 }
 
 .dashboard-admin-email-td {
-  max-width: 8.5rem;
+  min-width: 10rem;
+  max-width: none;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  vertical-align: top;
+  word-break: break-all;
+}
+
+.dashboard-admin-email-texto {
+  display: block;
+  line-height: 1.35;
 }
 
 .dashboard-admin-membresia-td {
