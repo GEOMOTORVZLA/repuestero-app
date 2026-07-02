@@ -17,8 +17,8 @@ android {
         applicationId "com.geomotor.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // Mantener alineado con iOS: MARKETING_VERSION 1.0.6 / CURRENT_PROJECT_VERSION 7 (project.pbxproj)
-        versionCode 7
+        // Mantener alineado con iOS: MARKETING_VERSION 1.0.6 / CURRENT_PROJECT_VERSION 8 (project.pbxproj)
+        versionCode 8
         versionName "1.0.6"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
