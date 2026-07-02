@@ -645,7 +645,8 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   max-width: 8rem;
 }
 
-.dashboard-admin-email-td {
+.dashboard-admin-email-td,
+.dashboard-admin-rif-td {
   min-width: 10rem;
   max-width: none;
   white-space: normal;
@@ -655,7 +656,8 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   word-break: break-all;
 }
 
-.dashboard-admin-email-texto {
+.dashboard-admin-email-texto,
+.dashboard-admin-rif-texto {
   display: block;
   line-height: 1.35;
 }

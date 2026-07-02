@@ -26,7 +26,7 @@ const ADMIN_TIENDAS_SELECT =
   'id, user_id, nombre, nombre_comercial, rif, telefono, email, estado, ciudad, latitud, longitud, bloqueado, aprobacion_estado, created_at, membresia_hasta';
 
 const ADMIN_TALLERES_SELECT =
-  'id, user_id, nombre, nombre_comercial, especialidad, telefono, email, estado, ciudad, latitud, longitud, bloqueado, aprobacion_estado, created_at, membresia_hasta';
+  'id, user_id, nombre, nombre_comercial, rif, especialidad, telefono, email, estado, ciudad, latitud, longitud, bloqueado, aprobacion_estado, created_at, membresia_hasta';
 
 type AdminKpiDetalle =
   | 'usuarios_total'
@@ -330,6 +330,7 @@ type AdminTaller = {
   user_id: string;
   nombre: string | null;
   nombre_comercial: string | null;
+  rif: string | null;
   especialidad: string[] | string | null;
   telefono: string | null;
   email?: string | null;
@@ -435,6 +436,11 @@ function celdaTextoUnaLineaAdmin(texto: string | null | undefined) {
 function celdaEmailAdmin(texto: string | null | undefined) {
   const valor = texto?.trim() || '—';
   return <span className="dashboard-admin-email-texto">{valor}</span>;
+}
+
+function celdaRifAdmin(texto: string | null | undefined) {
+  const valor = texto?.trim() || '—';
+  return <span className="dashboard-admin-rif-texto">{valor}</span>;
 }
 
 /** Reciente primero (fechas ISO). */
@@ -875,6 +881,19 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     }
     return m;
   }, [usuarios]);
+
+  const rifPorUserId = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const v of vendedores) {
+      const r = v.rif?.trim();
+      if (r) m.set(v.user_id, r);
+    }
+    for (const t of talleres) {
+      const r = t.rif?.trim();
+      if (r) m.set(t.user_id, r);
+    }
+    return m;
+  }, [vendedores, talleres]);
 
   const vendedoresParaFiltroProductos = useMemo(() => {
     return [...vendedores].sort((a, b) => {
@@ -1643,7 +1662,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
               {rows.map((v) => (
                 <tr key={v.id}>
                   <td>{v.nombre_comercial?.trim() || v.nombre || '—'}</td>
-                  <td>{v.rif || '—'}</td>
+                  <td className="dashboard-admin-rif-td">{celdaRifAdmin(v.rif)}</td>
                   <td>{emailNegocioAdmin(v, emailsPorUserId)}</td>
                   <td className="dashboard-admin-coords">{celdaUbicacionAdmin(v.latitud, v.longitud)}</td>
                   <td>{v.ciudad || '—'}</td>
@@ -1674,6 +1693,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
             <thead>
               <tr>
                 <th>Nombre comercial</th>
+                <th>RIF</th>
                 <th>Teléfono</th>
                 <th>Correo</th>
                 <th>Ubicación (lat, lng)</th>
@@ -1688,6 +1708,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
               {rows.map((t) => (
                 <tr key={t.id}>
                   <td>{t.nombre_comercial?.trim() || t.nombre || '—'}</td>
+                  <td className="dashboard-admin-rif-td">{celdaRifAdmin(t.rif)}</td>
                   <td>{t.telefono || '—'}</td>
                   <td>{emailNegocioAdmin(t, emailsPorUserId)}</td>
                   <td className="dashboard-admin-coords">{celdaUbicacionAdmin(t.latitud, t.longitud)}</td>
@@ -1767,6 +1788,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         <th>Correo</th>
                         <th>Tipo</th>
                         <th>Rol</th>
+                        <th>RIF</th>
                         <th>User ID</th>
                         <th>Creado</th>
                       </tr>
@@ -1779,6 +1801,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           </td>
                           <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.tipo_cuenta)}</td>
                           <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.role)}</td>
+                          <td className="dashboard-admin-rif-td">
+                            {celdaRifAdmin(rifPorUserId.get(u.user_id) ?? null)}
+                          </td>
                           <td className="dashboard-admin-userid-td">
                             <AdminCeldaUserId
                               userId={u.user_id}
@@ -1873,7 +1898,6 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     <thead>
                       <tr>
                         <th>Nombre</th>
-                        <th>RIF</th>
                         <th>Teléfono</th>
                         <th>Ciudad</th>
                         <th>Memb. suspendida</th>
@@ -1886,7 +1910,6 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           <td className="dashboard-admin-texto-td dashboard-admin-nombre-td">
                             {celdaTextoUnaLineaAdmin(c.nombre_comercial?.trim() || c.nombre)}
                           </td>
-                          <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(c.rif)}</td>
                           <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(c.telefono)}</td>
                           <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(c.ciudad)}</td>
                           <td className="dashboard-admin-status-td">
@@ -2167,6 +2190,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           <th>Correo</th>
                           <th>Tipo</th>
                           <th>Role</th>
+                          <th>RIF</th>
                           <th>User ID</th>
                           <th>Creado</th>
                           <th>Acciones</th>
@@ -2185,6 +2209,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                               </td>
                               <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.tipo_cuenta || 'sin tipo')}</td>
                               <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.role)}</td>
+                              <td className="dashboard-admin-rif-td">
+                                {celdaRifAdmin(rifPorUserId.get(u.user_id) ?? null)}
+                              </td>
                               <td className="dashboard-admin-userid-td">
                                 <AdminCeldaUserId
                                   userId={u.user_id}
@@ -2772,7 +2799,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             <td className="dashboard-admin-texto-td dashboard-admin-nombre-td">
                               {celdaTextoUnaLineaAdmin(v.nombre_comercial || v.nombre)}
                             </td>
-                            <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(v.rif)}</td>
+                            <td className="dashboard-admin-rif-td">{celdaRifAdmin(v.rif)}</td>
                             <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(v.telefono)}</td>
                             <td className="dashboard-admin-email-td">
                               {celdaEmailAdmin(emailNegocioAdmin(v, emailsPorUserId))}
@@ -2945,6 +2972,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       <thead>
                         <tr>
                           <th>Nombre</th>
+                          <th>RIF</th>
                           <th>Especialidad</th>
                           <th>Teléfono</th>
                           <th>Correo</th>
@@ -2962,7 +2990,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       <tbody>
                         {talleresVisibles.length === 0 ? (
                           <tr>
-                            <td colSpan={13} className="dashboard-texto-placeholder">
+                            <td colSpan={14} className="dashboard-texto-placeholder">
                               {filtroSoloSuspendidosImpagoTalleres
                                 ? 'Ningún taller suspendido en el listado cargado. Quita el filtro o recarga la pestaña.'
                                 : 'No hay talleres en el listado.'}
@@ -2981,6 +3009,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             <td className="dashboard-admin-texto-td dashboard-admin-nombre-td">
                               {celdaTextoUnaLineaAdmin(t.nombre_comercial || t.nombre)}
                             </td>
+                            <td className="dashboard-admin-rif-td">{celdaRifAdmin(t.rif)}</td>
                             <td className="dashboard-admin-especialidad-td">
                               <EspecialidadTallerCeldaAdmin
                                 especialidad={t.especialidad}
@@ -3131,7 +3160,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                   <h2 className="dashboard-seccion-titulo">Perfiles de compradores</h2>
                   <div className="dashboard-admin-busqueda-fila">
                     <label htmlFor="admin-buscar-compradores" className="dashboard-admin-busqueda-label">
-                      Buscar (correo, nombre, RIF, teléfono o parte del ID)
+                      Buscar (correo, nombre, teléfono o parte del ID)
                     </label>
                     <input
                       id="admin-buscar-compradores"
@@ -3155,7 +3184,6 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         <tr>
                           <th>Correo</th>
                           <th>Nombre</th>
-                          <th>RIF</th>
                           <th>Teléfono</th>
                           <th>Estado</th>
                           <th>Ciudad</th>
@@ -3176,7 +3204,6 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                               <td className="dashboard-admin-texto-td dashboard-admin-nombre-td">
                                 {celdaTextoUnaLineaAdmin(c.nombre_comercial || c.nombre)}
                               </td>
-                              <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(c.rif)}</td>
                               <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(c.telefono)}</td>
                               <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(c.estado)}</td>
                               <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(c.ciudad)}</td>

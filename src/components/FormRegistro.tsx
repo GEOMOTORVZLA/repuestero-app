@@ -27,6 +27,7 @@ import {
   esRifValido,
   mensajeValidacionDatosNegocio,
   parseCoordenadaRegistro,
+  rifDesdeFormularioRegistro,
 } from '../utils/validarDatosNegocio';
 
 const MARCAS_TALLER = [
@@ -209,7 +210,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
     const telefonoCompletoPre = restoTel ? `${codigoTel}${restoTel.replace(/\D/g, '')}` : null;
     const rifCompletoPre =
       tipo === 'vendedor' || tipo === 'taller'
-        ? `${tipoRif}${numeroRif.replace(/\D/g, '')}`.trim() || null
+        ? rifDesdeFormularioRegistro(tipoRif, numeroRif)
         : null;
 
     if (tipo === 'vendedor' || tipo === 'taller') {
@@ -218,7 +219,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
         return;
       }
       if (!esRifValido(tipoRif, numeroRif)) {
-        setMensaje('Indica un RIF válido (tipo + número completo).');
+        setMensaje('Indica un RIF (tipo y valor alfanumérico).');
         return;
       }
       const errNegocio = mensajeValidacionDatosNegocio({
@@ -256,11 +257,10 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
     const telefonoCompletoMeta = telefonoCompletoPre;
     const rifCompletoMeta =
       tipo === 'vendedor'
-        ? `${tipoRif}${numeroRif.replace(/\D/g, '')}`.trim() || null
+        ? rifDesdeFormularioRegistro(tipoRif, numeroRif)
         : null;
 
-    const rifUsuarioOComun =
-      `${tipoRif}${numeroRif.replace(/\D/g, '')}`.trim() || null;
+    const rifUsuarioOComun = rifDesdeFormularioRegistro(tipoRif, numeroRif);
 
     const signupMetadata =
       tipo === 'vendedor'
@@ -372,7 +372,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           onExito();
           return;
         }
-        const rifCompleto = `${tipoRif}${numeroRif.replace(/\D/g, '')}`.trim() || null;
+        const rifCompleto = rifDesdeFormularioRegistro(tipoRif, numeroRif);
         const { error: insertError } = await supabase.from('tiendas').insert({
           user_id: sessionUserId,
           nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi tienda',
@@ -610,11 +610,10 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
                   id="numeroRif"
                   className="form-registro-rif-numero"
                   type="text"
-                  inputMode="numeric"
                   value={numeroRif}
                   onChange={(e) => setNumeroRif(e.target.value)}
                   onFocus={(e) => scrollCampoAlFoco(e.currentTarget)}
-                  placeholder="12345678-9"
+                  placeholder="Valor alfanumérico"
                   disabled={cargando}
                 />
               </div>

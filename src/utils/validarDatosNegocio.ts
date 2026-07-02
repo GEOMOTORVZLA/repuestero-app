@@ -32,14 +32,22 @@ export function esTelefonoVenezuelaValido(telefono: string | null | undefined): 
   return digits.length >= 10 && digits.length <= 11 && digits.startsWith('0');
 }
 
+/** RIF en formulario: tipo + número/texto; al menos un carácter alfanumérico. */
+export function rifDesdeFormularioRegistro(tipoRif: string, numeroRif: string): string | null {
+  const combined = `${tipoRif.trim()}${numeroRif.trim()}`.trim();
+  return combined || null;
+}
+
 export function esRifValido(tipoRif: string, numeroRif: string): boolean {
-  const digits = numeroRif.replace(/\D/g, '');
-  return Boolean(tipoRif.trim()) && digits.length >= 7 && digits.length <= 9;
+  const combined = rifDesdeFormularioRegistro(tipoRif, numeroRif);
+  if (!combined) return false;
+  return /[a-zA-Z0-9]/.test(combined);
 }
 
 export function esRifAlmacenadoValido(rif: string | null | undefined): boolean {
-  const digits = String(rif ?? '').replace(/\D/g, '');
-  return digits.length >= 7 && digits.length <= 9;
+  const trimmed = String(rif ?? '').trim();
+  if (!trimmed) return false;
+  return /[a-zA-Z0-9]/.test(trimmed);
 }
 
 export function esNombreNegocioValido(nombreJuridico: string, nombreComercial: string): boolean {
@@ -61,9 +69,6 @@ export type DatosNegocioMinimos = {
 export function mensajeValidacionDatosNegocio(datos: DatosNegocioMinimos): string | null {
   if (!esNombreNegocioValido(datos.nombre ?? '', datos.nombre_comercial ?? '')) {
     return 'Indica el nombre jurídico o comercial del negocio (mínimo 2 caracteres).';
-  }
-  if (datos.rif !== undefined && !esRifAlmacenadoValido(datos.rif)) {
-    return 'Indica un RIF válido (número completo).';
   }
   if (!esTelefonoVenezuelaValido(datos.telefono)) {
     return 'Indica un teléfono de empresa válido (código de área + 7 dígitos).';
