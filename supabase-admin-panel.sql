@@ -308,6 +308,117 @@ $$;
 
 grant execute on function public.admin_set_taller_bloqueado(uuid, boolean) to authenticated;
 
+-- Fecha de fin de membresía del taller (tras pago u operación manual). Solo rol admin.
+create or replace function public.admin_set_taller_membresia_hasta(
+  p_taller_id uuid,
+  p_membresia_hasta date
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not exists (
+    select 1
+    from auth.users me
+    where me.id = auth.uid()
+      and coalesce(me.raw_app_meta_data ->> 'role', '') = 'admin'
+  ) then
+    raise exception 'No autorizado';
+  end if;
+
+  update public.talleres
+  set membresia_hasta = p_membresia_hasta
+  where id = p_taller_id;
+end;
+$$;
+
+grant execute on function public.admin_set_taller_membresia_hasta(uuid, date) to authenticated;
+
+-- Ubicación GPS (solo admin). Mismos límites que validación en la app (Venezuela).
+create or replace function public.admin_set_tienda_ubicacion(
+  p_tienda_id uuid,
+  p_latitud double precision,
+  p_longitud double precision
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not exists (
+    select 1
+    from auth.users me
+    where me.id = auth.uid()
+      and coalesce(me.raw_app_meta_data ->> 'role', '') = 'admin'
+  ) then
+    raise exception 'No autorizado';
+  end if;
+
+  if p_latitud < 0.5 or p_latitud > 12.6 or p_longitud < -73.4 or p_longitud > -59.8 then
+    raise exception 'Coordenadas fuera de Venezuela';
+  end if;
+
+  if abs(p_latitud) < 0.0001 and abs(p_longitud) < 0.0001 then
+    raise exception 'Coordenadas inválidas (0,0)';
+  end if;
+
+  update public.tiendas
+  set latitud = p_latitud,
+      longitud = p_longitud
+  where id = p_tienda_id;
+
+  if not found then
+    raise exception 'Tienda no encontrada';
+  end if;
+end;
+$$;
+
+grant execute on function public.admin_set_tienda_ubicacion(uuid, double precision, double precision) to authenticated;
+
+create or replace function public.admin_set_taller_ubicacion(
+  p_taller_id uuid,
+  p_latitud double precision,
+  p_longitud double precision
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not exists (
+    select 1
+    from auth.users me
+    where me.id = auth.uid()
+      and coalesce(me.raw_app_meta_data ->> 'role', '') = 'admin'
+  ) then
+    raise exception 'No autorizado';
+  end if;
+
+  if p_latitud < 0.5 or p_latitud > 12.6 or p_longitud < -73.4 or p_longitud > -59.8 then
+    raise exception 'Coordenadas fuera de Venezuela';
+  end if;
+
+  if abs(p_latitud) < 0.0001 and abs(p_longitud) < 0.0001 then
+    raise exception 'Coordenadas inválidas (0,0)';
+  end if;
+
+  update public.talleres
+  set latitud = p_latitud,
+      longitud = p_longitud
+  where id = p_taller_id;
+
+  if not found then
+    raise exception 'Taller no encontrado';
+  end if;
+end;
+$$;
+
+grant execute on function public.admin_set_taller_ubicacion(uuid, double precision, double precision) to authenticated;
+
 create or replace function public.admin_set_user_role(
   p_user_id uuid,
   p_role text
@@ -414,8 +525,11 @@ returns table (
   nombre_comercial text,
   rif text,
   telefono text,
+  email text,
   estado text,
   ciudad text,
+  latitud double precision,
+  longitud double precision,
   bloqueado boolean,
   aprobacion_estado text,
   created_at timestamptz,
@@ -445,8 +559,11 @@ begin
     t.nombre_comercial::text,
     t.rif::text,
     t.telefono::text,
+    t.email::text,
     t.estado::text,
     t.ciudad::text,
+    t.latitud::double precision,
+    t.longitud::double precision,
     coalesce(t.bloqueado, false)::boolean,
     coalesce(t.aprobacion_estado, 'aprobado')::text,
     t.created_at::timestamptz,

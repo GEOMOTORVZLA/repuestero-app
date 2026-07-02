@@ -309,14 +309,7 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
                 </p>
               ) : talleres.length === 0 ? (
                 <p className="busqueda-talleres-sin-resultados">
-                  No hay talleres con estos filtros: revisa <strong>estado</strong> y <strong>ciudad</strong>{' '}
-                  (deben coincidir con el registro). En la web solo se listan talleres{' '}
-                  <strong>aprobados</strong> y con <strong>membresía vigente</strong>. Si ya aprobaste uno en
-                  admin y no aparece, en Supabase ejecuta una vez{' '}
-                  <code className="busqueda-talleres-sin-resultados-code">
-                    supabase-talleres-membresia-inicial.sql
-                  </code>{' '}
-                  (o vuelve a pulsar &quot;Aprobar&quot; tras desplegar el SQL actualizado del repositorio).
+                  No hay talleres con estos filtros: revisa <strong>estado</strong> y <strong>ciudad</strong>.
                 </p>
               ) : (
                 <div className="busqueda-talleres-resultados busqueda-talleres-resultados--en-overlay">

@@ -6,6 +6,9 @@ import { verticalDesdePathname } from '../utils/verticalVehiculo';
 import { useAuth } from '../contexts/AuthContext';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import { bannerEstadoCuentaNegocio } from '../utils/estadoCuentaVendedorTaller';
+import {
+  mensajeValidacionDatosNegocio,
+} from '../utils/validarDatosNegocio';
 import { EstadoCuentaNegocioBanner } from './EstadoCuentaNegocioBanner';
 import './PerfilUsuario.css';
 
@@ -242,23 +245,21 @@ export function PerfilUsuario() {
     const nombreJuridico = tienda.nombre?.trim() || '';
     const nombreComercial = tienda.nombre_comercial?.trim() || nombreJuridico || '';
     const rif = tienda.rif?.trim() || '';
+    const telefono = tienda.telefono?.trim() || '';
 
-    const latitudOk = tienda.latitud != null && Number.isFinite(tienda.latitud);
-    const longitudOk = tienda.longitud != null && Number.isFinite(tienda.longitud);
-
-    if (!nombreComercial) {
+    const errNegocio = mensajeValidacionDatosNegocio({
+      nombre: nombreJuridico || null,
+      nombre_comercial: nombreComercial || null,
+      rif: rif || null,
+      telefono: telefono || null,
+      estado: tienda.estado?.trim() || null,
+      ciudad: tienda.ciudad?.trim() || null,
+      latitud: tienda.latitud ?? null,
+      longitud: tienda.longitud ?? null,
+    });
+    if (errNegocio) {
       setEstado('error');
-      setMensaje('Completa el nombre comercial.');
-      return;
-    }
-    if (!rif) {
-      setEstado('error');
-      setMensaje('Completa el RIF.');
-      return;
-    }
-    if (!latitudOk || !longitudOk) {
-      setEstado('error');
-      setMensaje('Completa latitud y longitud (ubicación).');
+      setMensaje(errNegocio);
       return;
     }
 
@@ -268,7 +269,7 @@ export function PerfilUsuario() {
       nombre_comercial: nombreComercial || null,
       vertical: tienda.vertical === 'moto' ? 'moto' : 'auto',
       rif: rif || null,
-      telefono: tienda.telefono?.trim() || null,
+      telefono: telefono || null,
       estado: tienda.estado?.trim() || null,
       ciudad: tienda.ciudad?.trim() || null,
       latitud: tienda.latitud ?? null,

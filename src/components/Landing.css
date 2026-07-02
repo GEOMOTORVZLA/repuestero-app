@@ -575,6 +575,40 @@
   margin: 0;
 }
 
+.lista-repuestos-categoria-busqueda {
+  margin-bottom: 1rem;
+}
+
+.lista-repuestos-categoria-busqueda .busqueda-repuestos-texto-label {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.lista-repuestos-categoria-limpiar {
+  margin-top: 0.55rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #2563eb;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.lista-repuestos-categoria-limpiar:hover:not(:disabled) {
+  color: #1d4ed8;
+}
+
+.lista-repuestos-categoria-limpiar:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* Sección Encuentra el taller que necesitas aquí */
 .landing-taller {
   padding: 1.25rem 1rem;

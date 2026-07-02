@@ -8,17 +8,25 @@ import {
   urlImagenProductoVariante,
 } from '../utils/imagenProducto';
 import { urlsFotosProducto } from '../utils/productoImagenesExtra';
-import { etiquetaEspecialidadesTaller } from '../utils/tallerEspecialidades';
+import { EspecialidadTallerCeldaAdmin } from './EspecialidadTallerCeldaAdmin';
+import { AdminCeldaAutorizacionWeb } from './AdminCeldaAutorizacionWeb';
+import { AdminCeldaUbicacion } from './AdminCeldaUbicacion';
+import { AdminCeldaUserId } from './AdminCeldaUserId';
+import { AdminModalEditarUbicacion } from './AdminModalEditarUbicacion';
 import { etiquetaMoneda } from '../utils/monedaProducto';
 import { formatearPrecioProducto } from '../utils/precioProducto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
+import { mensajeNegocioNoListoParaAprobar } from '../utils/validarDatosNegocio';
 import './Dashboard.css';
 
 const ADMIN_LIST_LIMIT = 250;
 /** Filas máximas en el modal de detalle KPI (evita DOM enorme con miles de productos). */
 const ADMIN_KPI_MODAL_ROWS = 250;
 const ADMIN_TIENDAS_SELECT =
-  'id, user_id, nombre, nombre_comercial, rif, telefono, estado, ciudad, bloqueado, aprobacion_estado, created_at, membresia_hasta';
+  'id, user_id, nombre, nombre_comercial, rif, telefono, email, estado, ciudad, latitud, longitud, bloqueado, aprobacion_estado, created_at, membresia_hasta';
+
+const ADMIN_TALLERES_SELECT =
+  'id, user_id, nombre, nombre_comercial, especialidad, telefono, email, estado, ciudad, latitud, longitud, bloqueado, aprobacion_estado, created_at, membresia_hasta';
 
 type AdminKpiDetalle =
   | 'usuarios_total'
@@ -107,6 +115,7 @@ type FiltroEstadoProductoGestion =
   | 'todos'
   | 'activos'
   | 'pausados'
+  | 'por_aprobar'
   | 'proximos_stock'
   | 'stock_vencido'
   | 'sin_fecha_stock';
@@ -168,11 +177,20 @@ type AdminTienda = {
   nombre_comercial: string | null;
   rif: string | null;
   telefono: string | null;
+  email?: string | null;
   estado: string | null;
   ciudad: string | null;
+  latitud?: number | null;
+  longitud?: number | null;
   bloqueado: boolean | null;
   aprobacion_estado?: string | null;
   created_at?: string | null;
+  membresia_hasta?: string | null;
+};
+
+type AdminPerfilMembresia = {
+  bloqueado: boolean | null;
+  aprobacion_estado?: string | null;
   membresia_hasta?: string | null;
 };
 
@@ -200,23 +218,23 @@ function membresiaVencidaOSinFecha(membresiaHasta: string | null | undefined, ah
   return fechaMem < fechaCalendarioUtc(ahora);
 }
 
-function tiendaBloqueadaPorAdmin(t: AdminTienda): boolean {
-  return t.bloqueado === true;
+function perfilBloqueadoPorAdmin(p: AdminPerfilMembresia): boolean {
+  return p.bloqueado === true;
 }
 
-/** Tienda aprobada: sin visibilidad pública por impago (bloqueo admin o membresía no vigente), alineado con políticas RLS. */
-function tiendaSuspendidaPorImpago(t: AdminTienda): boolean {
-  if ((t.aprobacion_estado ?? 'aprobado') !== 'aprobado') return false;
-  if (tiendaBloqueadaPorAdmin(t)) return true;
-  return membresiaVencidaOSinFecha(t.membresia_hasta);
+/** Perfil aprobado: sin visibilidad pública por impago (bloqueo admin o membresía no vigente), alineado con políticas RLS. */
+function perfilSuspendidoPorImpago(p: AdminPerfilMembresia): boolean {
+  if ((p.aprobacion_estado ?? 'aprobado') !== 'aprobado') return false;
+  if (perfilBloqueadoPorAdmin(p)) return true;
+  return membresiaVencidaOSinFecha(p.membresia_hasta);
 }
 
-/** Columna «Estado pago» en vendedores: debe coincidir con el KPI suspendidos. */
-function etiquetaEstadoImpagoTienda(v: AdminTienda): { texto: string; clase: 'ok' | 'rechazado' } {
-  if (!tiendaSuspendidaPorImpago(v)) {
+/** Columna «Estado pago» en vendedores/talleres: debe coincidir con el KPI suspendidos. */
+function etiquetaEstadoImpagoPerfil(v: AdminPerfilMembresia): { texto: string; clase: 'ok' | 'rechazado' } {
+  if (!perfilSuspendidoPorImpago(v)) {
     return { texto: 'Al día', clase: 'ok' };
   }
-  if (tiendaBloqueadaPorAdmin(v)) {
+  if (perfilBloqueadoPorAdmin(v)) {
     return { texto: 'Suspendido — bloqueo admin', clase: 'rechazado' };
   }
   if (v.membresia_hasta == null || String(v.membresia_hasta).trim() === '') {
@@ -225,18 +243,48 @@ function etiquetaEstadoImpagoTienda(v: AdminTienda): { texto: string; clase: 'ok
   return { texto: 'Suspendido — membresía vencida', clase: 'rechazado' };
 }
 
-/** Texto en la tabla de vendedores: alineado con la misma lógica que el KPI «suspendidos por impago». */
-function etiquetaVisibilidadWebTienda(v: AdminTienda): { texto: string; clase: 'ok' | 'warn' } {
+/** Texto en tablas admin: alineado con la misma lógica que el KPI «suspendidos por impago». */
+function etiquetaVisibilidadWebPerfil(v: AdminPerfilMembresia): { texto: string; clase: 'ok' | 'warn' } {
   if ((v.aprobacion_estado ?? 'aprobado') !== 'aprobado') {
     return { texto: '—', clase: 'ok' };
   }
-  if (tiendaBloqueadaPorAdmin(v)) {
+  if (perfilBloqueadoPorAdmin(v)) {
     return { texto: 'Oculta (bloqueo admin)', clase: 'warn' };
   }
   if (membresiaVencidaOSinFecha(v.membresia_hasta)) {
     return { texto: 'Oculta (sin membresía vigente)', clase: 'warn' };
   }
   return { texto: 'Visible en web', clase: 'ok' };
+}
+
+/** Tabla admin compacta: OK / NO (detalle en title). */
+function etiquetaEstadoImpagoPerfilTabla(v: AdminPerfilMembresia): {
+  texto: string;
+  clase: 'ok' | 'rechazado';
+  title: string;
+} {
+  const detalle = etiquetaEstadoImpagoPerfil(v);
+  return {
+    texto: perfilSuspendidoPorImpago(v) ? 'NO' : 'OK',
+    clase: detalle.clase,
+    title: detalle.texto,
+  };
+}
+
+/** Tabla admin compacta: una palabra (detalle en title). */
+function etiquetaVisibilidadWebPerfilTabla(v: AdminPerfilMembresia): {
+  texto: string;
+  clase: 'ok' | 'warn';
+  title: string;
+} {
+  const detalle = etiquetaVisibilidadWebPerfil(v);
+  if ((v.aprobacion_estado ?? 'aprobado') !== 'aprobado') {
+    return { texto: '—', clase: 'ok', title: 'Sin autorización web' };
+  }
+  if (perfilBloqueadoPorAdmin(v) || membresiaVencidaOSinFecha(v.membresia_hasta)) {
+    return { texto: 'Oculta', clase: 'warn', title: detalle.texto };
+  }
+  return { texto: 'Visible', clase: 'ok', title: detalle.texto };
 }
 
 /** Listado suspendidos por impago: RPC admin; si falla el RPC, filtra tiendas vía RLS admin. */
@@ -256,8 +304,25 @@ async function fetchTiendasSuspendidasImpago(limit = 2000): Promise<{
   if (fb.error) {
     return { data: [], rpcError: res.error.message || fb.error.message };
   }
-  const rows = ((fb.data ?? []) as AdminTienda[]).filter(tiendaSuspendidaPorImpago);
+  const rows = ((fb.data ?? []) as AdminTienda[]).filter(perfilSuspendidoPorImpago);
   return { data: rows, rpcError: res.error.message };
+}
+
+/** Talleres suspendidos por impago (sin RPC dedicado: filtra vía RLS admin). */
+async function fetchTalleresSuspendidosImpago(limit = 2000): Promise<{
+  data: AdminTaller[];
+  rpcError: string | null;
+}> {
+  const fb = await supabase
+    .from('talleres')
+    .select(ADMIN_TALLERES_SELECT)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (fb.error) {
+    return { data: [], rpcError: fb.error.message };
+  }
+  const rows = ((fb.data ?? []) as AdminTaller[]).filter(perfilSuspendidoPorImpago);
+  return { data: rows, rpcError: null };
 }
 
 type AdminTaller = {
@@ -267,11 +332,15 @@ type AdminTaller = {
   nombre_comercial: string | null;
   especialidad: string[] | string | null;
   telefono: string | null;
+  email?: string | null;
   estado: string | null;
   ciudad: string | null;
+  latitud?: number | null;
+  longitud?: number | null;
   bloqueado: boolean | null;
   aprobacion_estado?: string | null;
   created_at?: string | null;
+  membresia_hasta?: string | null;
 };
 
 interface DashboardAdminProps {
@@ -289,6 +358,33 @@ function fmtFecha(v?: string | null) {
   }
 }
 
+/** Fecha corta para tablas admin (una línea). */
+function fmtFechaCortaAdmin(v?: string | null): string {
+  if (!v) return '—';
+  const parts = String(v).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (parts) {
+    return `${parts[3]}/${parts[2]}/${parts[1]}`;
+  }
+  try {
+    return new Date(v).toLocaleDateString('es-VE');
+  } catch {
+    return String(v);
+  }
+}
+
+function etiquetaMembresiaCompradorTabla(c: AdminComprador): {
+  texto: string;
+  clase: 'ok' | 'rechazado';
+  title: string;
+} {
+  const susp = c.suspendido_membresia === true;
+  return {
+    texto: susp ? 'NO' : 'OK',
+    clase: susp ? 'rechazado' : 'ok',
+    title: susp ? 'Suspendido (impago)' : 'Activo',
+  };
+}
+
 /** Fecha membresía YYYY-MM-DD sin desfase UTC en la tabla admin. */
 function fmtMembresiaHasta(v?: string | null) {
   if (!v) return '—';
@@ -298,6 +394,42 @@ function fmtMembresiaHasta(v?: string | null) {
     return d.toLocaleDateString('es-VE');
   }
   return fmtFecha(v);
+}
+
+function fmtCoordAdmin(v?: number | null): string {
+  if (v == null || !Number.isFinite(Number(v))) return '—';
+  return Number(v).toFixed(5);
+}
+
+function celdaUbicacionAdmin(lat?: number | null, lng?: number | null): string {
+  if (lat == null || lng == null || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
+    return '—';
+  }
+  const latN = Number(lat);
+  const lngN = Number(lng);
+  if (Math.abs(latN) < 0.0001 && Math.abs(lngN) < 0.0001) {
+    return '0, 0 (sin ubicación)';
+  }
+  return `${fmtCoordAdmin(latN)}, ${fmtCoordAdmin(lngN)}`;
+}
+
+function emailNegocioAdmin(
+  negocio: { user_id: string; email?: string | null },
+  emailsPorUserId: Map<string, string | null>
+): string {
+  const deTabla = negocio.email?.trim();
+  if (deTabla) return deTabla;
+  const deAuth = emailsPorUserId.get(negocio.user_id)?.trim();
+  return deAuth || '—';
+}
+
+function celdaTextoUnaLineaAdmin(texto: string | null | undefined) {
+  const valor = texto?.trim() || '—';
+  return (
+    <span className="dashboard-admin-texto-una-linea" title={valor !== '—' ? valor : undefined}>
+      {valor}
+    </span>
+  );
 }
 
 /** Reciente primero (fechas ISO). */
@@ -416,6 +548,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [busquedaCompradores, setBusquedaCompradores] = useState('');
   const [busquedaVendedores, setBusquedaVendedores] = useState('');
   const [filtroSoloSuspendidosImpago, setFiltroSoloSuspendidosImpago] = useState(false);
+  const [filtroSoloSuspendidosImpagoTalleres, setFiltroSoloSuspendidosImpagoTalleres] = useState(false);
   const [busquedaTalleres, setBusquedaTalleres] = useState('');
   const [fotosMasivasTiendaId, setFotosMasivasTiendaId] = useState('');
   const [fotosMasivasAlcance, setFotosMasivasAlcance] = useState<'todos' | 'sin_foto' | 'seleccionados'>('sin_foto');
@@ -430,6 +563,21 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   /** Listado KPI modal «productos pausados» (misma lógica que SQL: activo distinto de true). */
   const [listaProductosPausadosModal, setListaProductosPausadosModal] = useState<AdminProducto[] | null>(null);
   const [errListaProductosPausadosModal, setErrListaProductosPausadosModal] = useState<string | null>(null);
+  const [especialidadTallerModal, setEspecialidadTallerModal] = useState<{
+    nombre: string;
+    items: string[];
+  } | null>(null);
+  const [userIdPerfilModal, setUserIdPerfilModal] = useState<{
+    nombre: string;
+    userId: string;
+  } | null>(null);
+  const [ubicacionNegocioModal, setUbicacionNegocioModal] = useState<{
+    tipo: 'tienda' | 'taller';
+    id: string;
+    nombre: string;
+    latitud: number | null;
+    longitud: number | null;
+  } | null>(null);
 
   const cargarProductos = async (opts?: { conIndicadorFiltros?: boolean }) => {
     const conIndicador = opts?.conIndicadorFiltros === true;
@@ -543,8 +691,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           }
         }
         rows.sort((a, b) => {
-          const sa = tiendaSuspendidaPorImpago(a) ? 0 : 1;
-          const sb = tiendaSuspendidaPorImpago(b) ? 0 : 1;
+          const sa = perfilSuspendidoPorImpago(a) ? 0 : 1;
+          const sb = perfilSuspendidoPorImpago(b) ? 0 : 1;
           if (sa !== sb) return sa - sb;
           return cmpIsoDesc(a.created_at, b.created_at);
         });
@@ -557,9 +705,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const cargarTalleres = async (buscar: string) => {
     let q = supabase
       .from('talleres')
-      .select(
-        'id, user_id, nombre, nombre_comercial, especialidad, telefono, estado, ciudad, bloqueado, aprobacion_estado, created_at'
-      )
+      .select(ADMIN_TALLERES_SELECT)
       .order('created_at', { ascending: false })
       .limit(ADMIN_LIST_LIMIT);
     const t = buscar.trim();
@@ -569,7 +715,29 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     }
     const tRes = await q;
     if (tRes.error) setError(tRes.error.message);
-    setTalleres((tRes.data ?? []) as AdminTaller[]);
+    let rows = (tRes.data ?? []) as AdminTaller[];
+
+    if (!t) {
+      const { data: suspendidos } = await fetchTalleresSuspendidosImpago(2000);
+      if (suspendidos.length) {
+        for (const taller of suspendidos) {
+          const idx = rows.findIndex((r) => r.id === taller.id);
+          if (idx >= 0) {
+            rows[idx] = { ...rows[idx], ...taller };
+          } else {
+            rows.push(taller);
+          }
+        }
+        rows.sort((a, b) => {
+          const sa = perfilSuspendidoPorImpago(a) ? 0 : 1;
+          const sb = perfilSuspendidoPorImpago(b) ? 0 : 1;
+          if (sa !== sb) return sa - sb;
+          return cmpIsoDesc(a.created_at, b.created_at);
+        });
+      }
+    }
+
+    setTalleres(rows);
   };
 
   const cargar = async (opts?: { silencioso?: boolean }) => {
@@ -626,13 +794,17 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   }, [busquedaTalleres, tab]);
 
   useEffect(() => {
-    if (!kpiDetalle) return;
+    if (!kpiDetalle && !especialidadTallerModal && !userIdPerfilModal) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setKpiDetalle(null);
+      if (e.key === 'Escape') {
+        setKpiDetalle(null);
+        setEspecialidadTallerModal(null);
+        setUserIdPerfilModal(null);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [kpiDetalle]);
+  }, [kpiDetalle, especialidadTallerModal, userIdPerfilModal]);
 
   useEffect(() => {
     if (kpiDetalle !== 'vendedores_suspendidos_impago') {
@@ -691,6 +863,14 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const productosCountAuto = kpis?.productos_auto ?? productos.filter((p) => (p.vertical ?? 'auto') === 'auto').length;
   const productosCountMoto = kpis?.productos_moto ?? productos.filter((p) => p.vertical === 'moto').length;
 
+  const emailsPorUserId = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const u of usuarios) {
+      m.set(u.user_id, u.email);
+    }
+    return m;
+  }, [usuarios]);
+
   const vendedoresParaFiltroProductos = useMemo(() => {
     return [...vendedores].sort((a, b) => {
       const la = (a.nombre_comercial || a.nombre || '').toLocaleLowerCase('es');
@@ -702,11 +882,11 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const vendedoresVisibles = useMemo(() => {
     let list = [...vendedores];
     if (filtroSoloSuspendidosImpago) {
-      list = list.filter(tiendaSuspendidaPorImpago);
+      list = list.filter(perfilSuspendidoPorImpago);
     }
     list.sort((a, b) => {
-      const sa = tiendaSuspendidaPorImpago(a) ? 0 : 1;
-      const sb = tiendaSuspendidaPorImpago(b) ? 0 : 1;
+      const sa = perfilSuspendidoPorImpago(a) ? 0 : 1;
+      const sb = perfilSuspendidoPorImpago(b) ? 0 : 1;
       if (sa !== sb) return sa - sb;
       return cmpIsoDesc(a.created_at, b.created_at);
     });
@@ -714,8 +894,27 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   }, [vendedores, filtroSoloSuspendidosImpago]);
 
   const vendedoresSuspendidosEnLista = useMemo(
-    () => vendedores.filter(tiendaSuspendidaPorImpago).length,
+    () => vendedores.filter(perfilSuspendidoPorImpago).length,
     [vendedores]
+  );
+
+  const talleresVisibles = useMemo(() => {
+    let list = [...talleres];
+    if (filtroSoloSuspendidosImpagoTalleres) {
+      list = list.filter(perfilSuspendidoPorImpago);
+    }
+    list.sort((a, b) => {
+      const sa = perfilSuspendidoPorImpago(a) ? 0 : 1;
+      const sb = perfilSuspendidoPorImpago(b) ? 0 : 1;
+      if (sa !== sb) return sa - sb;
+      return cmpIsoDesc(a.created_at, b.created_at);
+    });
+    return list;
+  }, [talleres, filtroSoloSuspendidosImpagoTalleres]);
+
+  const talleresSuspendidosEnLista = useMemo(
+    () => talleres.filter(perfilSuspendidoPorImpago).length,
+    [talleres]
   );
 
   const productosFiltrados = useMemo(() => {
@@ -732,6 +931,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
         filtroEstadoProductosAdmin === 'todos' ||
         (filtroEstadoProductosAdmin === 'activos' && p.activo === true) ||
         (filtroEstadoProductosAdmin === 'pausados' && p.activo !== true) ||
+        (filtroEstadoProductosAdmin === 'por_aprobar' &&
+          (p.aprobacion_publica ?? 'aprobado') === 'pendiente') ||
         (filtroEstadoProductosAdmin === 'proximos_stock' &&
           p.activo === true &&
           (semaforo.clase === 'amarillo' || semaforo.clase === 'rojo')) ||
@@ -809,7 +1010,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     (p) => (p.aprobacion_publica ?? 'aprobado') === 'pendiente'
   ).length;
   const vendedoresSuspendidosImpago =
-    kpis?.vendedores_suspendidos_impago ?? vendedores.filter(tiendaSuspendidaPorImpago).length;
+    kpis?.vendedores_suspendidos_impago ?? vendedores.filter(perfilSuspendidoPorImpago).length;
 
   const listasKpiResumen = useMemo(() => {
     const u = [...usuarios].sort((a, b) => cmpIsoDesc(a.creado_en, b.creado_en));
@@ -823,7 +1024,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     const pMoto = pReciente.filter((p) => p.vertical === 'moto');
     const pPendWeb = pReciente.filter((p) => (p.aprobacion_publica ?? 'aprobado') === 'pendiente');
     const vPend = v.filter((x) => (x.aprobacion_estado ?? 'aprobado') === 'pendiente');
-    const vSuspendImpago = v.filter((x) => tiendaSuspendidaPorImpago(x));
+    const vSuspendImpago = v.filter((x) => perfilSuspendidoPorImpago(x));
     const tPend = t.filter((x) => (x.aprobacion_estado ?? 'aprobado') === 'pendiente');
     return {
       u,
@@ -962,6 +1163,55 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     setAccionando(null);
   };
 
+  const setTallerMembresiaHasta = async (tallerId: string, membresiaHasta: string) => {
+    setAccionando(`membresia-taller-${tallerId}`);
+    const { error: rpcError } = await supabase.rpc('admin_set_taller_membresia_hasta', {
+      p_taller_id: tallerId,
+      p_membresia_hasta: membresiaHasta,
+    });
+    if (rpcError) {
+      setError(
+        `No se pudo actualizar la membresía del taller: ${rpcError.message}. ¿Ejecutaste en Supabase admin_set_taller_membresia_hasta (supabase-admin-panel.sql o supabase-fix-talleres-visibilidad-publica.sql)?`
+      );
+    } else {
+      setTalleres((prev) =>
+        prev.map((t) => (t.id === tallerId ? { ...t, membresia_hasta: membresiaHasta } : t))
+      );
+      void cargarKpis();
+    }
+    setAccionando(null);
+  };
+
+  const guardarUbicacionNegocio = async (latitud: number, longitud: number) => {
+    if (!ubicacionNegocioModal) return;
+    const { tipo, id } = ubicacionNegocioModal;
+    setAccionando(`ubic-${tipo}-${id}`);
+    const rpc =
+      tipo === 'tienda' ? 'admin_set_tienda_ubicacion' : 'admin_set_taller_ubicacion';
+    const params =
+      tipo === 'tienda'
+        ? { p_tienda_id: id, p_latitud: latitud, p_longitud: longitud }
+        : { p_taller_id: id, p_latitud: latitud, p_longitud: longitud };
+    const { error: rpcError } = await supabase.rpc(rpc, params);
+    if (rpcError) {
+      setError(
+        `No se pudo actualizar la ubicación: ${rpcError.message}. ¿Ejecutaste en Supabase admin_set_tienda_ubicacion y admin_set_taller_ubicacion (supabase-admin-panel.sql)?`
+      );
+    } else {
+      if (tipo === 'tienda') {
+        setVendedores((prev) =>
+          prev.map((t) => (t.id === id ? { ...t, latitud, longitud } : t))
+        );
+      } else {
+        setTalleres((prev) =>
+          prev.map((t) => (t.id === id ? { ...t, latitud, longitud } : t))
+        );
+      }
+      setUbicacionNegocioModal(null);
+    }
+    setAccionando(null);
+  };
+
   const setTallerBloqueado = async (tallerId: string, bloqueado: boolean) => {
     setAccionando(`taller-${tallerId}`);
     const { error: rpcError } = await supabase.rpc('admin_set_taller_bloqueado', {
@@ -972,11 +1222,20 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       setError(`No se pudo actualizar el taller: ${rpcError.message}`);
     } else {
       setTalleres((prev) => prev.map((t) => (t.id === tallerId ? { ...t, bloqueado } : t)));
+      void cargarKpis();
     }
     setAccionando(null);
   };
 
   const setTiendaAprobacion = async (tiendaId: string, estado: AprobacionEstado) => {
+    const tienda = vendedores.find((v) => v.id === tiendaId);
+    if (estado === 'aprobado' && tienda) {
+      const err = mensajeNegocioNoListoParaAprobar(tienda);
+      if (err) {
+        setError(`No se puede aprobar: ${tienda.nombre_comercial || tienda.nombre || tiendaId}. ${err}`);
+        return;
+      }
+    }
     setAccionando(`aprob-tienda-${tiendaId}`);
     const { error: rpcError } = await supabase.rpc('admin_set_tienda_aprobacion', {
       p_tienda_id: tiendaId,
@@ -995,6 +1254,14 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   };
 
   const setTallerAprobacion = async (tallerId: string, estado: AprobacionEstado) => {
+    const taller = talleres.find((t) => t.id === tallerId);
+    if (estado === 'aprobado' && taller) {
+      const err = mensajeNegocioNoListoParaAprobar(taller);
+      if (err) {
+        setError(`No se puede aprobar: ${taller.nombre_comercial || taller.nombre || tallerId}. ${err}`);
+        return;
+      }
+    }
     setAccionando(`aprob-taller-${tallerId}`);
     const { error: rpcError } = await supabase.rpc('admin_set_taller_aprobacion', {
       p_taller_id: tallerId,
@@ -1005,9 +1272,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
         `No se pudo actualizar el taller. ¿Ejecutaste supabase-aprobacion-contenido.sql? ${rpcError.message}`
       );
     } else {
-      setTalleres((prev) =>
-        prev.map((t) => (t.id === tallerId ? { ...t, aprobacion_estado: estado } : t))
-      );
+      await cargarTalleres(busquedaTalleres);
+      void cargarKpis();
     }
     setAccionando(null);
   };
@@ -1187,6 +1453,11 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     const errores: string[] = [];
 
     for (const v of pendientes) {
+      const errDatos = mensajeNegocioNoListoParaAprobar(v);
+      if (errDatos) {
+        errores.push(`${v.nombre_comercial || v.nombre || v.id}: ${errDatos}`);
+        continue;
+      }
       const { error: rpcError } = await supabase.rpc('admin_set_tienda_aprobacion', {
         p_tienda_id: v.id,
         p_estado: 'aprobado',
@@ -1218,6 +1489,11 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     const errores: string[] = [];
 
     for (const t of pendientes) {
+      const errDatos = mensajeNegocioNoListoParaAprobar(t);
+      if (errDatos) {
+        errores.push(`${t.nombre_comercial || t.nombre || t.id}: ${errDatos}`);
+        continue;
+      }
       const { error: rpcError } = await supabase.rpc('admin_set_taller_aprobacion', {
         p_taller_id: t.id,
         p_estado: 'aprobado',
@@ -1227,9 +1503,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     }
 
     if (okIds.length) {
-      setTalleres((prev) =>
-        prev.map((t) => (okIds.includes(t.id) ? { ...t, aprobacion_estado: 'aprobado' } : t))
-      );
+      await cargarTalleres(busquedaTalleres);
       void cargarKpis();
     }
     if (errores.length) {
@@ -1351,6 +1625,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
               <tr>
                 <th>Nombre comercial</th>
                 <th>RIF</th>
+                <th>Correo</th>
+                <th>Ubicación (lat, lng)</th>
                 <th>Ciudad</th>
                 <th>Aprobación</th>
                 <th>Bloqueado</th>
@@ -1363,6 +1639,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                 <tr key={v.id}>
                   <td>{v.nombre_comercial?.trim() || v.nombre || '—'}</td>
                   <td>{v.rif || '—'}</td>
+                  <td>{emailNegocioAdmin(v, emailsPorUserId)}</td>
+                  <td className="dashboard-admin-coords">{celdaUbicacionAdmin(v.latitud, v.longitud)}</td>
                   <td>{v.ciudad || '—'}</td>
                   <td>{etiquetaAprobacion(v.aprobacion_estado)}</td>
                   <td>{v.bloqueado ? 'Sí' : 'No'}</td>
@@ -1392,9 +1670,12 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
               <tr>
                 <th>Nombre comercial</th>
                 <th>Teléfono</th>
+                <th>Correo</th>
+                <th>Ubicación (lat, lng)</th>
                 <th>Ciudad</th>
                 <th>Aprobación</th>
-                <th>Bloqueado</th>
+                <th>Estado pago</th>
+                <th>Membresía hasta</th>
                 <th>Alta</th>
               </tr>
             </thead>
@@ -1403,9 +1684,12 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                 <tr key={t.id}>
                   <td>{t.nombre_comercial?.trim() || t.nombre || '—'}</td>
                   <td>{t.telefono || '—'}</td>
+                  <td>{emailNegocioAdmin(t, emailsPorUserId)}</td>
+                  <td className="dashboard-admin-coords">{celdaUbicacionAdmin(t.latitud, t.longitud)}</td>
                   <td>{t.ciudad || '—'}</td>
                   <td>{etiquetaAprobacion(t.aprobacion_estado)}</td>
-                  <td>{t.bloqueado ? 'Sí' : 'No'}</td>
+                  <td>{etiquetaEstadoImpagoPerfil(t).texto}</td>
+                  <td>{fmtMembresiaHasta(t.membresia_hasta)}</td>
                   <td>{fmtFecha(t.created_at)}</td>
                 </tr>
               ))}
@@ -1485,11 +1769,25 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     <tbody>
                       {rows.map((u) => (
                         <tr key={u.user_id}>
-                          <td>{u.email || '—'}</td>
-                          <td>{u.tipo_cuenta || '—'}</td>
-                          <td>{u.role || '—'}</td>
-                          <td>{u.user_id}</td>
-                          <td>{fmtFecha(u.creado_en)}</td>
+                          <td className="dashboard-admin-texto-td dashboard-admin-email-td">
+                            {celdaTextoUnaLineaAdmin(u.email)}
+                          </td>
+                          <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.tipo_cuenta)}</td>
+                          <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.role)}</td>
+                          <td className="dashboard-admin-userid-td">
+                            <AdminCeldaUserId
+                              userId={u.user_id}
+                              onVer={() =>
+                                setUserIdPerfilModal({
+                                  nombre: u.email || 'Usuario',
+                                  userId: u.user_id,
+                                })
+                              }
+                            />
+                          </td>
+                          <td className="dashboard-admin-texto-td dashboard-admin-membresia-td">
+                            {celdaTextoUnaLineaAdmin(fmtFechaCortaAdmin(u.creado_en))}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1580,12 +1878,25 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     <tbody>
                       {rows.map((c) => (
                         <tr key={c.user_id}>
-                          <td>{c.nombre_comercial?.trim() || c.nombre || '—'}</td>
-                          <td>{c.rif || '—'}</td>
-                          <td>{c.telefono || '—'}</td>
-                          <td>{c.ciudad || '—'}</td>
-                          <td>{c.suspendido_membresia ? 'Sí' : 'No'}</td>
-                          <td>{fmtFecha(c.creado_en)}</td>
+                          <td className="dashboard-admin-texto-td dashboard-admin-nombre-td">
+                            {celdaTextoUnaLineaAdmin(c.nombre_comercial?.trim() || c.nombre)}
+                          </td>
+                          <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(c.rif)}</td>
+                          <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(c.telefono)}</td>
+                          <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(c.ciudad)}</td>
+                          <td className="dashboard-admin-status-td">
+                            <span
+                              className={`dashboard-admin-status dashboard-admin-status--compacto ${
+                                c.suspendido_membresia ? 'rechazado' : 'ok'
+                              }`}
+                              title={c.suspendido_membresia ? 'Sí' : 'No'}
+                            >
+                              {c.suspendido_membresia ? 'NO' : 'OK'}
+                            </span>
+                          </td>
+                          <td className="dashboard-admin-texto-td dashboard-admin-membresia-td">
+                            {celdaTextoUnaLineaAdmin(fmtFechaCortaAdmin(c.creado_en))}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1864,44 +2175,60 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             accionando === `eliminar-${u.user_id}`;
                           return (
                             <tr key={u.user_id}>
-                              <td>{u.email || '—'}</td>
-                              <td>{u.tipo_cuenta || 'sin tipo'}</td>
-                              <td>{u.role || '—'}</td>
-                              <td>{u.user_id}</td>
-                              <td>{fmtFecha(u.creado_en)}</td>
-                              <td>
-                                <div className="dashboard-admin-usuario-acciones">
+                              <td className="dashboard-admin-texto-td dashboard-admin-email-td">
+                                {celdaTextoUnaLineaAdmin(u.email)}
+                              </td>
+                              <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.tipo_cuenta || 'sin tipo')}</td>
+                              <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.role)}</td>
+                              <td className="dashboard-admin-userid-td">
+                                <AdminCeldaUserId
+                                  userId={u.user_id}
+                                  onVer={() =>
+                                    setUserIdPerfilModal({
+                                      nombre: u.email || 'Usuario',
+                                      userId: u.user_id,
+                                    })
+                                  }
+                                />
+                              </td>
+                              <td className="dashboard-admin-texto-td dashboard-admin-membresia-td">
+                                {celdaTextoUnaLineaAdmin(fmtFechaCortaAdmin(u.creado_en))}
+                              </td>
+                              <td className="dashboard-admin-acciones-td">
+                                <div className="dashboard-admin-acciones-fila">
                                   {u.role === 'admin' ? (
                                     <button
                                       type="button"
-                                      className="dashboard-admin-btn danger"
+                                      className="dashboard-admin-btn danger dashboard-admin-btn--compacto"
                                       disabled={ocupado}
+                                      title="Quitar rol admin"
                                       onClick={() => void setUsuarioAdmin(u.user_id, false)}
                                     >
-                                      Quitar admin
+                                      −Admin
                                     </button>
                                   ) : (
                                     <button
                                       type="button"
-                                      className="dashboard-admin-btn"
+                                      className="dashboard-admin-btn dashboard-admin-btn--compacto"
                                       disabled={ocupado}
+                                      title="Hacer admin"
                                       onClick={() => void setUsuarioAdmin(u.user_id, true)}
                                     >
-                                      Hacer admin
+                                      +Admin
                                     </button>
                                   )}
                                   <button
                                     type="button"
-                                    className="dashboard-admin-btn danger dashboard-admin-btn--eliminar"
+                                    className="dashboard-admin-btn danger dashboard-admin-btn--compacto"
                                     disabled={ocupado || esMiCuenta}
                                     title={
                                       esMiCuenta
                                         ? 'No puedes eliminar la cuenta con la que estás conectado'
-                                        : undefined
+                                        : 'Eliminar usuario'
                                     }
                                     onClick={() => void eliminarUsuario(u)}
                                   >
-                                    {accionando === `eliminar-${u.user_id}` ? 'Eliminando…' : 'Eliminar usuario'}
+                                    {accionando === `eliminar-${u.user_id}` ? '…' : 'Eliminar'}
                                   </button>
                                 </div>
                               </td>
@@ -1975,6 +2302,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         <option value="todos">Todos los productos</option>
                         <option value="activos">Activos</option>
                         <option value="pausados">Pausados</option>
+                        <option value="por_aprobar">Por aprobar</option>
                         <option value="proximos_stock">Próximos a pausarse por fecha</option>
                         <option value="stock_vencido">Stock vencido</option>
                         <option value="sin_fecha_stock">Sin fecha de stock</option>
@@ -2405,8 +2733,10 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           <th>Nombre comercial</th>
                           <th>RIF</th>
                           <th>Teléfono</th>
+                          <th>Correo</th>
                           <th>Estado</th>
                           <th>Ciudad</th>
+                          <th>GPS</th>
                           <th>Autorización web</th>
                           <th>Estado pago</th>
                           <th>Visibilidad web</th>
@@ -2418,7 +2748,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       <tbody>
                         {vendedoresVisibles.length === 0 ? (
                           <tr>
-                            <td colSpan={11} className="dashboard-texto-placeholder">
+                            <td colSpan={13} className="dashboard-texto-placeholder">
                               {filtroSoloSuspendidosImpago
                                 ? 'Ningún vendedor suspendido en el listado cargado. Quita el filtro o recarga la pestaña.'
                                 : 'No hay vendedores en el listado.'}
@@ -2426,127 +2756,128 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           </tr>
                         ) : (
                         vendedoresVisibles.map((v) => {
-                          const ap = claseAprobacion(v.aprobacion_estado);
-                          const estadoImpago = etiquetaEstadoImpagoTienda(v);
-                          const visWeb = etiquetaVisibilidadWebTienda(v);
-                          const suspendida = tiendaSuspendidaPorImpago(v);
+                          const estadoImpago = etiquetaEstadoImpagoPerfilTabla(v);
+                          const visWeb = etiquetaVisibilidadWebPerfilTabla(v);
+                          const suspendida = perfilSuspendidoPorImpago(v);
                           return (
                           <tr
                             key={v.id}
                             className={suspendida ? 'dashboard-admin-row-impago' : undefined}
                           >
-                            <td>{v.nombre_comercial || v.nombre || '—'}</td>
-                            <td>{v.rif || '—'}</td>
-                            <td>{v.telefono || '—'}</td>
-                            <td>{v.estado || '—'}</td>
-                            <td>{v.ciudad || '—'}</td>
-                            <td>
-                              <span
-                                className={`dashboard-admin-status ${
-                                  ap === 'ok' ? 'ok' : ap === 'pendiente' ? 'pendiente' : 'rechazado'
-                                }`}
-                              >
-                                {etiquetaAprobacion(v.aprobacion_estado)}
-                              </span>
-                              <div className="dashboard-admin-acciones-mini">
-                                {(v.aprobacion_estado ?? 'aprobado') !== 'aprobado' && (
-                                  <button
-                                    type="button"
-                                    className="dashboard-admin-btn ok"
-                                    disabled={accionando === `aprob-tienda-${v.id}`}
-                                    onClick={() => void setTiendaAprobacion(v.id, 'aprobado')}
-                                  >
-                                    Autorizar
-                                  </button>
-                                )}
-                                {(v.aprobacion_estado ?? 'aprobado') !== 'rechazado' && (
-                                  <button
-                                    type="button"
-                                    className="dashboard-admin-btn danger"
-                                    disabled={accionando === `aprob-tienda-${v.id}`}
-                                    onClick={() => void setTiendaAprobacion(v.id, 'rechazado')}
-                                  >
-                                    Rechazar
-                                  </button>
-                                )}
-                                {(v.aprobacion_estado ?? 'aprobado') === 'rechazado' && (
-                                  <button
-                                    type="button"
-                                    className="dashboard-admin-btn warn"
-                                    disabled={accionando === `aprob-tienda-${v.id}`}
-                                    onClick={() => void setTiendaAprobacion(v.id, 'pendiente')}
-                                  >
-                                    Pendiente
-                                  </button>
-                                )}
-                              </div>
+                            <td className="dashboard-admin-texto-td dashboard-admin-nombre-td">
+                              {celdaTextoUnaLineaAdmin(v.nombre_comercial || v.nombre)}
                             </td>
-                            <td>
-                              <span className={`dashboard-admin-status ${estadoImpago.clase}`}>
+                            <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(v.rif)}</td>
+                            <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(v.telefono)}</td>
+                            <td className="dashboard-admin-texto-td dashboard-admin-email-td">
+                              {celdaTextoUnaLineaAdmin(emailNegocioAdmin(v, emailsPorUserId))}
+                            </td>
+                            <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(v.estado)}</td>
+                            <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(v.ciudad)}</td>
+                            <td className="dashboard-admin-ubicacion-td">
+                              <AdminCeldaUbicacion
+                                latitud={v.latitud}
+                                longitud={v.longitud}
+                                guardando={accionando === `ubic-tienda-${v.id}`}
+                                onEditar={() =>
+                                  setUbicacionNegocioModal({
+                                    tipo: 'tienda',
+                                    id: v.id,
+                                    nombre: v.nombre_comercial || v.nombre || 'Vendedor',
+                                    latitud: v.latitud ?? null,
+                                    longitud: v.longitud ?? null,
+                                  })
+                                }
+                              />
+                            </td>
+                            <td className="dashboard-admin-autorizacion-td">
+                              <AdminCeldaAutorizacionWeb
+                                aprobacionEstado={v.aprobacion_estado}
+                                accionando={accionando === `aprob-tienda-${v.id}`}
+                                onAprobar={() => void setTiendaAprobacion(v.id, 'aprobado')}
+                                onRechazar={() => void setTiendaAprobacion(v.id, 'rechazado')}
+                                onPendiente={() => void setTiendaAprobacion(v.id, 'pendiente')}
+                              />
+                            </td>
+                            <td className="dashboard-admin-status-td">
+                              <span
+                                className={`dashboard-admin-status dashboard-admin-status--compacto ${estadoImpago.clase}`}
+                                title={estadoImpago.title}
+                              >
                                 {estadoImpago.texto}
                               </span>
                             </td>
-                            <td>
-                              <span className={`dashboard-admin-status ${visWeb.clase}`}>{visWeb.texto}</span>
+                            <td className="dashboard-admin-status-td">
+                              <span
+                                className={`dashboard-admin-status dashboard-admin-status--compacto ${visWeb.clase}`}
+                                title={visWeb.title}
+                              >
+                                {visWeb.texto}
+                              </span>
                             </td>
-                            <td>{fmtMembresiaHasta(v.membresia_hasta)}</td>
-                            <td>{v.user_id}</td>
-                            <td>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                {suspendida && (
-                                  <p className="dashboard-admin-vendedor-impago-aviso">
-                                    Sus productos están ocultos al público. Reactiva la membresía para que vuelvan a
-                                    publicarse.
-                                  </p>
-                                )}
-                                {tiendaBloqueadaPorAdmin(v) ? (
+                            <td className="dashboard-admin-texto-td dashboard-admin-membresia-td">
+                              {celdaTextoUnaLineaAdmin(fmtMembresiaHasta(v.membresia_hasta))}
+                            </td>
+                            <td className="dashboard-admin-userid-td">
+                              <AdminCeldaUserId
+                                userId={v.user_id}
+                                onVer={() =>
+                                  setUserIdPerfilModal({
+                                    nombre: v.nombre_comercial || v.nombre || 'Vendedor',
+                                    userId: v.user_id,
+                                  })
+                                }
+                              />
+                            </td>
+                            <td className="dashboard-admin-acciones-td">
+                              <div className="dashboard-admin-acciones-fila">
+                                {perfilBloqueadoPorAdmin(v) ? (
                                   <button
                                     type="button"
-                                    className="dashboard-admin-btn ok"
+                                    className="dashboard-admin-btn ok dashboard-admin-btn--compacto"
                                     disabled={accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`}
                                     onClick={() => void setTiendaBloqueada(v.id, false)}
+                                    title="Quitar bloqueo admin"
                                   >
-                                    Quitar bloqueo admin
+                                    Quitar
                                   </button>
                                 ) : (
                                   <button
                                     type="button"
-                                    className="dashboard-admin-btn danger"
+                                    className="dashboard-admin-btn danger dashboard-admin-btn--compacto"
                                     disabled={accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`}
                                     onClick={() => void setTiendaBloqueada(v.id, true)}
+                                    title="Suspender por impago"
                                   >
-                                    Suspender por impago
+                                    Suspender
                                   </button>
                                 )}
                                 {(v.aprobacion_estado ?? 'aprobado') === 'aprobado' && suspendida && (
-                                    <div className="dashboard-admin-acciones-mini" style={{ flexWrap: 'wrap' }}>
-                                      <span style={{ width: '100%', fontSize: '0.85em', opacity: 0.9 }}>
-                                        {tiendaBloqueadaPorAdmin(v)
-                                          ? 'Tras pago, renueva membresía y quita el bloqueo:'
-                                          : 'Tras pago (nueva vigencia):'}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        className="dashboard-admin-btn ok"
-                                        disabled={
-                                          accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`
-                                        }
-                                        onClick={() => void setTiendaMembresiaHasta(v.id, fechaMembresiaDesdeHoyUtc(30))}
-                                      >
-                                        +30 días
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="dashboard-admin-btn ok"
-                                        disabled={
-                                          accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`
-                                        }
-                                        onClick={() => void setTiendaMembresiaHasta(v.id, fechaMembresiaDesdeHoyUtc(365))}
-                                      >
-                                        +1 año
-                                      </button>
-                                    </div>
-                                  )}
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="dashboard-admin-btn ok dashboard-admin-btn--compacto"
+                                      disabled={
+                                        accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`
+                                      }
+                                      title="Renovar membresía 30 días"
+                                      onClick={() => void setTiendaMembresiaHasta(v.id, fechaMembresiaDesdeHoyUtc(30))}
+                                    >
+                                      +30d
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="dashboard-admin-btn ok dashboard-admin-btn--compacto"
+                                      disabled={
+                                        accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`
+                                      }
+                                      title="Renovar membresía 1 año"
+                                      onClick={() => void setTiendaMembresiaHasta(v.id, fechaMembresiaDesdeHoyUtc(365))}
+                                    >
+                                      +1a
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -2576,9 +2907,22 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       autoComplete="off"
                       spellCheck={false}
                     />
-                    <span className="dashboard-admin-busqueda-hint">Hasta {ADMIN_LIST_LIMIT} filas.</span>
+                    <span className="dashboard-admin-busqueda-hint">
+                      Hasta {ADMIN_LIST_LIMIT} filas recientes + suspendidos por impago. Los suspendidos aparecen
+                      primero (fila naranja). Para reactivar: <strong>+30 días</strong> / <strong>+1 año</strong>{' '}
+                      tras el pago, o <strong>Quitar bloqueo admin</strong> si lo suspendiste manualmente.
+                    </span>
                   </div>
                   <div className="dashboard-admin-acciones-masivas">
+                    <button
+                      type="button"
+                      className={`dashboard-admin-btn ${filtroSoloSuspendidosImpagoTalleres ? 'warn' : ''}`}
+                      onClick={() => setFiltroSoloSuspendidosImpagoTalleres((x) => !x)}
+                    >
+                      {filtroSoloSuspendidosImpagoTalleres
+                        ? 'Ver todos los talleres'
+                        : `Solo suspendidos por impago (${talleresSuspendidosEnLista})`}
+                    </button>
                     <button
                       type="button"
                       className="dashboard-admin-btn ok"
@@ -2598,95 +2942,179 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           <th>Nombre</th>
                           <th>Especialidad</th>
                           <th>Teléfono</th>
+                          <th>Correo</th>
                           <th>Estado</th>
                           <th>Ciudad</th>
+                          <th>GPS</th>
                           <th>Autorización web</th>
-                          <th>Bloqueo</th>
+                          <th>Estado pago</th>
+                          <th>Visibilidad web</th>
+                          <th>Membresía hasta</th>
                           <th>User ID</th>
                           <th>Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {talleres.map((t) => {
-                          const ap = claseAprobacion(t.aprobacion_estado);
+                        {talleresVisibles.length === 0 ? (
+                          <tr>
+                            <td colSpan={13} className="dashboard-texto-placeholder">
+                              {filtroSoloSuspendidosImpagoTalleres
+                                ? 'Ningún taller suspendido en el listado cargado. Quita el filtro o recarga la pestaña.'
+                                : 'No hay talleres en el listado.'}
+                            </td>
+                          </tr>
+                        ) : (
+                        talleresVisibles.map((t) => {
+                          const estadoImpago = etiquetaEstadoImpagoPerfilTabla(t);
+                          const visWeb = etiquetaVisibilidadWebPerfilTabla(t);
+                          const suspendido = perfilSuspendidoPorImpago(t);
                           return (
-                          <tr key={t.id}>
-                            <td>{t.nombre_comercial || t.nombre || '—'}</td>
-                            <td>{etiquetaEspecialidadesTaller(t.especialidad)}</td>
-                            <td>{t.telefono || '—'}</td>
-                            <td>{t.estado || '—'}</td>
-                            <td>{t.ciudad || '—'}</td>
-                            <td>
+                          <tr
+                            key={t.id}
+                            className={suspendido ? 'dashboard-admin-row-impago' : undefined}
+                          >
+                            <td className="dashboard-admin-texto-td dashboard-admin-nombre-td">
+                              {celdaTextoUnaLineaAdmin(t.nombre_comercial || t.nombre)}
+                            </td>
+                            <td className="dashboard-admin-especialidad-td">
+                              <EspecialidadTallerCeldaAdmin
+                                especialidad={t.especialidad}
+                                onVerDetalle={(items) =>
+                                  setEspecialidadTallerModal({
+                                    nombre: t.nombre_comercial || t.nombre || 'Taller',
+                                    items,
+                                  })
+                                }
+                              />
+                            </td>
+                            <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(t.telefono)}</td>
+                            <td className="dashboard-admin-texto-td dashboard-admin-email-td">
+                              {celdaTextoUnaLineaAdmin(emailNegocioAdmin(t, emailsPorUserId))}
+                            </td>
+                            <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(t.estado)}</td>
+                            <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(t.ciudad)}</td>
+                            <td className="dashboard-admin-ubicacion-td">
+                              <AdminCeldaUbicacion
+                                latitud={t.latitud}
+                                longitud={t.longitud}
+                                guardando={accionando === `ubic-taller-${t.id}`}
+                                onEditar={() =>
+                                  setUbicacionNegocioModal({
+                                    tipo: 'taller',
+                                    id: t.id,
+                                    nombre: t.nombre_comercial || t.nombre || 'Taller',
+                                    latitud: t.latitud ?? null,
+                                    longitud: t.longitud ?? null,
+                                  })
+                                }
+                              />
+                            </td>
+                            <td className="dashboard-admin-autorizacion-td">
+                              <AdminCeldaAutorizacionWeb
+                                aprobacionEstado={t.aprobacion_estado}
+                                accionando={accionando === `aprob-taller-${t.id}`}
+                                onAprobar={() => void setTallerAprobacion(t.id, 'aprobado')}
+                                onRechazar={() => void setTallerAprobacion(t.id, 'rechazado')}
+                                onPendiente={() => void setTallerAprobacion(t.id, 'pendiente')}
+                              />
+                            </td>
+                            <td className="dashboard-admin-status-td">
                               <span
-                                className={`dashboard-admin-status ${
-                                  ap === 'ok' ? 'ok' : ap === 'pendiente' ? 'pendiente' : 'rechazado'
-                                }`}
+                                className={`dashboard-admin-status dashboard-admin-status--compacto ${estadoImpago.clase}`}
+                                title={estadoImpago.title}
                               >
-                                {etiquetaAprobacion(t.aprobacion_estado)}
+                                {estadoImpago.texto}
                               </span>
-                              <div className="dashboard-admin-acciones-mini">
-                                {(t.aprobacion_estado ?? 'aprobado') !== 'aprobado' && (
+                            </td>
+                            <td className="dashboard-admin-status-td">
+                              <span
+                                className={`dashboard-admin-status dashboard-admin-status--compacto ${visWeb.clase}`}
+                                title={visWeb.title}
+                              >
+                                {visWeb.texto}
+                              </span>
+                            </td>
+                            <td className="dashboard-admin-texto-td dashboard-admin-membresia-td">
+                              {celdaTextoUnaLineaAdmin(fmtMembresiaHasta(t.membresia_hasta))}
+                            </td>
+                            <td className="dashboard-admin-userid-td">
+                              <AdminCeldaUserId
+                                userId={t.user_id}
+                                onVer={() =>
+                                  setUserIdPerfilModal({
+                                    nombre: t.nombre_comercial || t.nombre || 'Taller',
+                                    userId: t.user_id,
+                                  })
+                                }
+                              />
+                            </td>
+                            <td className="dashboard-admin-acciones-td">
+                              <div className="dashboard-admin-acciones-fila">
+                                {perfilBloqueadoPorAdmin(t) ? (
                                   <button
                                     type="button"
-                                    className="dashboard-admin-btn ok"
-                                    disabled={accionando === `aprob-taller-${t.id}`}
-                                    onClick={() => void setTallerAprobacion(t.id, 'aprobado')}
+                                    className="dashboard-admin-btn ok dashboard-admin-btn--compacto"
+                                    disabled={
+                                      accionando === `taller-${t.id}` ||
+                                      accionando === `membresia-taller-${t.id}`
+                                    }
+                                    onClick={() => void setTallerBloqueado(t.id, false)}
+                                    title="Quitar bloqueo admin"
                                   >
-                                    Autorizar
+                                    Quitar
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="dashboard-admin-btn danger dashboard-admin-btn--compacto"
+                                    disabled={
+                                      accionando === `taller-${t.id}` ||
+                                      accionando === `membresia-taller-${t.id}`
+                                    }
+                                    onClick={() => void setTallerBloqueado(t.id, true)}
+                                    title="Suspender por impago"
+                                  >
+                                    Suspender
                                   </button>
                                 )}
-                                {(t.aprobacion_estado ?? 'aprobado') !== 'rechazado' && (
-                                  <button
-                                    type="button"
-                                    className="dashboard-admin-btn danger"
-                                    disabled={accionando === `aprob-taller-${t.id}`}
-                                    onClick={() => void setTallerAprobacion(t.id, 'rechazado')}
-                                  >
-                                    Rechazar
-                                  </button>
-                                )}
-                                {(t.aprobacion_estado ?? 'aprobado') === 'rechazado' && (
-                                  <button
-                                    type="button"
-                                    className="dashboard-admin-btn warn"
-                                    disabled={accionando === `aprob-taller-${t.id}`}
-                                    onClick={() => void setTallerAprobacion(t.id, 'pendiente')}
-                                  >
-                                    Pendiente
-                                  </button>
+                                {(t.aprobacion_estado ?? 'aprobado') === 'aprobado' && suspendido && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="dashboard-admin-btn ok dashboard-admin-btn--compacto"
+                                      disabled={
+                                        accionando === `taller-${t.id}` ||
+                                        accionando === `membresia-taller-${t.id}`
+                                      }
+                                      title="Renovar membresía 30 días"
+                                      onClick={() =>
+                                        void setTallerMembresiaHasta(t.id, fechaMembresiaDesdeHoyUtc(30))
+                                      }
+                                    >
+                                      +30d
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="dashboard-admin-btn ok dashboard-admin-btn--compacto"
+                                      disabled={
+                                        accionando === `taller-${t.id}` ||
+                                        accionando === `membresia-taller-${t.id}`
+                                      }
+                                      title="Renovar membresía 1 año"
+                                      onClick={() =>
+                                        void setTallerMembresiaHasta(t.id, fechaMembresiaDesdeHoyUtc(365))
+                                      }
+                                    >
+                                      +1a
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             </td>
-                            <td>
-                              <span className={`dashboard-admin-status ${t.bloqueado ? 'warn' : 'ok'}`}>
-                                {t.bloqueado ? 'Suspendido (impago u otro)' : 'Membresía activa'}
-                              </span>
-                            </td>
-                            <td>{t.user_id}</td>
-                            <td>
-                              {t.bloqueado ? (
-                                <button
-                                  type="button"
-                                  className="dashboard-admin-btn ok"
-                                  disabled={accionando === `taller-${t.id}`}
-                                  onClick={() => void setTallerBloqueado(t.id, false)}
-                                >
-                                  Reactivar membresía
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="dashboard-admin-btn danger"
-                                  disabled={accionando === `taller-${t.id}`}
-                                  onClick={() => void setTallerBloqueado(t.id, true)}
-                                >
-                                  Suspender por impago
-                                </button>
-                              )}
-                            </td>
                           </tr>
                           );
-                        })}
+                        })
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -2733,42 +3161,63 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </thead>
                       <tbody>
                         {compradores.map((c) => {
-                          const susp = c.suspendido_membresia === true;
+                          const membresia = etiquetaMembresiaCompradorTabla(c);
                           const ocupado = accionando === `comp-memb-${c.user_id}`;
                           return (
                             <tr key={c.user_id}>
-                              <td>{c.email || '—'}</td>
-                              <td>{c.nombre_comercial || c.nombre || '—'}</td>
-                              <td>{c.rif || '—'}</td>
-                              <td>{c.telefono || '—'}</td>
-                              <td>{c.estado || '—'}</td>
-                              <td>{c.ciudad || '—'}</td>
-                              <td>
-                                <span className={`dashboard-admin-status ${susp ? 'warn' : 'ok'}`}>
-                                  {susp ? 'Suspendido (impago)' : 'Activo'}
+                              <td className="dashboard-admin-texto-td dashboard-admin-email-td">
+                                {celdaTextoUnaLineaAdmin(c.email)}
+                              </td>
+                              <td className="dashboard-admin-texto-td dashboard-admin-nombre-td">
+                                {celdaTextoUnaLineaAdmin(c.nombre_comercial || c.nombre)}
+                              </td>
+                              <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(c.rif)}</td>
+                              <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(c.telefono)}</td>
+                              <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(c.estado)}</td>
+                              <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(c.ciudad)}</td>
+                              <td className="dashboard-admin-status-td">
+                                <span
+                                  className={`dashboard-admin-status dashboard-admin-status--compacto ${membresia.clase}`}
+                                  title={membresia.title}
+                                >
+                                  {membresia.texto}
                                 </span>
                               </td>
-                              <td>{c.user_id}</td>
-                              <td>
-                                {susp ? (
-                                  <button
-                                    type="button"
-                                    className="dashboard-admin-btn ok"
-                                    disabled={ocupado}
-                                    onClick={() => void setCompradorSuspendidoMembresia(c.user_id, false)}
-                                  >
-                                    Reactivar membresía
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className="dashboard-admin-btn danger"
-                                    disabled={ocupado}
-                                    onClick={() => void setCompradorSuspendidoMembresia(c.user_id, true)}
-                                  >
-                                    Suspender por impago
-                                  </button>
-                                )}
+                              <td className="dashboard-admin-userid-td">
+                                <AdminCeldaUserId
+                                  userId={c.user_id}
+                                  onVer={() =>
+                                    setUserIdPerfilModal({
+                                      nombre: c.nombre_comercial || c.nombre || c.email || 'Comprador',
+                                      userId: c.user_id,
+                                    })
+                                  }
+                                />
+                              </td>
+                              <td className="dashboard-admin-acciones-td">
+                                <div className="dashboard-admin-acciones-fila">
+                                  {c.suspendido_membresia === true ? (
+                                    <button
+                                      type="button"
+                                      className="dashboard-admin-btn ok dashboard-admin-btn--compacto"
+                                      disabled={ocupado}
+                                      title="Reactivar membresía"
+                                      onClick={() => void setCompradorSuspendidoMembresia(c.user_id, false)}
+                                    >
+                                      Reactivar
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="dashboard-admin-btn danger dashboard-admin-btn--compacto"
+                                      disabled={ocupado}
+                                      title="Suspender por impago"
+                                      onClick={() => void setCompradorSuspendidoMembresia(c.user_id, true)}
+                                    >
+                                      Suspender
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -2781,6 +3230,90 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
             </>
           )}
         </main>
+        {ubicacionNegocioModal && (
+          <div
+            className="dashboard-kpi-modal-backdrop"
+            role="presentation"
+            onClick={() => {
+              if (accionando?.startsWith('ubic-')) return;
+              setUbicacionNegocioModal(null);
+            }}
+          >
+            <AdminModalEditarUbicacion
+              nombre={ubicacionNegocioModal.nombre}
+              latitudInicial={ubicacionNegocioModal.latitud}
+              longitudInicial={ubicacionNegocioModal.longitud}
+              guardando={accionando === `ubic-${ubicacionNegocioModal.tipo}-${ubicacionNegocioModal.id}`}
+              onGuardar={(lat, lng) => void guardarUbicacionNegocio(lat, lng)}
+              onCerrar={() => {
+                if (accionando?.startsWith('ubic-')) return;
+                setUbicacionNegocioModal(null);
+              }}
+            />
+          </div>
+        )}
+        {userIdPerfilModal && (
+          <div
+            className="dashboard-kpi-modal-backdrop"
+            role="presentation"
+            onClick={() => setUserIdPerfilModal(null)}
+          >
+            <div
+              className="dashboard-admin-userid-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="dashboard-userid-perfil-titulo"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="dashboard-kpi-modal-header">
+                <h3 id="dashboard-userid-perfil-titulo" className="dashboard-kpi-modal-titulo">
+                  User ID — {userIdPerfilModal.nombre}
+                </h3>
+                <button
+                  type="button"
+                  className="dashboard-kpi-modal-cerrar"
+                  onClick={() => setUserIdPerfilModal(null)}
+                >
+                  Cerrar
+                </button>
+              </div>
+              <p className="dashboard-admin-userid-completo">{userIdPerfilModal.userId}</p>
+            </div>
+          </div>
+        )}
+        {especialidadTallerModal && (
+          <div
+            className="dashboard-kpi-modal-backdrop"
+            role="presentation"
+            onClick={() => setEspecialidadTallerModal(null)}
+          >
+            <div
+              className="dashboard-admin-especialidad-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="dashboard-especialidad-taller-titulo"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="dashboard-kpi-modal-header">
+                <h3 id="dashboard-especialidad-taller-titulo" className="dashboard-kpi-modal-titulo">
+                  Especialidades — {especialidadTallerModal.nombre}
+                </h3>
+                <button
+                  type="button"
+                  className="dashboard-kpi-modal-cerrar"
+                  onClick={() => setEspecialidadTallerModal(null)}
+                >
+                  Cerrar
+                </button>
+              </div>
+              <ul className="dashboard-admin-especialidad-lista">
+                {especialidadTallerModal.items.map((esp) => (
+                  <li key={esp}>{esp}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
         {kpiDetalle && (
           <div
             className="dashboard-kpi-modal-backdrop"

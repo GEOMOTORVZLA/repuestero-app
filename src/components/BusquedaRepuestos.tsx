@@ -20,6 +20,10 @@ import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from 
 import { mensajeWhatsappVendedorProducto, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
 import { permitirAccionCliente } from '../utils/rateLimitCliente';
 import { esIdProductoUuid } from '../utils/enlaceCompartirProducto';
+import {
+  aplicarTerminosTextoABusquedaProductos,
+  terminosBusquedaProducto,
+} from '../utils/busquedaProductosTexto';
 import './BusquedaRepuestos.css';
 
 /** Distancia en km entre dos puntos (Haversine) */
@@ -84,42 +88,6 @@ const SUGERENCIAS_TAM_PAGINA = 20;
 
 type SugerenciaRepuesto = { id: string; nombre: string; detalle: string | null };
 
-/** Valor en filtros PostgREST: comas u otros caracteres sin citar rompen `.or()` y devuelven resultados erróneos. */
-function comillasFiltroPostgrest(valor: string): string {
-  if (/[",()]/.test(valor)) {
-    return `"${valor.replace(/"/g, '""')}"`;
-  }
-  return valor;
-}
-
-/** Quita comillas y marcas tipográficas pegadas al pegar desde catálogos/WhatsApp (evita ilike imposibles). */
-function limpiarTokenTermino(raw: string): string {
-  return raw
-    .replace(/^[\s"'«»\u2018\u2019\u201C\u201D\u201E\u201A\u00B4`„‚]+/u, '')
-    .replace(/[\s"'«»\u2018\u2019\u201C\u201D\u201E\u201A\u00B4`„‚]+$/u, '')
-    .trim();
-}
-
-function terminosBusqueda(texto: string): string[] {
-  const vistos = new Set<string>();
-  return texto
-    .trim()
-    .split(/\s+/)
-    .map((t) => limpiarTokenTermino(t.trim()))
-    .filter((t) => t.length >= 2)
-    .filter((t) => {
-      const k = t.toLocaleLowerCase();
-      if (vistos.has(k)) return false;
-      vistos.add(k);
-      return true;
-    });
-}
-
-function patronIlikeTermino(termino: string): string {
-  const limpio = termino.replace(/[%_]/g, '');
-  return comillasFiltroPostgrest(`%${limpio}%`);
-}
-
 function mapFilasASugerencias(
   raw: { id: unknown; nombre: unknown; marca: unknown; modelo: unknown }[]
 ): SugerenciaRepuesto[] {
@@ -142,12 +110,7 @@ function queryProductosSugerencias(textoBusquedaTrim: string, vertical: Vertical
     .eq('aprobacion_publica', 'aprobado')
     .eq('vertical', vertical);
 
-  for (const termino of terminosBusqueda(textoBusquedaTrim)) {
-    const q = patronIlikeTermino(termino);
-    query = query.or(
-      `nombre.ilike.${q},descripcion.ilike.${q},comentarios.ilike.${q},marca.ilike.${q},modelo.ilike.${q},categoria.ilike.${q}`
-    );
-  }
+  query = aplicarTerminosTextoABusquedaProductos(query, textoBusquedaTrim);
 
   return query.order('nombre', { ascending: true }).order('id', { ascending: true });
 }
@@ -341,13 +304,7 @@ export function BusquedaRepuestos({
       .eq('aprobacion_publica', 'aprobado')
       .eq('vertical', vertical);
 
-    const terminos = terminosBusqueda(p.texto);
-    for (const termino of terminos) {
-      const like = patronIlikeTermino(termino);
-      query = query.or(
-        `nombre.ilike.${like},descripcion.ilike.${like},comentarios.ilike.${like},marca.ilike.${like},modelo.ilike.${like},categoria.ilike.${like}`
-      );
-    }
+    query = aplicarTerminosTextoABusquedaProductos(query, p.texto);
 
     if (p.marca) query = query.eq('marca', p.marca);
     if (p.modelo) query = query.eq('modelo', p.modelo);
@@ -375,7 +332,7 @@ export function BusquedaRepuestos({
       setMensaje('Escribe qué repuesto buscas o aplica al menos un filtro.');
       return;
     }
-    if (texto && terminosBusqueda(texto).length === 0 && !marca.trim() && !modelo.trim() && !anio.trim()) {
+    if (texto && terminosBusquedaProducto(texto).length === 0 && !marca.trim() && !modelo.trim() && !anio.trim()) {
       setMensaje('Escribe al menos una palabra clave de 2 caracteres o más.');
       return;
     }

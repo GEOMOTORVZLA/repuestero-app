@@ -27,37 +27,38 @@ export function urlGoogleMapsDirConOrigen(
  * Pide la ubicacion actual y abre Maps con origen + destino.
  * Si falla el GPS, abre solo destino.
  */
+async function abrirUrlExterna(url: string): Promise<void> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await Browser.open({ url });
+    } catch {
+      window.location.href = url;
+    }
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 export function abrirNavegacionGoogleMapsDesdeAqui(destLat: number, destLng: number): void {
   if (typeof window === 'undefined') return;
 
   const destinoUrl = urlGoogleMapsDirSoloDestino(destLat, destLng);
   const esNativa = Capacitor.isNativePlatform();
+
+  // En APK/WebView, abrir Maps debe ocurrir en el mismo toque del usuario.
+  // Esperar el GPS (async) hace que Android bloquee la apertura; en web sí funciona.
+  if (esNativa) {
+    void abrirUrlExterna(destinoUrl);
+    return;
+  }
+
   const abrirUrl = (url: string) => {
-    if (esNativa) {
-      void Browser.open({ url, windowName: '_system' });
-      return;
-    }
-    window.open(url, '_blank', 'noopener,noreferrer');
+    void abrirUrlExterna(url);
   };
 
   if (!window.navigator?.geolocation) {
     emitirMapsNavSinUbicacion();
     abrirUrl(destinoUrl);
-    return;
-  }
-
-  if (esNativa) {
-    window.navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude: oLat, longitude: oLng } = pos.coords;
-        abrirUrl(urlGoogleMapsDirConOrigen(destLat, destLng, oLat, oLng));
-      },
-      () => {
-        emitirMapsNavSinUbicacion();
-        abrirUrl(destinoUrl);
-      },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 }
-    );
     return;
   }
 

@@ -5,6 +5,7 @@ import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezue
 import { MARCAS_VEHICULOS } from '../data/marcasVehiculos';
 import { ESPECIALIDADES_TALLER } from '../data/registroVenezuela';
 import { normalizeEspecialidadesTallerDb } from '../utils/tallerEspecialidades';
+import { mensajeValidacionDatosNegocio, perfilTallerMetadataListo } from '../utils/validarDatosNegocio';
 import { bannerEstadoCuentaNegocio } from '../utils/estadoCuentaVendedorTaller';
 import { EstadoCuentaNegocioBanner } from './EstadoCuentaNegocioBanner';
 import './PerfilTaller.css';
@@ -145,11 +146,22 @@ function extraerMetaTaller(u: { user_metadata?: Record<string, unknown> } | null
   return null;
 }
 
-/** Cuerpo para insert/update; null si faltan mínimos (especialidad, nombre comercial). */
+/** Cuerpo para insert/update; null si faltan mínimos. */
 function cuerpoTallerDesdePerfil(d: TallerPerfilFull): Record<string, unknown> | null {
   const esp = normalizeEspecialidadesTallerDb(d.especialidad);
   const nomCom = d.nombre_comercial?.trim() || '';
   if (esp.length === 0 || !nomCom) return null;
+  const err = mensajeValidacionDatosNegocio({
+    nombre: d.nombre,
+    nombre_comercial: nomCom,
+    rif: d.rif,
+    telefono: d.telefono,
+    estado: d.estado,
+    ciudad: d.ciudad,
+    latitud: d.latitud,
+    longitud: d.longitud,
+  });
+  if (err) return null;
   return {
     nombre: d.nombre?.trim() || null,
     nombre_comercial: nomCom,
@@ -272,7 +284,11 @@ export function PerfilTaller() {
           if (!cancelled) {
             setDatos(perfilMeta);
             setEditando(true);
-            setMensaje('Completa nombre comercial y al menos una especialidad, luego guarda.');
+            setMensaje(
+              perfilTallerMetadataListo(metaTaller)
+                ? 'Completa los datos del taller y guarda.'
+                : 'Completa teléfono, ubicación, especialidades y nombre comercial, luego guarda.'
+            );
           }
           setCargando(false);
           return;
@@ -356,13 +372,28 @@ export function PerfilTaller() {
       return;
     }
 
+    const errNegocio = mensajeValidacionDatosNegocio({
+      nombre: datos.nombre,
+      nombre_comercial: nomCom,
+      rif: datos.rif,
+      telefono: datos.telefono,
+      estado: datos.estado,
+      ciudad: datos.ciudad,
+      latitud: datos.latitud,
+      longitud: datos.longitud,
+    });
+    if (errNegocio) {
+      setMensaje(errNegocio);
+      return;
+    }
+
     setGuardando(true);
     setMensaje('');
 
     const payload = cuerpoTallerDesdePerfil({ ...datos, nombre_comercial: nomCom, especialidad: esp });
     if (!payload) {
       setGuardando(false);
-      setMensaje('Selecciona al menos una especialidad e indica el nombre comercial.');
+      setMensaje('No se pudo preparar el perfil. Revisa teléfono, ubicación y datos obligatorios.');
       return;
     }
 

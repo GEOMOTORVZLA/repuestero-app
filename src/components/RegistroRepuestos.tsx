@@ -15,6 +15,7 @@ import {
 } from '../utils/imagenProducto';
 import { MAX_FOTOS_EXTRA, slotsArchivosExtraVacios } from '../utils/productoImagenesExtra';
 import { normalizarInputPrecio, parsePrecioProducto } from '../utils/precioProducto';
+import { perfilVendedorMetadataListo, parseCoordenadaRegistro } from '../utils/validarDatosNegocio';
 import './RegistroRepuestos.css';
 
 interface Tienda {
@@ -38,6 +39,7 @@ export function RegistroRepuestos({
   const { user } = useAuth();
   const [tiendas, setTiendas] = useState<Tienda[]>([]);
   const [cargandoTienda, setCargandoTienda] = useState(true);
+  const [avisoTiendaIncompleta, setAvisoTiendaIncompleta] = useState<string | null>(null);
   const [nombre, setNombre] = useState('');
   const [categoria, setCategoria] = useState('');
   const [marca, setMarca] = useState('');
@@ -76,9 +78,20 @@ export function RegistroRepuestos({
         return;
       }
 
-      // Si no existe tienda, la creamos automáticamente (1 usuario = 1 tienda)
+      // Si no existe tienda, solo la creamos si el registro dejó metadata completa.
       const md = (user as any)?.user_metadata ?? {};
       const perfil = md?.perfil_vendedor ?? null;
+
+      if (!perfilVendedorMetadataListo(perfil)) {
+        setTiendas([]);
+        setAvisoTiendaIncompleta(
+          'Completa teléfono, ubicación y datos del negocio en la pestaña Perfil antes de publicar productos.'
+        );
+        setCargandoTienda(false);
+        return;
+      }
+
+      setAvisoTiendaIncompleta(null);
 
       const nombreAuto =
         (perfil?.nombre_comercial ||
@@ -90,13 +103,20 @@ export function RegistroRepuestos({
       const estadoAuto = (perfil?.estado ?? null) as string | null;
       const ciudadAuto = (perfil?.ciudad ?? null) as string | null;
       const telefonoAuto = (perfil?.telefono ?? null) as string | null;
-      const latAuto =
-        perfil?.latitud != null ? parseFloat(String(perfil.latitud).replace(',', '.')) : null;
-      const lngAuto =
-        perfil?.longitud != null ? parseFloat(String(perfil.longitud).replace(',', '.')) : null;
+      const latAuto = parseCoordenadaRegistro(perfil?.latitud);
+      const lngAuto = parseCoordenadaRegistro(perfil?.longitud);
       const metodosAuto = Array.isArray(perfil?.metodos_pago)
         ? (perfil.metodos_pago as string[])
         : null;
+
+      if (latAuto == null || lngAuto == null) {
+        setTiendas([]);
+        setAvisoTiendaIncompleta(
+          'Completa teléfono, ubicación y datos del negocio en la pestaña Perfil antes de publicar productos.'
+        );
+        setCargandoTienda(false);
+        return;
+      }
 
       const { error: insertErr } = await supabase.from('tiendas').insert({
         user_id: user.id,
@@ -107,8 +127,8 @@ export function RegistroRepuestos({
         estado: estadoAuto,
         ciudad: ciudadAuto,
         telefono: telefonoAuto,
-        latitud: Number.isFinite(latAuto as number) ? (latAuto as number) : 0,
-        longitud: Number.isFinite(lngAuto as number) ? (lngAuto as number) : 0,
+        latitud: latAuto,
+        longitud: lngAuto,
         metodos_pago: metodosAuto && metodosAuto.length ? metodosAuto : null,
       });
 
@@ -326,7 +346,8 @@ export function RegistroRepuestos({
     return (
       <div className="registro-repuestos">
         <p className="registro-repuestos-aviso">
-          No se pudo preparar tu tienda automáticamente. Ve a “Mi perfil” y guarda tus datos, luego vuelve aquí.
+          {avisoTiendaIncompleta ??
+            'No se pudo preparar tu tienda automáticamente. Ve a “Perfil”, completa teléfono y ubicación, guarda y vuelve aquí.'}
         </p>
       </div>
     );

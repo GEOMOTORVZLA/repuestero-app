@@ -1,6 +1,11 @@
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../supabaseClient';
 import { esUsuarioAdmin } from '../utils/cuentaTipo';
+import {
+  parseCoordenadaRegistro,
+  perfilTallerMetadataListo,
+  perfilVendedorMetadataListo,
+} from '../utils/validarDatosNegocio';
 
 const ensureInflight = new Map<string, Promise<void>>();
 
@@ -78,6 +83,13 @@ async function runEnsureNegocio(user: User): Promise<void> {
         .limit(1);
       if (filasTienda?.length) return;
 
+      if (!perfilVendedorMetadataListo(perfil as Record<string, unknown>)) {
+        console.warn(
+          '[ensureNegocioTrasRegistro] perfil_vendedor incompleto; no se crea tienda hasta completar datos.'
+        );
+        return;
+      }
+
       const nombre =
         (perfil.nombre && String(perfil.nombre).trim()) ||
         (perfil.nombre_comercial && String(perfil.nombre_comercial).trim()) ||
@@ -96,8 +108,8 @@ async function runEnsureNegocio(user: User): Promise<void> {
         estado: perfil.estado ?? null,
         ciudad: perfil.ciudad ?? null,
         telefono: perfil.telefono ?? null,
-        latitud: typeof perfil.latitud === 'number' ? perfil.latitud : 0,
-        longitud: typeof perfil.longitud === 'number' ? perfil.longitud : 0,
+        latitud: parseCoordenadaRegistro(perfil.latitud) as number,
+        longitud: parseCoordenadaRegistro(perfil.longitud) as number,
         metodos_pago: perfil.metodos_pago?.length ? perfil.metodos_pago : null,
         politica_divulgacion_aceptada: perfil.politica_divulgacion_aceptada === true,
         politica_divulgacion_version:
@@ -125,8 +137,10 @@ async function runEnsureNegocio(user: User): Promise<void> {
       if (filasTaller?.length) return;
 
       const esp = especialidadTallerDesdeMeta(perfil);
-      if (esp.length === 0) {
-        console.warn('[ensureNegocioTrasRegistro] taller sin especialidad en metadata');
+      if (!perfilTallerMetadataListo(perfil as Record<string, unknown>)) {
+        console.warn(
+          '[ensureNegocioTrasRegistro] perfil_taller incompleto; no se crea taller hasta completar datos.'
+        );
         return;
       }
 
@@ -153,8 +167,8 @@ async function runEnsureNegocio(user: User): Promise<void> {
         ciudad: perfil.ciudad ?? null,
         telefono: perfil.telefono ?? null,
         email: perfil.email ?? user.email ?? null,
-        latitud: typeof perfil.latitud === 'number' ? perfil.latitud : 0,
-        longitud: typeof perfil.longitud === 'number' ? perfil.longitud : 0,
+        latitud: parseCoordenadaRegistro(perfil.latitud) as number,
+        longitud: parseCoordenadaRegistro(perfil.longitud) as number,
         metodos_pago: perfil.metodos_pago?.length ? perfil.metodos_pago : null,
         politica_divulgacion_aceptada: perfil.politica_divulgacion_aceptada === true,
         politica_divulgacion_version:
