@@ -89,7 +89,7 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
   const email = user?.email ?? '';
 
   return (
-    <div className="dashboard">
+    <div className="dashboard dashboard-vendedor">
       <aside className="dashboard-sidebar">
         {email && (
           <div className="dashboard-sidebar-usuario">
@@ -278,6 +278,37 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
           )}
         </main>
       </div>
+
+      <nav className="dashboard-nav-movil" aria-label="Navegación del panel">
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'resumen' ? 'activo' : ''}`}
+          onClick={() => setTab('resumen')}
+        >
+          Inicio
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'productos' ? 'activo' : ''}`}
+          onClick={() => setTab('productos')}
+        >
+          Productos
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'estadisticas' ? 'activo' : ''}`}
+          onClick={() => setTab('estadisticas')}
+        >
+          Estadísticas
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'perfil' ? 'activo' : ''}`}
+          onClick={() => setTab('perfil')}
+        >
+          Perfil
+        </button>
+      </nav>
     </div>
   );
 }

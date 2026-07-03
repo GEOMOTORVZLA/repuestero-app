@@ -1226,6 +1226,10 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   background: #b91c1c;
 }
 
+.dashboard-nav-movil {
+  display: none;
+}
+
 @media (max-width: 768px) {
   .dashboard-sidebar {
     display: none;
@@ -1243,6 +1247,151 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
 
   .dashboard-contenido {
     padding: 1rem;
+  }
+
+  .dashboard-vendedor {
+    padding-bottom: calc(3.75rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .dashboard-vendedor .dashboard-nav-movil {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    align-items: stretch;
+    justify-content: space-around;
+    gap: 0;
+    padding: 0.35rem 0.25rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
+  }
+
+  .dashboard-vendedor .dashboard-nav-movil-item {
+    flex: 1;
+    min-width: 0;
+    padding: 0.45rem 0.25rem;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+
+  .dashboard-vendedor .dashboard-nav-movil-item:hover {
+    color: #334155;
+    background: #f8fafc;
+  }
+
+  .dashboard-vendedor .dashboard-nav-movil-item.activo {
+    color: #1e3a5f;
+    background: #eff6ff;
+  }
+
+  .dashboard-vendedor .dashboard-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .dashboard-vendedor .dashboard-titulo {
+    font-size: 1.1rem;
+  }
+
+  .dashboard-vendedor .dashboard-subtitulo {
+    display: none;
+  }
+
+  .dashboard-vendedor .dashboard-usuario {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .dashboard-vendedor .dashboard-btn-inicio,
+  .dashboard-vendedor .dashboard-btn-salir {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.82rem;
+  }
+
+  .dashboard-vendedor .dashboard-contenido {
+    padding: 0.85rem 0.75rem 1rem;
+    gap: 1rem;
+  }
+
+  .dashboard-vendedor .dashboard-card {
+    padding: 0.85rem;
+  }
+
+  .dashboard-vendedor .dashboard-kpi-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .dashboard-vendedor .dashboard-seccion-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dashboard-vendedor .dashboard-btn-accion {
+    width: 100%;
+    padding: 0.65rem 1rem;
+    text-align: center;
+    font-size: 0.88rem;
+  }
+
+  .dashboard-vendedor .dashboard-productos-toolbar {
+    padding: 0.65rem 0.75rem;
+  }
+
+  .dashboard-vendedor .dashboard-productos-toolbar-hint {
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+
+  .dashboard-vendedor .dashboard-vertical-picker {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.45rem;
+  }
+
+  .dashboard-vendedor .dashboard-vertical-picker-segment {
+    display: flex;
+    width: 100%;
+  }
+
+  .dashboard-vendedor .dashboard-vertical-picker-segment button {
+    flex: 1;
+    padding: 0.55rem 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .dashboard-vendedor .dashboard-importar-bloque {
+    width: 100%;
+    max-width: none;
+  }
+
+  .dashboard-vendedor .dashboard-importar-texto {
+    font-size: 0.8rem;
+  }
+
+  .dashboard-vendedor .registro-repuestos {
+    max-width: none;
+    padding: 0.5rem 0.15rem;
+  }
+
+  .dashboard-vendedor .registro-repuestos select,
+  .dashboard-vendedor .registro-repuestos input {
+    font-size: 16px;
   }
 }
 
