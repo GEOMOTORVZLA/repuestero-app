@@ -183,7 +183,7 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
                 <h2 className="dashboard-seccion-titulo">Mis productos</h2>
                 <button
                   type="button"
-                  className="dashboard-btn-accion"
+                  className="dashboard-btn-accion dashboard-btn-accion--principal"
                   onClick={() => setMostrarNuevoProducto((v) => !v)}
                 >
                   {mostrarNuevoProducto ? 'Cerrar formulario' : 'Agregar producto nuevo'}
