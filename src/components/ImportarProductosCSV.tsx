@@ -13,6 +13,104 @@ import { parsePrecioProducto } from '../utils/precioProducto';
 import { permitirAccionCliente } from '../utils/rateLimitCliente';
 import './ImportarProductosCSV.css';
 
+const PLANTILLA_IMPORT_HEADERS = [
+  'nombre',
+  'categoria',
+  'marca',
+  'modelo',
+  'anio',
+  'comentarios',
+  'precio',
+  'moneda',
+] as const;
+
+const PLANTILLA_SHEET_PRODUCTOS = 'Productos';
+const EJEMPLO_NOMBRE_PLANTILLA = '(EJEMPLO - borrar esta fila)';
+
+function listasPlantillaImport(vertical: VerticalVehiculo) {
+  return {
+    categorias: vertical === 'moto' ? [...CATEGORIAS_PRODUCTO_MOTO] : [...CATEGORIAS_PRODUCTO],
+    marcas: vertical === 'moto' ? [...MARCAS_MOTOS] : [...MARCAS_VEHICULOS],
+  };
+}
+
+function filaEjemploPlantilla(vertical: VerticalVehiculo): string[] {
+  if (vertical === 'moto') {
+    return [
+      EJEMPLO_NOMBRE_PLANTILLA,
+      'Frenos',
+      'Yamaha',
+      'YBR 125',
+      '2022',
+      'Pastillas delanteras originales',
+      '18.50',
+      'USD',
+    ];
+  }
+  return [
+    EJEMPLO_NOMBRE_PLANTILLA,
+    'Filtros',
+    'Toyota',
+    'Corolla',
+    '2020',
+    'Filtro de aceite compatible',
+    '25.50',
+    'USD',
+  ];
+}
+
+function sheetListaReferenciaPlantilla(titulo: string, valores: readonly string[]): XLSX.WorkSheet {
+  const rows = [[titulo], ...valores.map((v) => [v])];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: Math.max(titulo.length, ...valores.map((v) => v.length), 12) + 2 }];
+  return ws;
+}
+
+function esFilaEjemploPlantilla(nombre: string): boolean {
+  const n = nombre.trim();
+  if (!n) return false;
+  return (
+    n === EJEMPLO_NOMBRE_PLANTILLA ||
+    /^\(EJEMPLO/i.test(n) ||
+    /^EJEMPLO\s*[-—]/i.test(n) ||
+    /borrar\s+esta\s+fila/i.test(n)
+  );
+}
+
+function nombreArchivoPlantillaImport(vertical: VerticalVehiculo): string {
+  return vertical === 'moto' ? 'template_productos_moto.xlsx' : 'template_productos_auto.xlsx';
+}
+
+function descargarPlantillaImportacion(vertical: VerticalVehiculo): void {
+  const { categorias, marcas } = listasPlantillaImport(vertical);
+  const wsProductos = XLSX.utils.aoa_to_sheet([
+    [...PLANTILLA_IMPORT_HEADERS],
+    filaEjemploPlantilla(vertical),
+  ]);
+  wsProductos['!cols'] = [
+    { wch: 34 },
+    { wch: 30 },
+    { wch: 22 },
+    { wch: 18 },
+    { wch: 8 },
+    { wch: 36 },
+    { wch: 10 },
+    { wch: 8 },
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsProductos, PLANTILLA_SHEET_PRODUCTOS);
+  XLSX.utils.book_append_sheet(wb, sheetListaReferenciaPlantilla('categoria', categorias), 'Categorias');
+  XLSX.utils.book_append_sheet(wb, sheetListaReferenciaPlantilla('marca', marcas), 'Marcas');
+  XLSX.writeFile(wb, nombreArchivoPlantillaImport(vertical), { compression: true });
+}
+
+function sheetNameProductosImport(workbook: XLSX.WorkBook): string {
+  if (workbook.SheetNames.includes(PLANTILLA_SHEET_PRODUCTOS)) {
+    return PLANTILLA_SHEET_PRODUCTOS;
+  }
+  return workbook.SheetNames[0] ?? PLANTILLA_SHEET_PRODUCTOS;
+}
+
 type Moneda = 'BS' | 'USD';
 
 type ParsedRow = {
@@ -98,8 +196,9 @@ function parseCSV(text: string): string[][] {
 
 function parseXLSXToRows(arrayBuffer: ArrayBuffer): string[][] {
   const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-  const sheetName = workbook.SheetNames[0];
+  const sheetName = sheetNameProductosImport(workbook);
   const worksheet = workbook.Sheets[sheetName];
+  if (!worksheet) return [];
 
   const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as unknown[][];
   const rows = (rawRows ?? [])
@@ -149,27 +248,10 @@ export function ImportarProductosCSV({
     return m;
   }, [vertical]);
 
-  const templateHeaders = useMemo(
-    () =>
-      [
-        'nombre',
-        'categoria',
-        'marca',
-        'modelo',
-        'anio',
-        'comentarios',
-        'precio',
-        'moneda',
-      ] as const,
-    []
-  );
+  const templateHeaders = PLANTILLA_IMPORT_HEADERS;
 
-  /** Plantilla Excel: evita que Excel (español) meta todo en una sola celda al abrir CSV. */
   const descargarTemplate = () => {
-    const ws = XLSX.utils.aoa_to_sheet([Array.from(templateHeaders)]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Productos');
-    XLSX.writeFile(wb, 'template_productos.xlsx', { compression: true });
+    descargarPlantillaImportacion(vertical);
   };
 
   /** CSV con UTF-8 BOM para Excel; comas como en la spec internacional. */
@@ -295,7 +377,11 @@ export function ImportarProductosCSV({
       const row = dataRows[i];
       const rowNumber = i + 2; // +1 por header +1 por index
 
-      const nombre = get(row, 'nombre').trim().toUpperCase();
+      const nombreRaw = get(row, 'nombre').trim();
+      if (esFilaEjemploPlantilla(nombreRaw)) {
+        continue;
+      }
+      const nombre = nombreRaw.toUpperCase();
       const categoria = get(row, 'categoria').trim();
       const marcaRaw = get(row, 'marca').trim();
       const modelo = normalizeOptionalText(get(row, 'modelo'));
@@ -375,7 +461,15 @@ export function ImportarProductosCSV({
       setErrores(erroresFila.slice(0, 20));
       setEstado('error');
       setMensaje(
-        `Encontramos ${erroresFila.length} error(es) en el archivo. Corregirlos y reintentar. (Mostrando hasta 20)`
+        `Encontramos ${erroresFila.length} error(es) en el archivo. Corrígelos y reintenta. (Mostrando hasta 20)`
+      );
+      return;
+    }
+
+    if (filas.length === 0) {
+      setEstado('error');
+      setMensaje(
+        'No hay productos para importar. Llena la hoja Productos del Excel (borra la fila de ejemplo si sigue ahí).'
       );
       return;
     }
@@ -459,6 +553,12 @@ export function ImportarProductosCSV({
     <div className="importar-productos">
       <div className="importar-productos-header">
         <h3 className="importar-productos-titulo">Importar productos desde Excel o CSV (sin fotos)</h3>
+        <p className="importar-productos-ayuda">
+          Descarga la plantilla Excel: incluye hojas <strong>Productos</strong>,{' '}
+          <strong>Categorias</strong> y <strong>Marcas</strong> con los valores válidos para{' '}
+          {vertical === 'moto' ? 'motocicleta' : 'automóvil'}. Llena la hoja Productos (borra la fila
+          de ejemplo) y súbela aquí. Moneda: BS o USD.
+        </p>
       </div>
 
       <input
@@ -475,7 +575,7 @@ export function ImportarProductosCSV({
           className="importar-productos-link"
           disabled={estado === 'importando'}
         >
-          Descargar plantilla Excel (.xlsx)
+          Descargar plantilla Excel (.xlsx) con categorías y marcas
         </button>
         <button
           type="button"

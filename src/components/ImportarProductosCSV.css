@@ -6,10 +6,17 @@
 
 .importar-productos-header {
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.importar-productos-ayuda {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: #4a5568;
+  max-width: 52rem;
 }
 
 .importar-productos-titulo {

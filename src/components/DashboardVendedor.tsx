@@ -230,8 +230,8 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
               <div className="dashboard-importar-row dashboard-importar-row-final">
                 <div className="dashboard-importar-bloque">
                   <p className="dashboard-importar-texto">
-                    Puedes subir tus productos de manera masiva utilizando esta opción, descarga la plantilla, llénala
-                    y luego súbela a la página.
+                    Puedes subir tus productos de manera masiva: descarga la plantilla Excel (incluye
+                    categorías y marcas válidas), llénala en la hoja Productos y súbela aquí.
                   </p>
                   <button
                     type="button"
