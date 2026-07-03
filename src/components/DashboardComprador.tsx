@@ -16,7 +16,7 @@ export function DashboardComprador({ onVolverInicio }: DashboardCompradorProps) 
   const email = user?.email ?? '';
 
   return (
-    <div className="dashboard">
+    <div className="dashboard dashboard-comprador dashboard-panel-movil">
       <aside className="dashboard-sidebar">
         {email && (
           <div className="dashboard-sidebar-usuario">
@@ -84,6 +84,23 @@ export function DashboardComprador({ onVolverInicio }: DashboardCompradorProps) 
           )}
         </main>
       </div>
+
+      <nav className="dashboard-nav-movil" aria-label="Navegación del panel">
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'historial' ? 'activo' : ''}`}
+          onClick={() => setTab('historial')}
+        >
+          Historial
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'perfil' ? 'activo' : ''}`}
+          onClick={() => setTab('perfil')}
+        >
+          Perfil
+        </button>
+      </nav>
     </div>
   );
 }

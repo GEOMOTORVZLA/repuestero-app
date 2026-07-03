@@ -89,7 +89,7 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
   const email = user?.email ?? '';
 
   return (
-    <div className="dashboard dashboard-vendedor">
+    <div className="dashboard dashboard-vendedor dashboard-panel-movil">
       <aside className="dashboard-sidebar">
         {email && (
           <div className="dashboard-sidebar-usuario">

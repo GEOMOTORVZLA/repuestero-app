@@ -7,12 +7,15 @@ import type { BannerEstadoCuenta } from '../utils/estadoCuentaVendedorTaller';
 import { EstadoCuentaNegocioBanner } from './EstadoCuentaNegocioBanner';
 import './Dashboard.css';
 
+type TabTaller = 'datos' | 'seguridad';
+
 interface DashboardTallerProps {
   onVolverInicio?: () => void;
 }
 
 export function DashboardTaller({ onVolverInicio }: DashboardTallerProps) {
   const { user, signOut } = useAuth();
+  const [tab, setTab] = useState<TabTaller>('datos');
   const [bannerTaller, setBannerTaller] = useState<BannerEstadoCuenta | null>(null);
   const [passwordNueva, setPasswordNueva] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
@@ -102,7 +105,7 @@ export function DashboardTaller({ onVolverInicio }: DashboardTallerProps) {
   const email = user?.email ?? '';
 
   return (
-    <div className="dashboard">
+    <div className="dashboard dashboard-taller dashboard-panel-movil">
       <aside className="dashboard-sidebar">
         {email && (
           <div className="dashboard-sidebar-usuario">
@@ -110,8 +113,19 @@ export function DashboardTaller({ onVolverInicio }: DashboardTallerProps) {
           </div>
         )}
         <nav className="dashboard-menu">
-          <button type="button" className="dashboard-menu-item activo">
+          <button
+            type="button"
+            className={`dashboard-menu-item ${tab === 'datos' ? 'activo' : ''}`}
+            onClick={() => setTab('datos')}
+          >
             Datos del taller
+          </button>
+          <button
+            type="button"
+            className={`dashboard-menu-item ${tab === 'seguridad' ? 'activo' : ''}`}
+            onClick={() => setTab('seguridad')}
+          >
+            Seguridad
           </button>
         </nav>
       </aside>
@@ -143,60 +157,81 @@ export function DashboardTaller({ onVolverInicio }: DashboardTallerProps) {
             </div>
           )}
 
-          <section className="dashboard-seccion">
-            <h2 className="dashboard-seccion-titulo">Datos del taller</h2>
-            <div className="dashboard-card">
-              <PerfilTaller />
-            </div>
-          </section>
+          {tab === 'datos' && (
+            <section className="dashboard-seccion">
+              <h2 className="dashboard-seccion-titulo">Datos del taller</h2>
+              <div className="dashboard-card">
+                <PerfilTaller />
+              </div>
+            </section>
+          )}
 
-          <section className="dashboard-seccion">
-            <h2 className="dashboard-seccion-titulo">Seguridad de la cuenta</h2>
-            <div className="dashboard-card">
-              <form onSubmit={guardarPassword} className="perfil-usuario-form">
-                <div className="perfil-usuario-grid">
-                  <div className="perfil-usuario-campo">
-                    <label htmlFor="taller-password-nueva">Nueva contraseña</label>
-                    <input
-                      id="taller-password-nueva"
-                      type="password"
-                      value={passwordNueva}
-                      onChange={(e) => setPasswordNueva(e.target.value)}
-                      disabled={estadoPassword === 'guardando'}
-                    />
+          {tab === 'seguridad' && (
+            <section className="dashboard-seccion">
+              <h2 className="dashboard-seccion-titulo">Seguridad de la cuenta</h2>
+              <div className="dashboard-card">
+                <form onSubmit={guardarPassword} className="perfil-usuario-form">
+                  <div className="perfil-usuario-grid">
+                    <div className="perfil-usuario-campo">
+                      <label htmlFor="taller-password-nueva">Nueva contraseña</label>
+                      <input
+                        id="taller-password-nueva"
+                        type="password"
+                        value={passwordNueva}
+                        onChange={(e) => setPasswordNueva(e.target.value)}
+                        disabled={estadoPassword === 'guardando'}
+                      />
+                    </div>
+                    <div className="perfil-usuario-campo">
+                      <label htmlFor="taller-password-confirm">Confirmar contraseña</label>
+                      <input
+                        id="taller-password-confirm"
+                        type="password"
+                        value={passwordConfirm}
+                        onChange={(e) => setPasswordConfirm(e.target.value)}
+                        disabled={estadoPassword === 'guardando'}
+                      />
+                    </div>
                   </div>
-                  <div className="perfil-usuario-campo">
-                    <label htmlFor="taller-password-confirm">Confirmar contraseña</label>
-                    <input
-                      id="taller-password-confirm"
-                      type="password"
-                      value={passwordConfirm}
-                      onChange={(e) => setPasswordConfirm(e.target.value)}
-                      disabled={estadoPassword === 'guardando'}
-                    />
-                  </div>
-                </div>
-                {mensajePassword && (
-                  <p
-                    className={`perfil-usuario-mensaje ${
-                      estadoPassword === 'error' ? 'error' : estadoPassword === 'ok' ? 'ok' : ''
-                    }`}
+                  {mensajePassword && (
+                    <p
+                      className={`perfil-usuario-mensaje ${
+                        estadoPassword === 'error' ? 'error' : estadoPassword === 'ok' ? 'ok' : ''
+                      }`}
+                    >
+                      {mensajePassword}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    className="perfil-usuario-boton-secundario"
+                    disabled={estadoPassword === 'guardando'}
                   >
-                    {mensajePassword}
-                  </p>
-                )}
-                <button
-                  type="submit"
-                  className="perfil-usuario-boton-secundario"
-                  disabled={estadoPassword === 'guardando'}
-                >
-                  {estadoPassword === 'guardando' ? 'Actualizando...' : 'Actualizar contraseña'}
-                </button>
-              </form>
-            </div>
-          </section>
+                    {estadoPassword === 'guardando' ? 'Actualizando...' : 'Actualizar contraseña'}
+                  </button>
+                </form>
+              </div>
+            </section>
+          )}
         </main>
       </div>
+
+      <nav className="dashboard-nav-movil" aria-label="Navegación del panel">
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'datos' ? 'activo' : ''}`}
+          onClick={() => setTab('datos')}
+        >
+          Mi taller
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'seguridad' ? 'activo' : ''}`}
+          onClick={() => setTab('seguridad')}
+        >
+          Seguridad
+        </button>
+      </nav>
     </div>
   );
 }
