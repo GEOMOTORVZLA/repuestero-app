@@ -245,7 +245,7 @@ export function RegistroRepuestos({
       moneda: moneda,
       stock_actual: 0,
       activo: true,
-      aprobacion_publica: 'pendiente',
+      aprobacion_publica: 'aprobado',
       stock_confirmado_at: new Date().toISOString(),
       pausado_por_stock_vencido: false,
       vertical,
@@ -319,7 +319,7 @@ export function RegistroRepuestos({
     registrandoRef.current = false;
     setEstado('ok');
     setMensaje(
-      '¡Producto registrado! Quedará pendiente de autorización por un administrador antes de mostrarse en la búsqueda pública.'
+      '¡Producto registrado! Ya está publicado y visible en la búsqueda pública de Geomotor.'
     );
     onProductoRegistrado?.();
     setNombre('');

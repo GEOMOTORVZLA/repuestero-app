@@ -27,6 +27,8 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
   const [verticalAlta, setVerticalAlta] = useState<VerticalVehiculo>(vertical);
   const [refreshProductos, setRefreshProductos] = useState(0);
   const [bannerTienda, setBannerTienda] = useState<BannerEstadoCuenta | null>(null);
+  const [avisoNormasEliminados, setAvisoNormasEliminados] = useState(0);
+  const [cerrandoAvisoNormas, setCerrandoAvisoNormas] = useState(false);
 
   useEffect(() => {
     setVerticalAlta(vertical);
@@ -35,6 +37,7 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
   useEffect(() => {
     if (!user) {
       setBannerTienda(null);
+      setAvisoNormasEliminados(0);
       return;
     }
     let cancelled = false;
@@ -45,7 +48,7 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
 
       const { data: tiendaRow } = await supabase
         .from('tiendas')
-        .select('bloqueado, aprobacion_estado, membresia_hasta')
+        .select('bloqueado, aprobacion_estado, membresia_hasta, aviso_normas_productos_eliminados')
         .eq('user_id', user.id)
         .order('created_at', { ascending: true })
         .limit(1)
@@ -57,7 +60,11 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
         bloqueado?: boolean | null;
         aprobacion_estado?: string | null;
         membresia_hasta?: string | null;
+        aviso_normas_productos_eliminados?: number | null;
       } | null;
+
+      const nAviso = Number(tr?.aviso_normas_productos_eliminados ?? 0);
+      setAvisoNormasEliminados(Number.isFinite(nAviso) && nAviso > 0 ? Math.floor(nAviso) : 0);
 
       if (tr) {
         setBannerTienda(
@@ -85,6 +92,15 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
       cancelled = true;
     };
   }, [user]);
+
+  const cerrarAvisoNormas = async () => {
+    setCerrandoAvisoNormas(true);
+    const { error } = await supabase.rpc('vendedor_cerrar_aviso_normas_productos');
+    if (!error) {
+      setAvisoNormasEliminados(0);
+    }
+    setCerrandoAvisoNormas(false);
+  };
 
   const email = user?.email ?? '';
 
@@ -152,6 +168,22 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
           {bannerTienda && (
             <div className="dashboard-cuenta-banners" role="region" aria-label="Estado de tu cuenta">
               <EstadoCuentaNegocioBanner etiqueta="Vendedor / tienda" banner={bannerTienda} />
+            </div>
+          )}
+          {avisoNormasEliminados > 0 && (
+            <div className="dashboard-aviso-normas" role="alert">
+              <p className="dashboard-aviso-normas-texto">
+                Se eliminaron {avisoNormasEliminados} productos de tus publicaciones por no cumplir con
+                nuestras normas, recuerda publicar solo productos referentes a vehículos o motocicletas.
+              </p>
+              <button
+                type="button"
+                className="dashboard-aviso-normas-cerrar"
+                disabled={cerrandoAvisoNormas}
+                onClick={() => void cerrarAvisoNormas()}
+              >
+                {cerrandoAvisoNormas ? 'Cerrando…' : 'Entendido'}
+              </button>
             </div>
           )}
           {tab === 'resumen' && (

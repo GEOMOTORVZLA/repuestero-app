@@ -153,6 +153,48 @@
   gap: 0.75rem;
 }
 
+.dashboard-aviso-normas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #f6ad55;
+  background: #fffaf0;
+  color: #744210;
+}
+
+.dashboard-aviso-normas-texto {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.dashboard-aviso-normas-cerrar {
+  flex-shrink: 0;
+  padding: 0.4rem 0.85rem;
+  border: none;
+  border-radius: 6px;
+  background: #c05621;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dashboard-aviso-normas-cerrar:hover:not(:disabled) {
+  background: #9c4221;
+}
+
+.dashboard-aviso-normas-cerrar:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
 .dashboard-seccion {
   display: flex;
   flex-direction: column;

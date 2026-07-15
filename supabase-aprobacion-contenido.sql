@@ -17,7 +17,7 @@ ALTER TABLE public.talleres ALTER COLUMN aprobacion_estado SET NOT NULL;
 
 ALTER TABLE public.productos ADD COLUMN IF NOT EXISTS aprobacion_publica text;
 UPDATE public.productos SET aprobacion_publica = 'aprobado' WHERE aprobacion_publica IS NULL;
-ALTER TABLE public.productos ALTER COLUMN aprobacion_publica SET DEFAULT 'pendiente';
+ALTER TABLE public.productos ALTER COLUMN aprobacion_publica SET DEFAULT 'aprobado';
 ALTER TABLE public.productos ALTER COLUMN aprobacion_publica SET NOT NULL;
 
 -- 3) Restringir valores (opcional pero claro)
@@ -122,7 +122,7 @@ AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
     IF NOT public.is_admin() THEN
-      NEW.aprobacion_publica := 'pendiente';
+      NEW.aprobacion_publica := 'aprobado';
     END IF;
     RETURN NEW;
   END IF;

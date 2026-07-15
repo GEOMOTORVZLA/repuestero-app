@@ -963,7 +963,7 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
           const vehiculo = [p.marca, p.modelo, p.anio].filter(Boolean).join(' · ');
           const estaActivo = p.activo !== false;
           const semaforoStock = semaforoStockProducto(p);
-          const mod = (p.aprobacion_publica ?? 'pendiente').toLowerCase();
+          const mod = (p.aprobacion_publica ?? 'aprobado').toLowerCase();
           const seleccionadoFotosMasivas = fotosMasivasSeleccionados.includes(p.id);
           const claseMod =
             mod === 'aprobado' ? 'aprobado' : mod === 'rechazado' ? 'rechazado' : 'pendiente';

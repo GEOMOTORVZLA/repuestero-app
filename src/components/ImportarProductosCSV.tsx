@@ -515,7 +515,7 @@ export function ImportarProductosCSV({
         moneda: r.moneda,
         stock_actual: 0,
         activo: true,
-        aprobacion_publica: 'pendiente',
+        aprobacion_publica: 'aprobado',
         stock_confirmado_at: new Date().toISOString(),
         pausado_por_stock_vencido: false,
         vertical,
@@ -544,7 +544,7 @@ export function ImportarProductosCSV({
 
     setEstado('ok');
     setMensaje(
-      `Importación completada: ${ok} producto(s) insertados (sin fotos). Quedan pendientes de autorización por un administrador antes de verse en la web.`
+      `Importación completada: ${ok} producto(s) insertados (sin fotos). Ya están publicados y visibles en la búsqueda pública.`
     );
     onImportado?.();
   };

@@ -17,6 +17,8 @@ returns table (
   email text,
   tipo_cuenta text,
   role text,
+  nombre text,
+  telefono text,
   creado_en timestamptz
 )
 language plpgsql
@@ -42,12 +44,58 @@ begin
     u.email::text,
     coalesce(u.raw_user_meta_data ->> 'tipo_cuenta', null)::text,
     nullif(coalesce(u.raw_app_meta_data ->> 'role', u.raw_user_meta_data ->> 'role'), '')::text,
+    nullif(
+      trim(
+        coalesce(
+          nullif(t.nombre_comercial, ''),
+          nullif(t.nombre, ''),
+          nullif(tal.nombre_comercial, ''),
+          nullif(tal.nombre, ''),
+          nullif(u.raw_user_meta_data -> 'perfil_vendedor' ->> 'nombre_comercial', ''),
+          nullif(u.raw_user_meta_data -> 'perfil_vendedor' ->> 'nombre', ''),
+          nullif(u.raw_user_meta_data -> 'perfil_taller' ->> 'nombre_comercial', ''),
+          nullif(u.raw_user_meta_data -> 'perfil_taller' ->> 'nombre', ''),
+          nullif(u.raw_user_meta_data -> 'perfil_comprador' ->> 'nombre_comercial', ''),
+          nullif(u.raw_user_meta_data -> 'perfil_comprador' ->> 'nombre', '')
+        )
+      ),
+      ''
+    )::text,
+    nullif(
+      trim(
+        coalesce(
+          nullif(t.telefono, ''),
+          nullif(tal.telefono, ''),
+          nullif(u.raw_user_meta_data -> 'perfil_vendedor' ->> 'telefono', ''),
+          nullif(u.raw_user_meta_data -> 'perfil_taller' ->> 'telefono', ''),
+          nullif(u.raw_user_meta_data -> 'perfil_comprador' ->> 'telefono', '')
+        )
+      ),
+      ''
+    )::text,
     u.created_at
   from auth.users u
+  left join public.tiendas t on t.user_id = u.id
+  left join public.talleres tal on tal.user_id = u.id
   where q = ''
      or u.email::text ilike '%' || q || '%'
      or u.id::text ilike '%' || q || '%'
      or coalesce(u.raw_user_meta_data ->> 'tipo_cuenta', '') ilike '%' || q || '%'
+     or coalesce(t.nombre_comercial, '') ilike '%' || q || '%'
+     or coalesce(t.nombre, '') ilike '%' || q || '%'
+     or coalesce(tal.nombre_comercial, '') ilike '%' || q || '%'
+     or coalesce(tal.nombre, '') ilike '%' || q || '%'
+     or coalesce(t.telefono, '') ilike '%' || q || '%'
+     or coalesce(tal.telefono, '') ilike '%' || q || '%'
+     or coalesce(u.raw_user_meta_data -> 'perfil_vendedor' ->> 'nombre', '') ilike '%' || q || '%'
+     or coalesce(u.raw_user_meta_data -> 'perfil_vendedor' ->> 'nombre_comercial', '') ilike '%' || q || '%'
+     or coalesce(u.raw_user_meta_data -> 'perfil_vendedor' ->> 'telefono', '') ilike '%' || q || '%'
+     or coalesce(u.raw_user_meta_data -> 'perfil_taller' ->> 'nombre', '') ilike '%' || q || '%'
+     or coalesce(u.raw_user_meta_data -> 'perfil_taller' ->> 'nombre_comercial', '') ilike '%' || q || '%'
+     or coalesce(u.raw_user_meta_data -> 'perfil_taller' ->> 'telefono', '') ilike '%' || q || '%'
+     or coalesce(u.raw_user_meta_data -> 'perfil_comprador' ->> 'nombre', '') ilike '%' || q || '%'
+     or coalesce(u.raw_user_meta_data -> 'perfil_comprador' ->> 'nombre_comercial', '') ilike '%' || q || '%'
+     or coalesce(u.raw_user_meta_data -> 'perfil_comprador' ->> 'telefono', '') ilike '%' || q || '%'
   order by u.created_at desc
   limit lim;
 end;
@@ -191,7 +239,7 @@ $$;
 
 grant execute on function public.admin_set_productos_activo_bulk(uuid[], boolean) to authenticated;
 
--- Eliminar productos por ids (admin). Respeta FKs en tablas hijas con ON DELETE CASCADE.
+-- Eliminar productos por ids (admin). Acumula aviso de normas en la tienda del vendedor.
 create or replace function public.admin_eliminar_productos(
   p_producto_ids uuid[]
 )
@@ -202,6 +250,7 @@ set search_path = public, auth
 as $$
 declare
   n int := 0;
+  r record;
 begin
   if not exists (
     select 1
@@ -215,6 +264,19 @@ begin
   if p_producto_ids is null or coalesce(cardinality(p_producto_ids), 0) = 0 then
     return 0;
   end if;
+
+  for r in
+    select tienda_id, count(*)::int as cnt
+    from public.productos
+    where id = any (p_producto_ids)
+      and tienda_id is not null
+    group by tienda_id
+  loop
+    update public.tiendas
+    set aviso_normas_productos_eliminados =
+      coalesce(aviso_normas_productos_eliminados, 0) + r.cnt
+    where id = r.tienda_id;
+  end loop;
 
   delete from public.productos
   where id = any (p_producto_ids);

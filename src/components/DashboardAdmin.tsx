@@ -116,9 +116,20 @@ type FiltroEstadoProductoGestion =
   | 'activos'
   | 'pausados'
   | 'por_aprobar'
+  | 'agregado_reciente'
   | 'proximos_stock'
   | 'stock_vencido'
   | 'sin_fecha_stock';
+
+const DIAS_PRODUCTO_AGREGADO_RECIENTE = 5;
+
+function esProductoAgregadoReciente(createdAt: string | null | undefined): boolean {
+  if (createdAt == null || String(createdAt).trim() === '') return false;
+  const creado = new Date(createdAt).getTime();
+  if (Number.isNaN(creado)) return false;
+  const limiteMs = DIAS_PRODUCTO_AGREGADO_RECIENTE * 24 * 60 * 60 * 1000;
+  return Date.now() - creado <= limiteMs;
+}
 
 /** Acciones masivas del panel admin sobre productosFiltrados */
 type AccionMasivaProductosAdmin = '' | 'activar' | 'pausar' | 'eliminar';
@@ -128,6 +139,8 @@ type AdminUsuario = {
   email: string | null;
   tipo_cuenta: string | null;
   role: string | null;
+  nombre: string | null;
+  telefono: string | null;
   creado_en: string | null;
 };
 
@@ -957,6 +970,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
         (filtroEstadoProductosAdmin === 'pausados' && p.activo !== true) ||
         (filtroEstadoProductosAdmin === 'por_aprobar' &&
           (p.aprobacion_publica ?? 'aprobado') === 'pendiente') ||
+        (filtroEstadoProductosAdmin === 'agregado_reciente' &&
+          esProductoAgregadoReciente(p.created_at)) ||
         (filtroEstadoProductosAdmin === 'proximos_stock' &&
           p.activo === true &&
           (semaforo.clase === 'amarillo' || semaforo.clase === 'rojo')) ||
@@ -1101,7 +1116,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     if (
       !window.confirm(
         accion === 'eliminar'
-          ? `¿Confirmas ${etiqueta}? Esta acción no se puede deshacer desde el panel.`
+          ? `¿Confirmas ${etiqueta}? El vendedor verá en su panel: se eliminaron esos productos por no cumplir las normas. Esta acción no se puede deshacer desde el panel.`
           : `¿${etiqueta.charAt(0).toUpperCase() + etiqueta.slice(1)}?`
       )
     ) {
@@ -1786,6 +1801,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     <thead>
                       <tr>
                         <th>Correo</th>
+                        <th>Nombre</th>
+                        <th>Teléfono</th>
                         <th>Tipo</th>
                         <th>Rol</th>
                         <th>RIF</th>
@@ -1799,6 +1816,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           <td className="dashboard-admin-email-td">
                             {celdaEmailAdmin(u.email)}
                           </td>
+                          <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.nombre)}</td>
+                          <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.telefono)}</td>
                           <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.tipo_cuenta)}</td>
                           <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.role)}</td>
                           <td className="dashboard-admin-rif-td">
@@ -2161,7 +2180,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                   <h2 className="dashboard-seccion-titulo">Usuarios registrados</h2>
                   <div className="dashboard-admin-busqueda-fila">
                     <label htmlFor="admin-buscar-usuarios" className="dashboard-admin-busqueda-label">
-                      Buscar (correo, tipo o parte del ID)
+                      Buscar (correo, nombre, teléfono, tipo o parte del ID)
                     </label>
                     <input
                       id="admin-buscar-usuarios"
@@ -2188,6 +2207,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       <thead>
                         <tr>
                           <th>Correo</th>
+                          <th>Nombre</th>
+                          <th>Teléfono</th>
                           <th>Tipo</th>
                           <th>Role</th>
                           <th>RIF</th>
@@ -2207,6 +2228,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                               <td className="dashboard-admin-email-td">
                                 {celdaEmailAdmin(u.email)}
                               </td>
+                              <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.nombre)}</td>
+                              <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.telefono)}</td>
                               <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.tipo_cuenta || 'sin tipo')}</td>
                               <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.role)}</td>
                               <td className="dashboard-admin-rif-td">
@@ -2335,6 +2358,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         <option value="activos">Activos</option>
                         <option value="pausados">Pausados</option>
                         <option value="por_aprobar">Por aprobar</option>
+                        <option value="agregado_reciente">Agregado reciente (últimos 5 días)</option>
                         <option value="proximos_stock">Próximos a pausarse por fecha</option>
                         <option value="stock_vencido">Stock vencido</option>
                         <option value="sin_fecha_stock">Sin fecha de stock</option>
