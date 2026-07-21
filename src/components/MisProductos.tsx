@@ -68,10 +68,14 @@ interface ProductoPanel {
   /** pendiente | aprobado | rechazado — visibilidad en la web */
   aprobacion_publica?: string | null;
   vertical?: VerticalVehiculo | null;
+  disponibilidad_aviso?: string | null;
+  es_oferta?: boolean | null;
 }
 
 interface MisProductosProps {
   refreshTrigger?: number;
+  /** Si viene del panel, el listado queda fijado a ese vertical (sin mezclar auto/moto). */
+  vertical?: VerticalVehiculo;
 }
 
 type FiltroEstadoProductoGestion =
@@ -85,7 +89,7 @@ type FiltroEstadoProductoGestion =
 type FiltroVerticalMisProductos = 'todos' | VerticalVehiculo;
 
 const PRODUCTOS_VENDEDOR_SELECT =
-  'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, aprobacion_publica, created_at, stock_confirmado_at, pausado_por_stock_vencido, vertical';
+  'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, aprobacion_publica, created_at, stock_confirmado_at, pausado_por_stock_vencido, vertical, disponibilidad_aviso, es_oferta';
 
 const PRODUCTOS_VENDEDOR_PAGE = 1000;
 
@@ -161,7 +165,8 @@ function semaforoStockProducto(p: ProductoPanel): {
   return { clase: 'vencido', texto: `Vencido (${dias} día(s) sin confirmar)` };
 }
 
-export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
+export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps) {
+  const verticalFijo = vertical === 'auto' || vertical === 'moto' ? vertical : null;
   const { user } = useAuth();
   const [productos, setProductos] = useState<ProductoPanel[]>([]);
   const [cargando, setCargando] = useState(false);
@@ -177,6 +182,10 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
   const [contactosDetalle, setContactosDetalle] = useState<number | null>(null);
   const [cargandoContactos, setCargandoContactos] = useState(false);
   const [fotosMasivasAlcance, setFotosMasivasAlcance] = useState<'sin_foto' | 'todos' | 'seleccionados'>('sin_foto');
+  /** Alcance aplicado a la lista de tarjetas (tras pulsar «Buscar»). null = sin filtrar por alcance. */
+  const [filtroAlcanceListaAplicado, setFiltroAlcanceListaAplicado] = useState<
+    'sin_foto' | 'todos' | 'seleccionados' | null
+  >(null);
   const [fotosMasivasArchivos, setFotosMasivasArchivos] = useState<(File | null)[]>([null, null, null, null]);
   const [fotosMasivasInputKey, setFotosMasivasInputKey] = useState(0);
   const [fotosMasivasSeleccionados, setFotosMasivasSeleccionados] = useState<string[]>([]);
@@ -189,10 +198,20 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
   const [filtroEstadoProductos, setFiltroEstadoProductos] = useState<FiltroEstadoProductoGestion>('todos');
   const [filtroEstadoProductosDraft, setFiltroEstadoProductosDraft] =
     useState<FiltroEstadoProductoGestion>('todos');
-  const [filtroVerticalProductos, setFiltroVerticalProductos] = useState<FiltroVerticalMisProductos>('todos');
+  const [filtroVerticalProductos, setFiltroVerticalProductos] = useState<FiltroVerticalMisProductos>(
+    () => (vertical === 'auto' || vertical === 'moto' ? vertical : 'todos')
+  );
   const [filtroVerticalProductosDraft, setFiltroVerticalProductosDraft] =
-    useState<FiltroVerticalMisProductos>('todos');
+    useState<FiltroVerticalMisProductos>(
+      () => (vertical === 'auto' || vertical === 'moto' ? vertical : 'todos')
+    );
   const [cargandoFiltrosProductos, setCargandoFiltrosProductos] = useState(false);
+
+  useEffect(() => {
+    if (!verticalFijo) return;
+    setFiltroVerticalProductos(verticalFijo);
+    setFiltroVerticalProductosDraft(verticalFijo);
+  }, [verticalFijo]);
 
   useEffect(() => {
     let cancelado = false;
@@ -318,7 +337,7 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
     if (!user) return;
     setBusquedaProductos(busquedaProductosInput.trim());
     setFiltroEstadoProductos(filtroEstadoProductosDraft);
-    setFiltroVerticalProductos(filtroVerticalProductosDraft);
+    setFiltroVerticalProductos(verticalFijo ?? filtroVerticalProductosDraft);
     setCargandoFiltrosProductos(true);
     setError(null);
     try {
@@ -343,12 +362,13 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
 
   const restablecerFiltrosMisProductos = async () => {
     if (!user) return;
+    const verticalReset: FiltroVerticalMisProductos = verticalFijo ?? 'todos';
     setBusquedaProductosInput('');
     setFiltroEstadoProductosDraft('todos');
-    setFiltroVerticalProductosDraft('todos');
+    setFiltroVerticalProductosDraft(verticalReset);
     setBusquedaProductos('');
     setFiltroEstadoProductos('todos');
-    setFiltroVerticalProductos('todos');
+    setFiltroVerticalProductos(verticalReset);
     setCargandoFiltrosProductos(true);
     setError(null);
     try {
@@ -380,6 +400,28 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
           }
           return true;
         });
+
+  /** Lista de tarjetas: mismos filtros generales + alcance solo tras «Buscar» (no altera la carga masiva). */
+  const productosParaLista = useMemo(() => {
+    if (!filtroAlcanceListaAplicado) return productosVisibles;
+    if (filtroAlcanceListaAplicado === 'seleccionados') {
+      return productosVisibles.filter((p) => fotosMasivasSeleccionados.includes(p.id));
+    }
+    if (filtroAlcanceListaAplicado === 'sin_foto') {
+      return productosVisibles.filter((p) => !p.imagen_url || !String(p.imagen_url).trim());
+    }
+    return productosVisibles;
+  }, [productosVisibles, filtroAlcanceListaAplicado, fotosMasivasSeleccionados]);
+
+  const buscarProductosPorAlcance = () => {
+    setFiltroAlcanceListaAplicado(fotosMasivasAlcance);
+    setMensajeFotosMasivas(null);
+    if (fotosMasivasAlcance === 'seleccionados' && fotosMasivasSeleccionados.length === 0) {
+      setMensajeFotosMasivas(
+        'No hay productos seleccionados. Márcalos en la lista o elige otro alcance y pulsa Buscar.'
+      );
+    }
+  };
 
   const cambiarFotoMasiva = (idx: number, file: File | null) => {
     setMensajeFotosMasivas(null);
@@ -621,20 +663,22 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
               placeholder="Ej: amortiguador x1, batería, Cherokee..."
             />
           </label>
-          <label>
-            Vertical
-            <select
-              value={filtroVerticalProductosDraft}
-              onChange={(e) =>
-                setFiltroVerticalProductosDraft(e.target.value as FiltroVerticalMisProductos)
-              }
-              disabled={cargandoFiltrosProductos}
-            >
-              <option value="todos">Todos (auto y moto)</option>
-              <option value="auto">Solo automóvil</option>
-              <option value="moto">Solo moto</option>
-            </select>
-          </label>
+          {!verticalFijo && (
+            <label>
+              Vertical
+              <select
+                value={filtroVerticalProductosDraft}
+                onChange={(e) =>
+                  setFiltroVerticalProductosDraft(e.target.value as FiltroVerticalMisProductos)
+                }
+                disabled={cargandoFiltrosProductos}
+              >
+                <option value="todos">Todos (auto y moto)</option>
+                <option value="auto">Solo automóvil</option>
+                <option value="moto">Solo moto</option>
+              </select>
+            </label>
+          )}
           <label>
             Estado del artículo
             <select
@@ -722,19 +766,37 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
         <div className="mis-productos-fotos-masivas-config">
           <label>
             Alcance
-            <select
-              value={fotosMasivasAlcance}
-              onChange={(e) => {
-                setFotosMasivasAlcance(e.target.value as 'sin_foto' | 'todos' | 'seleccionados');
-                setMensajeFotosMasivas(null);
-              }}
-              disabled={aplicandoFotosMasivas}
-            >
-              <option value="sin_foto">Solo productos sin foto principal</option>
-              <option value="todos">Todos mis productos</option>
-              <option value="seleccionados">Solo productos seleccionados manualmente</option>
-            </select>
+            <span className="mis-productos-fotos-masivas-alcance-fila">
+              <select
+                value={fotosMasivasAlcance}
+                onChange={(e) => {
+                  setFotosMasivasAlcance(e.target.value as 'sin_foto' | 'todos' | 'seleccionados');
+                  setMensajeFotosMasivas(null);
+                }}
+                disabled={aplicandoFotosMasivas}
+              >
+                <option value="sin_foto">Solo productos sin foto principal</option>
+                <option value="todos">Todos mis productos</option>
+                <option value="seleccionados">Solo productos seleccionados manualmente</option>
+              </select>
+              <button
+                type="button"
+                className="mis-productos-btn-secundario mis-productos-fotos-masivas-buscar"
+                onClick={buscarProductosPorAlcance}
+                disabled={aplicandoFotosMasivas}
+              >
+                Buscar
+              </button>
+            </span>
           </label>
+          {filtroAlcanceListaAplicado && (
+            <p className="mis-productos-fotos-masivas-lista-filtro" role="status">
+              Lista filtrada por alcance: mostrando {productosParaLista.length} producto(s).
+              {filtroAlcanceListaAplicado === 'sin_foto' && ' (sin foto principal)'}
+              {filtroAlcanceListaAplicado === 'seleccionados' && ' (seleccionados)'}
+              {filtroAlcanceListaAplicado === 'todos' && ' (todos los visibles)'}
+            </p>
+          )}
         </div>
         {fotosMasivasAlcance === 'seleccionados' && (
           <div className="mis-productos-fotos-masivas-seleccion">
@@ -955,11 +1017,13 @@ export function MisProductos({ refreshTrigger = 0 }: MisProductosProps) {
         </div>
       )}
       <div className="mis-productos-grid">
-        {productosVisibles.length === 0 ? (
+        {productosParaLista.length === 0 ? (
           <p className="mis-productos-mensaje">
-            No hay productos que coincidan con la búsqueda o el filtro seleccionado.
+            {productosVisibles.length === 0
+              ? 'No hay productos que coincidan con la búsqueda o el filtro seleccionado.'
+              : 'No hay productos que coincidan con el alcance elegido. Prueba otro alcance y pulsa Buscar.'}
           </p>
-        ) : productosVisibles.map((p) => {
+        ) : productosParaLista.map((p) => {
           const vehiculo = [p.marca, p.modelo, p.anio].filter(Boolean).join(' · ');
           const estaActivo = p.activo !== false;
           const semaforoStock = semaforoStockProducto(p);

@@ -803,7 +803,7 @@ export function IdentificarRepuestoVision({ vertical, onIaModalCapaDelta }: Iden
         .from('productos')
         .select(
           `
-          id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, moneda, precio_usd, imagen_url, imagenes_extra,
+          id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, moneda, precio_usd, imagen_url, imagenes_extra, disponibilidad_aviso, es_oferta,
           tiendas ( nombre_comercial, nombre, rif, telefono, direccion, latitud, longitud, metodos_pago )
         `
         )

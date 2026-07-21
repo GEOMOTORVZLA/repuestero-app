@@ -24,16 +24,13 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
   const [tab, setTab] = useState<TabId>('resumen');
   const [mostrarNuevoProducto, setMostrarNuevoProducto] = useState(false);
   const [mostrarImportarCSV, setMostrarImportarCSV] = useState(false);
-  const [verticalAlta, setVerticalAlta] = useState<VerticalVehiculo>(vertical);
   const [refreshProductos, setRefreshProductos] = useState(0);
   const [bannerTienda, setBannerTienda] = useState<BannerEstadoCuenta | null>(null);
   const [avisoNormasEliminados, setAvisoNormasEliminados] = useState(0);
   const [cerrandoAvisoNormas, setCerrandoAvisoNormas] = useState(false);
-
-  useEffect(() => {
-    setVerticalAlta(vertical);
-  }, [vertical]);
-
+  const esMoto = vertical === VERTICAL_MOTO;
+  const etiquetaVertical = esMoto ? 'motocicleta' : 'automóvil';
+  const etiquetaVerticalMayus = esMoto ? 'Motocicleta' : 'Automóvil';
   useEffect(() => {
     if (!user) {
       setBannerTienda(null);
@@ -174,7 +171,7 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
             <div className="dashboard-aviso-normas" role="alert">
               <p className="dashboard-aviso-normas-texto">
                 Se eliminaron {avisoNormasEliminados} productos de tus publicaciones por no cumplir con
-                nuestras normas, recuerda publicar solo productos referentes a vehículos o motocicletas.
+                nuestras normas, recuerda publicar solo productos referentes a {etiquetaVertical}.
               </p>
               <button
                 type="button"
@@ -224,37 +221,21 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
               <div
                 className="dashboard-productos-toolbar"
                 role="group"
-                aria-label="Registrar o importar productos según automóvil o motocicleta"
+                aria-label={`Productos de ${etiquetaVertical}`}
               >
                 <p className="dashboard-productos-toolbar-hint">
-                  Para <strong>registrar</strong> o <strong>importar</strong>, elige automóvil o motocicleta. Para{' '}
-                  <strong>eliminar</strong>, usa la opción en cada producto del listado. Puedes cambiar el selector en
-                  cualquier momento; el listado muestra todo junto.
+                  Este panel es solo de <strong>{etiquetaVertical}</strong>. Aquí puedes{' '}
+                  <strong>registrar</strong> o <strong>importar</strong> repuestos de {etiquetaVertical}. Para{' '}
+                  <strong>eliminar</strong>, usa la opción en cada producto del listado.
                 </p>
-                <div className="dashboard-vertical-picker">
-                  <span className="dashboard-vertical-picker-label">Registrar o eliminar producto en:</span>
-                  <div className="dashboard-vertical-picker-segment">
-                    <button
-                      type="button"
-                      className={verticalAlta === VERTICAL_AUTO ? 'activo' : ''}
-                      onClick={() => setVerticalAlta(VERTICAL_AUTO)}
-                    >
-                      Automóvil
-                    </button>
-                    <button
-                      type="button"
-                      className={verticalAlta === VERTICAL_MOTO ? 'activo' : ''}
-                      onClick={() => setVerticalAlta(VERTICAL_MOTO)}
-                    >
-                      Motocicleta
-                    </button>
-                  </div>
-                </div>
+                <p className="dashboard-productos-toolbar-vertical" role="status">
+                  Catálogo activo: <strong>{etiquetaVerticalMayus}</strong>
+                </p>
               </div>
               {mostrarNuevoProducto && (
-                <div className="dashboard-card" key={`registro-${verticalAlta}`}>
+                <div className="dashboard-card" key={`registro-${vertical}`}>
                   <RegistroRepuestos
-                    vertical={verticalAlta}
+                    vertical={vertical}
                     onProductoRegistrado={() => setRefreshProductos((n) => n + 1)}
                   />
                 </div>
@@ -262,8 +243,8 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
               <div className="dashboard-importar-row dashboard-importar-row-final">
                 <div className="dashboard-importar-bloque">
                   <p className="dashboard-importar-texto">
-                    Puedes subir tus productos de manera masiva: descarga la plantilla Excel (incluye
-                    categorías y marcas válidas), llénala en la hoja Productos y súbela aquí.
+                    Puedes subir tus productos de {etiquetaVertical} de manera masiva: descarga la plantilla Excel
+                    (incluye categorías y marcas válidas), llénala en la hoja Productos y súbela aquí.
                   </p>
                   <button
                     type="button"
@@ -275,15 +256,15 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
                 </div>
               </div>
               {mostrarImportarCSV && (
-                <div className="dashboard-card" key={`import-${verticalAlta}`}>
+                <div className="dashboard-card" key={`import-${vertical}`}>
                   <ImportarProductosCSV
-                    vertical={verticalAlta}
+                    vertical={vertical}
                     onImportado={() => setRefreshProductos((n) => n + 1)}
                   />
                 </div>
               )}
               <div className="dashboard-card">
-                <MisProductos refreshTrigger={refreshProductos} />
+                <MisProductos refreshTrigger={refreshProductos} vertical={vertical} />
               </div>
             </section>
           )}

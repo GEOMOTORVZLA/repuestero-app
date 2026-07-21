@@ -20,6 +20,11 @@ import {
 } from '../utils/productoImagenesExtra';
 import { esMonedaBolivar } from '../utils/monedaProducto';
 import { normalizarInputPrecio, parsePrecioProducto } from '../utils/precioProducto';
+import {
+  DISPONIBILIDAD_AVISO_OPCIONES,
+  esDisponibilidadAviso,
+  type DisponibilidadAviso,
+} from '../utils/avisoProductoPublicacion';
 import './RegistroRepuestos.css';
 
 export interface ProductoEditable {
@@ -37,6 +42,8 @@ export interface ProductoEditable {
   imagenes_extra?: (string | null)[] | string[] | null;
   /** Si no viene de la BD, se asume automóvil */
   vertical?: VerticalVehiculo | null;
+  disponibilidad_aviso?: string | null;
+  es_oferta?: boolean | null;
 }
 
 interface EditarProductoProps {
@@ -59,6 +66,10 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
   const [comentarios, setComentarios] = useState(producto.comentarios ?? producto.descripcion ?? '');
   const [precio, setPrecio] = useState(String(producto.precio_usd));
   const [moneda, setMoneda] = useState<'BS' | 'USD'>(esMonedaBolivar(producto.moneda) ? 'BS' : 'USD');
+  const [disponibilidadAviso, setDisponibilidadAviso] = useState<DisponibilidadAviso | ''>(
+    esDisponibilidadAviso(producto.disponibilidad_aviso) ? producto.disponibilidad_aviso : ''
+  );
+  const [esOferta, setEsOferta] = useState(Boolean(producto.es_oferta));
   const [estado, setEstado] = useState<'idle' | 'guardando' | 'ok' | 'error'>('idle');
   const [mensaje, setMensaje] = useState('');
   const [nuevaFotoPrincipal, setNuevaFotoPrincipal] = useState<File | null>(null);
@@ -104,6 +115,11 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       setMensaje('Los comentarios no pueden superar los 500 caracteres.');
       return;
     }
+    if (!esDisponibilidadAviso(disponibilidadAviso)) {
+      setEstado('error');
+      setMensaje('Selecciona la disponibilidad del producto (única, pocas o muchas).');
+      return;
+    }
 
     setEstado('guardando');
     setMensaje('Guardando cambios del repuesto...');
@@ -119,6 +135,8 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       comentarios: comentarios.trim() || null,
       precio_usd: precioNum,
       moneda,
+      disponibilidad_aviso: disponibilidadAviso,
+      es_oferta: esOferta,
     };
 
     // Subir nuevas imágenes si el usuario seleccionó
@@ -211,6 +229,8 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       moneda,
       imagen_url: imagenPrincipalUrl,
       imagenes_extra: imagenesExtraGuardadas,
+      disponibilidad_aviso: disponibilidadAviso,
+      es_oferta: esOferta,
     });
   };
 
@@ -321,6 +341,37 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
           onChange={(e) => setPrecio(normalizarInputPrecio(e.target.value))}
           disabled={estado === 'guardando'}
         />
+      </div>
+      <div className="registro-repuestos-avisos-publicacion">
+        <label className="registro-repuestos-fotos-label" htmlFor="disponibilidad-aviso-editar">
+          Disponibilidad en la publicación *
+        </label>
+        <select
+          id="disponibilidad-aviso-editar"
+          value={disponibilidadAviso}
+          onChange={(e) =>
+            setDisponibilidadAviso(
+              e.target.value === '' ? '' : (e.target.value as DisponibilidadAviso)
+            )
+          }
+          disabled={estado === 'guardando'}
+        >
+          <option value="">Elige disponibilidad</option>
+          {DISPONIBILIDAD_AVISO_OPCIONES.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <label className="registro-repuestos-oferta-check">
+          <input
+            type="checkbox"
+            checked={esOferta}
+            onChange={(e) => setEsOferta(e.target.checked)}
+            disabled={estado === 'guardando'}
+          />
+          Marcar como <strong>OFERTA</strong> (se verá titilando en la búsqueda)
+        </label>
       </div>
       <div className="registro-repuestos-fotos">
         <label className="registro-repuestos-fotos-label">Subir foto (opcional)</label>

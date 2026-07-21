@@ -10,6 +10,7 @@ import {
   construirUrlProductoCompartido,
   mensajeWhatsappCompartirRepuesto,
 } from '../utils/enlaceCompartirProducto';
+import { etiquetaDisponibilidadAviso } from '../utils/avisoProductoPublicacion';
 import './BusquedaRepuestos.css';
 
 /** Producto mínimo para listados de búsqueda / categoría */
@@ -24,6 +25,8 @@ export interface ProductoTarjetaBusqueda {
   anio: number | null;
   imagen_url: string | null;
   imagenes_extra?: string[] | null;
+  disponibilidad_aviso?: string | null;
+  es_oferta?: boolean | null;
 }
 
 function fotoPrincipalTarjeta(p: ProductoTarjetaBusqueda): string | null {
@@ -71,6 +74,24 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
   }, [expandida, fotos]);
 
   const thumb = fotoPrincipalTarjeta(p);
+  const etiquetaDisponibilidad = etiquetaDisponibilidadAviso(p.disponibilidad_aviso);
+  const mostrarOferta = Boolean(p.es_oferta);
+  const mostrarAvisos = Boolean(etiquetaDisponibilidad || mostrarOferta);
+
+  const bloqueAvisos = mostrarAvisos ? (
+    <div className="busqueda-repuestos-card-avisos" aria-label="Avisos del producto">
+      {etiquetaDisponibilidad && (
+        <span
+          className={`busqueda-repuestos-card-aviso busqueda-repuestos-card-aviso--disponibilidad busqueda-repuestos-card-aviso--${p.disponibilidad_aviso}`}
+        >
+          {etiquetaDisponibilidad}
+        </span>
+      )}
+      {mostrarOferta && (
+        <span className="busqueda-repuestos-card-aviso busqueda-repuestos-card-aviso--oferta">OFERTA</span>
+      )}
+    </div>
+  ) : null;
 
   const compartirPorWhatsapp = () => {
     const url = construirUrlProductoCompartido(p.id, vertical);
@@ -79,6 +100,7 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
 
   const bloqueInfo = (
     <div className="busqueda-repuestos-card-info">
+      {bloqueAvisos}
       <h4 className="busqueda-repuestos-card-nombre">{p.nombre}</h4>
       {(p.marca || p.modelo || p.anio) && (
         <p className="busqueda-repuestos-card-vehiculo">
@@ -143,6 +165,7 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
               )}
             </div>
             <div className="busqueda-repuestos-card-cabecera-expandida-texto">
+              {bloqueAvisos}
               <h4 className="busqueda-repuestos-card-nombre busqueda-repuestos-card-nombre--compacto">
                 {p.nombre}
               </h4>

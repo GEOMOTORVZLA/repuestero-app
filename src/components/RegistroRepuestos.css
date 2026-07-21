@@ -95,6 +95,31 @@
   margin-bottom: 1rem;
 }
 
+.registro-repuestos-avisos-publicacion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+}
+
+.registro-repuestos-avisos-publicacion select {
+  width: 100%;
+}
+
+.registro-repuestos-oferta-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: #334155;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.registro-repuestos-oferta-check input {
+  margin-top: 0.15rem;
+}
+
 .registro-repuestos-moneda {
   display: flex;
   gap: 1.5rem;

@@ -61,6 +61,8 @@ interface ProductoResultado {
   anio: number | null;
   imagen_url: string | null;
   imagenes_extra: string[] | null;
+  disponibilidad_aviso?: string | null;
+  es_oferta?: boolean | null;
   tiendas: TiendaContacto | null;
 }
 
@@ -77,8 +79,10 @@ const SELECT_PRODUCTOS_PUBLICO_LISTA = `
         anio,
         imagen_url,
         imagenes_extra,
+        disponibilidad_aviso,
+        es_oferta,
         tiendas ( nombre_comercial, nombre, rif, telefono, direccion, latitud, longitud, metodos_pago )
-      `;
+`;
 
 /** Tamaño de página en listados públicos (se pide una fila extra para saber si hay más). */
 const PAGE_SIZE_RESULTADOS_PUBLICOS = 24;

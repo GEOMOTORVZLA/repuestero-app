@@ -60,7 +60,9 @@ const SELECT_PRODUCTOS_VENDEDOR_CERCA = `
   modelo,
   anio,
   imagen_url,
-  imagenes_extra
+  imagenes_extra,
+  disponibilidad_aviso,
+  es_oferta
 `;
 
 type ProductoVendedorCercaBusqueda = ProductoTarjetaBusqueda & {

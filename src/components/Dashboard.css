@@ -233,6 +233,19 @@
   gap: 0.5rem 0.75rem;
 }
 
+.dashboard-productos-toolbar-vertical {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
 .dashboard-vertical-picker-label {
   font-size: 0.85rem;
   font-weight: 600;

@@ -16,6 +16,11 @@ import {
 import { MAX_FOTOS_EXTRA, slotsArchivosExtraVacios } from '../utils/productoImagenesExtra';
 import { normalizarInputPrecio, parsePrecioProducto } from '../utils/precioProducto';
 import { perfilVendedorMetadataListo, parseCoordenadaRegistro } from '../utils/validarDatosNegocio';
+import {
+  DISPONIBILIDAD_AVISO_OPCIONES,
+  esDisponibilidadAviso,
+  type DisponibilidadAviso,
+} from '../utils/avisoProductoPublicacion';
 import './RegistroRepuestos.css';
 
 interface Tienda {
@@ -48,6 +53,8 @@ export function RegistroRepuestos({
   const [comentarios, setComentarios] = useState('');
   const [precio, setPrecio] = useState('');
   const [moneda, setMoneda] = useState<'BS' | 'USD'>('BS');
+  const [disponibilidadAviso, setDisponibilidadAviso] = useState<DisponibilidadAviso | ''>('');
+  const [esOferta, setEsOferta] = useState(false);
   const [estado, setEstado] = useState<'idle' | 'registrando' | 'ok' | 'error'>('idle');
   const [mensaje, setMensaje] = useState('');
   const [fotoPrincipal, setFotoPrincipal] = useState<File | null>(null);
@@ -199,6 +206,12 @@ export function RegistroRepuestos({
       setMensaje('Sube al menos una foto principal del repuesto.');
       return;
     }
+    if (!esDisponibilidadAviso(disponibilidadAviso)) {
+      registrandoRef.current = false;
+      setEstado('error');
+      setMensaje('Selecciona la disponibilidad del producto (única, pocas o muchas).');
+      return;
+    }
     setEstado('registrando');
     setMensaje('Optimizando imágenes y registrando repuesto...');
 
@@ -243,6 +256,8 @@ export function RegistroRepuestos({
       comentarios: comentarios.trim() || null,
       precio_usd: precioNum,
       moneda: moneda,
+      disponibilidad_aviso: disponibilidadAviso,
+      es_oferta: esOferta,
       stock_actual: 0,
       activo: true,
       aprobacion_publica: 'aprobado',
@@ -330,6 +345,8 @@ export function RegistroRepuestos({
     setComentarios('');
     setPrecio('');
     setMoneda('BS');
+    setDisponibilidadAviso('');
+    setEsOferta(false);
     setFotoPrincipal(null);
     setFotosExtraSlots(slotsArchivosExtraVacios());
   };
@@ -453,6 +470,37 @@ export function RegistroRepuestos({
           onChange={(e) => setPrecio(normalizarInputPrecio(e.target.value))}
           disabled={estado === 'registrando'}
         />
+      </div>
+      <div className="registro-repuestos-avisos-publicacion">
+        <label className="registro-repuestos-fotos-label" htmlFor="disponibilidad-aviso-registro">
+          Disponibilidad en la publicación *
+        </label>
+        <select
+          id="disponibilidad-aviso-registro"
+          value={disponibilidadAviso}
+          onChange={(e) =>
+            setDisponibilidadAviso(
+              e.target.value === '' ? '' : (e.target.value as DisponibilidadAviso)
+            )
+          }
+          disabled={estado === 'registrando'}
+        >
+          <option value="">Elige disponibilidad</option>
+          {DISPONIBILIDAD_AVISO_OPCIONES.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <label className="registro-repuestos-oferta-check">
+          <input
+            type="checkbox"
+            checked={esOferta}
+            onChange={(e) => setEsOferta(e.target.checked)}
+            disabled={estado === 'registrando'}
+          />
+          Marcar como <strong>OFERTA</strong> (se verá titilando en la búsqueda)
+        </label>
       </div>
       <div className="registro-repuestos-fotos">
         <label className="registro-repuestos-fotos-label">Subir foto *</label>

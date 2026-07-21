@@ -1109,6 +1109,75 @@
   min-width: 0;
 }
 
+.busqueda-repuestos-card-avisos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+  margin: 0 0 0.28rem;
+}
+
+.busqueda-repuestos-card-aviso {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.busqueda-repuestos-card-aviso--disponibilidad {
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fdba74;
+}
+
+.busqueda-repuestos-card-aviso--unica {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+.busqueda-repuestos-card-aviso--pocas {
+  background: #fffbeb;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.busqueda-repuestos-card-aviso--muchas {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #6ee7b7;
+}
+
+.busqueda-repuestos-card-aviso--oferta {
+  background: #dc2626;
+  color: #fff;
+  border: 1px solid #b91c1c;
+  animation: busqueda-repuestos-oferta-titilar 1.1s ease-in-out infinite;
+}
+
+@keyframes busqueda-repuestos-oferta-titilar {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .busqueda-repuestos-card-aviso--oferta {
+    animation: none;
+  }
+}
+
 .busqueda-repuestos-card-nombre {
   margin: 0 0 0.1rem;
   font-size: 0.88rem;

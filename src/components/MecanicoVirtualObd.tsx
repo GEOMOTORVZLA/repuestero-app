@@ -305,6 +305,8 @@ export function MecanicoVirtualObd({
           anio,
           imagen_url,
           imagenes_extra,
+          disponibilidad_aviso,
+          es_oferta,
           tiendas ( nombre_comercial, nombre, rif, telefono, direccion, latitud, longitud, metodos_pago )
         `
         )
