@@ -1154,6 +1154,18 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
                     <p className="mis-productos-card-desc">
                       {p.descripcion && p.descripcion.length > 0 ? p.descripcion : 'Sin descripción'}
                     </p>
+                    <div className="mis-productos-card-etiquetas-activas" aria-live="polite">
+                      {etiquetaDisponibilidadAviso(p.disponibilidad_aviso) ? (
+                        <span
+                          className={`mis-productos-card-aviso mis-productos-card-aviso--${p.disponibilidad_aviso}`}
+                        >
+                          {etiquetaDisponibilidadAviso(p.disponibilidad_aviso)}
+                        </span>
+                      ) : null}
+                      {p.es_oferta ? (
+                        <span className="mis-productos-card-aviso mis-productos-card-aviso--oferta">OFERTA</span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
                 <div
@@ -1162,20 +1174,6 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
                   aria-label="Etiquetas de publicación"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="mis-productos-card-etiquetas-activas" aria-live="polite">
-                    {etiquetaDisponibilidadAviso(p.disponibilidad_aviso) ? (
-                      <span
-                        className={`mis-productos-card-aviso mis-productos-card-aviso--${p.disponibilidad_aviso}`}
-                      >
-                        {etiquetaDisponibilidadAviso(p.disponibilidad_aviso)}
-                      </span>
-                    ) : (
-                      <span className="mis-productos-card-etiquetas-vacio">Sin aviso de stock</span>
-                    )}
-                    {p.es_oferta ? (
-                      <span className="mis-productos-card-aviso mis-productos-card-aviso--oferta">OFERTA</span>
-                    ) : null}
-                  </div>
                   <div className="mis-productos-card-etiquetas-botones">
                     {DISPONIBILIDAD_AVISO_OPCIONES.map((o) => {
                       const activo = p.disponibilidad_aviso === o.value;
