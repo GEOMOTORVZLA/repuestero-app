@@ -278,6 +278,35 @@
   margin-bottom: 1rem;
 }
 
+.mis-productos-editor-modal {
+  background: #fff;
+  border-radius: 10px;
+  padding: 1rem 1.15rem 1.15rem;
+  max-width: 560px;
+  width: 100%;
+  max-height: min(90vh, 820px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.35);
+}
+
+.mis-productos-editor-modal .registro-repuestos {
+  margin: 0;
+  max-width: none;
+}
+
+.mis-productos-editor-modal .registro-repuestos h2 {
+  margin-top: 0;
+  font-size: 1.15rem;
+}
+
+@media (max-width: 640px) {
+  .mis-productos-editor-modal {
+    max-height: min(92vh, 100%);
+    padding: 0.85rem 0.9rem 1rem;
+  }
+}
+
 .mis-productos-grid {
   display: flex;
   flex-direction: column;
@@ -506,6 +535,127 @@
   color: #718096;
 }
 
+.mis-productos-card-etiquetas {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  align-self: flex-start;
+  gap: 0.35rem;
+  min-width: 7.5rem;
+  max-width: 10.5rem;
+}
+
+.mis-productos-card-etiquetas-activas {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 0.22rem;
+  min-height: 1.4rem;
+}
+
+.mis-productos-card-etiquetas-vacio {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #94a3b8;
+  line-height: 1.25;
+}
+
+.mis-productos-card-aviso {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.12rem 0.38rem;
+  border-radius: 4px;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.mis-productos-card-aviso--unica {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+.mis-productos-card-aviso--pocas {
+  background: #fffbeb;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.mis-productos-card-aviso--muchas {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #6ee7b7;
+}
+
+.mis-productos-card-aviso--oferta {
+  background: #dc2626;
+  color: #fff;
+  border-color: #b91c1c;
+  animation: mis-productos-oferta-titilar 1.1s ease-in-out infinite;
+}
+
+@keyframes mis-productos-oferta-titilar {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mis-productos-card-aviso--oferta {
+    animation: none;
+  }
+}
+
+.mis-productos-card-etiquetas-botones {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+}
+
+.mis-productos-card-etiqueta-btn {
+  min-height: 26px;
+  padding: 0.18rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.mis-productos-card-etiqueta-btn:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.mis-productos-card-etiqueta-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.mis-productos-card-etiqueta-btn--activa {
+  border-color: #1e3a5f;
+  background: #1e3a5f;
+  color: #fff;
+}
+
+.mis-productos-card-etiqueta-btn--oferta.mis-productos-card-etiqueta-btn--activa {
+  border-color: #b91c1c;
+  background: #dc2626;
+  color: #fff;
+}
+
 /* Columna derecha: 4 botones uno debajo del otro */
 .mis-productos-card-acciones {
   display: flex;
@@ -522,6 +672,17 @@
 @media (max-width: 520px) {
   .mis-productos-card-cuerpo {
     flex-direction: column;
+  }
+
+  .mis-productos-card-etiquetas {
+    max-width: none;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .mis-productos-card-etiquetas-botones {
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 
   .mis-productos-card-acciones {
@@ -689,7 +850,11 @@
   padding: 1rem 1.2rem 1.2rem;
   max-width: 520px;
   width: 100%;
+  max-height: min(88vh, 720px);
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.35);
+  overflow: hidden;
 }
 
 .mis-productos-detalle-header {
@@ -697,6 +862,7 @@
   flex-direction: column;
   gap: 0.15rem;
   margin-bottom: 0.6rem;
+  flex-shrink: 0;
 }
 
 .mis-productos-detalle-nombre {
@@ -712,6 +878,14 @@
   color: #718096;
 }
 
+.mis-productos-detalle-cuerpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.15rem;
+}
+
 .mis-productos-detalle-galeria {
   display: flex;
   flex-direction: column;
@@ -722,7 +896,7 @@
 .mis-productos-detalle-galeria-principal {
   width: 100%;
   aspect-ratio: 4 / 3;
-  max-height: 520px;
+  max-height: min(280px, 38vh);
   border-radius: 8px;
   overflow: hidden;
   background: #fff;
@@ -799,16 +973,27 @@
 }
 
 .mis-productos-detalle-cerrar {
-  margin: 0.5rem auto 0;
+  margin: 0.65rem auto 0;
   display: block;
+  flex-shrink: 0;
   background: #1e3a5f;
   color: #fff;
 }
 
 @media (max-width: 640px) {
+  .mis-productos-detalle {
+    max-height: min(90vh, 100%);
+    padding: 0.85rem 0.95rem 1rem;
+  }
+
+  .mis-productos-detalle-galeria-principal {
+    max-height: min(220px, 32vh);
+  }
+
   .mis-productos-tabla th:nth-child(4),
   .mis-productos-tabla td:nth-child(4) {
     display: none;
   }
 }
+
 

@@ -12,6 +12,11 @@ import {
 import { etiquetaMoneda } from '../utils/monedaProducto';
 import { formatearPrecioProducto } from '../utils/precioProducto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
+import {
+  DISPONIBILIDAD_AVISO_OPCIONES,
+  etiquetaDisponibilidadAviso,
+  type DisponibilidadAviso,
+} from '../utils/avisoProductoPublicacion';
 
 const NETWORK_TIMEOUT_MS = 30000;
 const NETWORK_RETRIES = 1;
@@ -191,6 +196,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
   const [fotosMasivasSeleccionados, setFotosMasivasSeleccionados] = useState<string[]>([]);
   const [aplicandoFotosMasivas, setAplicandoFotosMasivas] = useState(false);
   const [mensajeFotosMasivas, setMensajeFotosMasivas] = useState<string | null>(null);
+  const [etiquetandoId, setEtiquetandoId] = useState<string | null>(null);
   /** Texto de búsqueda en el control (borrador). */
   const [busquedaProductosInput, setBusquedaProductosInput] = useState('');
   /** Filtros aplicados al listado (tras «Aplicar filtros»). */
@@ -420,6 +426,28 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
       setMensajeFotosMasivas(
         'No hay productos seleccionados. Márcalos en la lista o elige otro alcance y pulsa Buscar.'
       );
+    }
+  };
+
+  const actualizarEtiquetasPublicacion = async (
+    productoId: string,
+    patch: { disponibilidad_aviso?: DisponibilidadAviso | null; es_oferta?: boolean }
+  ) => {
+    setError(null);
+    setEtiquetandoId(productoId);
+    try {
+      const { error: errUp } = await supabase.from('productos').update(patch).eq('id', productoId);
+      if (errUp) throw errUp;
+      setProductos((prev) =>
+        prev.map((p) => (p.id === productoId ? { ...p, ...patch } : p))
+      );
+      setProductoDetalle((prev) => (prev && prev.id === productoId ? { ...prev, ...patch } : prev));
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : 'No se pudo actualizar la etiqueta del producto.';
+      setError(msg);
+    } finally {
+      setEtiquetandoId(null);
     }
   };
 
@@ -875,78 +903,80 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
                 <p className="mis-productos-detalle-categoria">{productoDetalle.categoria}</p>
               )}
             </div>
-            <div className="mis-productos-detalle-galeria">
-              <div className="mis-productos-detalle-galeria-principal">
-                {fotoDetalleActiva ? (
-                  <img
-                    src={urlImagenProductoVariante(fotoDetalleActiva, 'vista') ?? fotoDetalleActiva}
-                    alt={productoDetalle.nombre}
-                    width={1080}
-                    height={1080}
-                    loading="lazy"
-                    decoding="async"
-                    sizes="(max-width: 900px) 90vw, 640px"
-                  />
-                ) : (
-                  <div className="mis-productos-card-foto-placeholder">Sin fotos cargadas</div>
+            <div className="mis-productos-detalle-cuerpo">
+              <div className="mis-productos-detalle-galeria">
+                <div className="mis-productos-detalle-galeria-principal">
+                  {fotoDetalleActiva ? (
+                    <img
+                      src={urlImagenProductoVariante(fotoDetalleActiva, 'vista') ?? fotoDetalleActiva}
+                      alt={productoDetalle.nombre}
+                      width={1080}
+                      height={1080}
+                      loading="lazy"
+                      decoding="async"
+                      sizes="(max-width: 900px) 90vw, 640px"
+                    />
+                  ) : (
+                    <div className="mis-productos-card-foto-placeholder">Sin fotos cargadas</div>
+                  )}
+                </div>
+                {([productoDetalle.imagen_url, ...(productoDetalle.imagenes_extra ?? [])] as (string | null)[])
+                  .filter((url): url is string => Boolean(url))
+                  .length > 0 && (
+                  <div className="mis-productos-detalle-thumbs">
+                    {([productoDetalle.imagen_url, ...(productoDetalle.imagenes_extra ?? [])] as (string | null)[])
+                      .filter((url): url is string => Boolean(url))
+                      .map((url) => (
+                        <button
+                          key={url}
+                          type="button"
+                          className={`mis-productos-detalle-thumb${
+                            fotoDetalleActiva === url ? ' activa' : ''
+                          }`}
+                          onMouseEnter={() => setFotoDetalleActiva(url)}
+                        >
+                          <img
+                            src={urlImagenProductoVariante(url, 'miniatura') ?? url}
+                            alt="Foto del producto"
+                            width={160}
+                            height={160}
+                            loading="lazy"
+                            decoding="async"
+                            sizes="80px"
+                          />
+                        </button>
+                      ))}
+                  </div>
                 )}
               </div>
-              {([productoDetalle.imagen_url, ...(productoDetalle.imagenes_extra ?? [])] as (string | null)[])
-                .filter((url): url is string => Boolean(url))
-                .length > 0 && (
-                <div className="mis-productos-detalle-thumbs">
-                  {([productoDetalle.imagen_url, ...(productoDetalle.imagenes_extra ?? [])] as (string | null)[])
-                    .filter((url): url is string => Boolean(url))
-                    .map((url) => (
-                      <button
-                        key={url}
-                        type="button"
-                        className={`mis-productos-detalle-thumb${
-                          fotoDetalleActiva === url ? ' activa' : ''
-                        }`}
-                        onMouseEnter={() => setFotoDetalleActiva(url)}
-                      >
-                        <img
-                          src={urlImagenProductoVariante(url, 'miniatura') ?? url}
-                          alt="Foto del producto"
-                          width={160}
-                          height={160}
-                          loading="lazy"
-                          decoding="async"
-                          sizes="80px"
-                        />
-                      </button>
-                    ))}
-                </div>
-              )}
-            </div>
-            <div className="mis-productos-detalle-info">
-              <p className="mis-productos-detalle-linea">
-                <strong>Vehículo:</strong>{' '}
-                {[productoDetalle.marca, productoDetalle.modelo, productoDetalle.anio]
-                  .filter(Boolean)
-                  .join(' · ') || 'No especificado'}
-              </p>
-              <p className="mis-productos-detalle-linea">
-                <strong>Precio:</strong>{' '}
-                {etiquetaMoneda(productoDetalle.moneda)}{' '}
-                {formatearPrecioProducto(productoDetalle.precio_usd)}
-              </p>
-              {productoDetalle.comentarios && (
+              <div className="mis-productos-detalle-info">
                 <p className="mis-productos-detalle-linea">
-                  <strong>Descripción:</strong> {productoDetalle.comentarios}
+                  <strong>Vehículo:</strong>{' '}
+                  {[productoDetalle.marca, productoDetalle.modelo, productoDetalle.anio]
+                    .filter(Boolean)
+                    .join(' · ') || 'No especificado'}
                 </p>
-              )}
-            </div>
-            <div className="mis-productos-detalle-metricas">
-              <h4>Estadísticas de contacto</h4>
-              {cargandoContactos ? (
-                <p className="mis-productos-detalle-metricas-texto">Cargando métricas…</p>
-              ) : (
-                <p className="mis-productos-detalle-metricas-texto">
-                  {contactosDetalle ?? 0} contactos registrados para este producto.
+                <p className="mis-productos-detalle-linea">
+                  <strong>Precio:</strong>{' '}
+                  {etiquetaMoneda(productoDetalle.moneda)}{' '}
+                  {formatearPrecioProducto(productoDetalle.precio_usd)}
                 </p>
-              )}
+                {productoDetalle.comentarios && (
+                  <p className="mis-productos-detalle-linea">
+                    <strong>Descripción:</strong> {productoDetalle.comentarios}
+                  </p>
+                )}
+              </div>
+              <div className="mis-productos-detalle-metricas">
+                <h4>Estadísticas de contacto</h4>
+                {cargandoContactos ? (
+                  <p className="mis-productos-detalle-metricas-texto">Cargando métricas…</p>
+                ) : (
+                  <p className="mis-productos-detalle-metricas-texto">
+                    {contactosDetalle ?? 0} contactos registrados para este producto.
+                  </p>
+                )}
+              </div>
             </div>
             <button
               type="button"
@@ -1003,17 +1033,29 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         </div>
       )}
       {productoEditando && (
-        <div className="mis-productos-editor">
-          <EditarProducto
-            producto={productoEditando as ProductoEditable}
-            onCancel={() => setProductoEditando(null)}
-            onSaved={(actualizado) => {
-              setProductos((prev) =>
-                prev.map((p) => (p.id === actualizado.id ? { ...p, ...actualizado } : p))
-              );
-              setProductoEditando(null);
-            }}
-          />
+        <div
+          className="mis-productos-modal-overlay"
+          onClick={() => setProductoEditando(null)}
+          role="presentation"
+        >
+          <div
+            className="mis-productos-editor-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Editar producto"
+          >
+            <EditarProducto
+              producto={productoEditando as ProductoEditable}
+              onCancel={() => setProductoEditando(null)}
+              onSaved={(actualizado) => {
+                setProductos((prev) =>
+                  prev.map((p) => (p.id === actualizado.id ? { ...p, ...actualizado } : p))
+                );
+                setProductoEditando(null);
+              }}
+            />
+          </div>
         </div>
       )}
       <div className="mis-productos-grid">
@@ -1112,6 +1154,67 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
                     <p className="mis-productos-card-desc">
                       {p.descripcion && p.descripcion.length > 0 ? p.descripcion : 'Sin descripción'}
                     </p>
+                  </div>
+                </div>
+                <div
+                  className="mis-productos-card-etiquetas"
+                  role="group"
+                  aria-label="Etiquetas de publicación"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="mis-productos-card-etiquetas-activas" aria-live="polite">
+                    {etiquetaDisponibilidadAviso(p.disponibilidad_aviso) ? (
+                      <span
+                        className={`mis-productos-card-aviso mis-productos-card-aviso--${p.disponibilidad_aviso}`}
+                      >
+                        {etiquetaDisponibilidadAviso(p.disponibilidad_aviso)}
+                      </span>
+                    ) : (
+                      <span className="mis-productos-card-etiquetas-vacio">Sin aviso de stock</span>
+                    )}
+                    {p.es_oferta ? (
+                      <span className="mis-productos-card-aviso mis-productos-card-aviso--oferta">OFERTA</span>
+                    ) : null}
+                  </div>
+                  <div className="mis-productos-card-etiquetas-botones">
+                    {DISPONIBILIDAD_AVISO_OPCIONES.map((o) => {
+                      const activo = p.disponibilidad_aviso === o.value;
+                      const corto =
+                        o.value === 'unica' ? 'Única' : o.value === 'pocas' ? 'Pocas' : 'Muchas';
+                      return (
+                        <button
+                          key={o.value}
+                          type="button"
+                          className={`mis-productos-card-etiqueta-btn${
+                            activo ? ' mis-productos-card-etiqueta-btn--activa' : ''
+                          }`}
+                          disabled={etiquetandoId === p.id}
+                          title={o.label}
+                          onClick={() =>
+                            void actualizarEtiquetasPublicacion(p.id, {
+                              disponibilidad_aviso: activo ? null : o.value,
+                            })
+                          }
+                        >
+                          {corto}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      className={`mis-productos-card-etiqueta-btn mis-productos-card-etiqueta-btn--oferta${
+                        p.es_oferta ? ' mis-productos-card-etiqueta-btn--activa' : ''
+                      }`}
+                      disabled={etiquetandoId === p.id}
+                      title="Marcar o quitar OFERTA"
+                      onClick={() =>
+                        void actualizarEtiquetasPublicacion(p.id, {
+                          es_oferta: !p.es_oferta,
+                        })
+                      }
+                    >
+                      Oferta
+                    </button>
                   </div>
                 </div>
                 <div
