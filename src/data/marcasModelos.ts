@@ -608,6 +608,30 @@ export const MARCAS_MODELOS: Record<string, string[]> = {
     'NQR',
     'FRR',
   ],
+  Iveco: [
+    'Daily',
+    'Tector',
+    'Eurocargo',
+    'Stralis',
+    'S-Way',
+  ],
+  Mack: [
+    'Anthem',
+    'Granite',
+    'Pinnacle',
+    'MD',
+  ],
+  Yutong: [
+    'ZK',
+    'E12',
+    'C12',
+  ],
+  Freightliner: [
+    'Cascadia',
+    'M2',
+    'Century',
+    'Columbia',
+  ],
   Subaru: [
     'Outback',
     'Forester',
