@@ -11,6 +11,14 @@ export function mensajeWhatsappTaller(): string {
   return 'Hola, te escribo desde Geomotor. Vi tu taller en la plataforma y quiero consultarte.';
 }
 
+/** Soporte / contacto oficial Geomotor (landing). */
+export function mensajeWhatsappSoporteGeomotor(): string {
+  return 'Hola Geomotor, escribo desde la app y quiero más información.';
+}
+
+/** Teléfono oficial de contacto (Venezuela). */
+export const TELEFONO_SOPORTE_GEOMOTOR = '04241978797';
+
 export function urlWhatsAppGeomotor(telefono: string, mensaje: string): string | null {
   const digits = telefono.replace(/\D/g, '');
   if (!digits) return null;
