@@ -585,6 +585,15 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [mensajeFotosMasivas, setMensajeFotosMasivas] = useState<string | null>(null);
   const [fotoActivaAdminProducto, setFotoActivaAdminProducto] = useState<Record<string, number>>({});
   const [productoEditandoAdmin, setProductoEditandoAdmin] = useState<AdminProducto | null>(null);
+  const [modalProductosVendedor, setModalProductosVendedor] = useState<{
+    tiendaId: string;
+    nombre: string;
+  } | null>(null);
+  const [listaProductosVendedorModal, setListaProductosVendedorModal] = useState<AdminProducto[] | null>(
+    null
+  );
+  const [cargandoProductosVendedorModal, setCargandoProductosVendedorModal] = useState(false);
+  const [errProductosVendedorModal, setErrProductosVendedorModal] = useState<string | null>(null);
   const [kpiDetalle, setKpiDetalle] = useState<AdminKpiDetalle | null>(null);
   /** Listado completo para el modal «suspendidos por impago» (el KPI cuenta todo el sistema; esto evita depender de las 250 filas del tab). */
   const [listaSuspendidasImpagoModal, setListaSuspendidasImpagoModal] = useState<AdminTienda[] | null>(null);
@@ -1099,8 +1108,41 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       setError(`No se pudo actualizar el producto: ${rpcError.message}`);
     } else {
       setProductos((prev) => prev.map((p) => (p.id === productoId ? { ...p, activo } : p)));
+      setListaProductosVendedorModal((prev) =>
+        prev ? prev.map((p) => (p.id === productoId ? { ...p, activo } : p)) : prev
+      );
     }
     setAccionando(null);
+  };
+
+  const abrirProductosVendedor = async (v: AdminTienda) => {
+    const nombre = v.nombre_comercial?.trim() || v.nombre?.trim() || 'Vendedor';
+    setModalProductosVendedor({ tiendaId: v.id, nombre });
+    setListaProductosVendedorModal(null);
+    setErrProductosVendedorModal(null);
+    setCargandoProductosVendedorModal(true);
+    try {
+      const { data, error: qErr } = await supabase
+        .from('productos')
+        .select(ADMIN_PRODUCTOS_SELECT)
+        .eq('tienda_id', v.id)
+        .order('created_at', { ascending: false });
+      if (qErr) {
+        setErrProductosVendedorModal(qErr.message);
+        setListaProductosVendedorModal([]);
+        return;
+      }
+      const rows = (data ?? []) as AdminProducto[];
+      setListaProductosVendedorModal(rows);
+      // Mantener el listado global al día si ya teníamos esos productos.
+      setProductos((prev) => {
+        const porId = new Map(prev.map((p) => [p.id, p]));
+        for (const p of rows) porId.set(p.id, { ...porId.get(p.id), ...p });
+        return Array.from(porId.values());
+      });
+    } finally {
+      setCargandoProductosVendedorModal(false);
+    }
   };
 
   const ejecutarAccionMasivaProductosFiltrados = async (accion: AccionMasivaProductosAdmin) => {
@@ -2902,6 +2944,14 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             </td>
                             <td className="dashboard-admin-acciones-td">
                               <div className="dashboard-admin-acciones-fila">
+                                <button
+                                  type="button"
+                                  className="dashboard-admin-btn dashboard-admin-btn--compacto"
+                                  onClick={() => void abrirProductosVendedor(v)}
+                                  title="Ver y editar productos de este vendedor"
+                                >
+                                  Productos
+                                </button>
                                 {perfilBloqueadoPorAdmin(v) ? (
                                   <button
                                     type="button"
@@ -3303,7 +3353,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
         </main>
         {productoEditandoAdmin && (
           <div
-            className="mis-productos-modal-overlay"
+            className="mis-productos-modal-overlay dashboard-admin-editor-sobre-modal"
             role="presentation"
             onClick={() => setProductoEditandoAdmin(null)}
           >
@@ -3336,21 +3386,185 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                 }
                 onCancel={() => setProductoEditandoAdmin(null)}
                 onSaved={(actualizado) => {
-                  setProductos((prev) =>
-                    prev.map((p) =>
-                      p.id === actualizado.id
-                        ? {
-                            ...p,
-                            ...actualizado,
-                            precio_usd: actualizado.precio_usd,
-                            vertical: actualizado.vertical ?? p.vertical,
-                          }
-                        : p
-                    )
-                  );
+                  const aplicar = (p: AdminProducto): AdminProducto =>
+                    p.id === actualizado.id
+                      ? {
+                          ...p,
+                          ...actualizado,
+                          precio_usd: actualizado.precio_usd,
+                          vertical: actualizado.vertical ?? p.vertical,
+                        }
+                      : p;
+                  setProductos((prev) => prev.map(aplicar));
+                  setListaProductosVendedorModal((prev) => (prev ? prev.map(aplicar) : prev));
                   setProductoEditandoAdmin(null);
                 }}
               />
+            </div>
+          </div>
+        )}
+        {modalProductosVendedor && (
+          <div
+            className="dashboard-kpi-modal-backdrop"
+            role="presentation"
+            onClick={() => {
+              if (productoEditandoAdmin) return;
+              setModalProductosVendedor(null);
+              setListaProductosVendedorModal(null);
+              setErrProductosVendedorModal(null);
+            }}
+          >
+            <div
+              className="dashboard-kpi-modal-panel dashboard-admin-productos-vendedor-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="dashboard-productos-vendedor-titulo"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="dashboard-kpi-modal-header">
+                <h3 id="dashboard-productos-vendedor-titulo" className="dashboard-kpi-modal-titulo">
+                  Productos — {modalProductosVendedor.nombre}
+                </h3>
+                <button
+                  type="button"
+                  className="dashboard-kpi-modal-cerrar"
+                  onClick={() => {
+                    setModalProductosVendedor(null);
+                    setListaProductosVendedorModal(null);
+                    setErrProductosVendedorModal(null);
+                  }}
+                >
+                  Cerrar
+                </button>
+              </div>
+              <div className="dashboard-kpi-modal-body">
+                {cargandoProductosVendedorModal && (
+                  <p className="dashboard-texto-placeholder">Cargando productos…</p>
+                )}
+                {errProductosVendedorModal && (
+                  <p className="dashboard-kpi-modal-aviso">No se pudo cargar: {errProductosVendedorModal}</p>
+                )}
+                {!cargandoProductosVendedorModal && listaProductosVendedorModal && (
+                  <>
+                    <p className="dashboard-kpi-modal-meta" style={{ marginTop: 0 }}>
+                      {listaProductosVendedorModal.length} producto
+                      {listaProductosVendedorModal.length === 1 ? '' : 's'}
+                    </p>
+                    {listaProductosVendedorModal.length === 0 ? (
+                      <p className="dashboard-texto-placeholder">Este vendedor no tiene productos publicados.</p>
+                    ) : (
+                      <div className="dashboard-kpi-modal-table-wrap">
+                        <table className="dashboard-admin-table">
+                          <thead>
+                            <tr>
+                              <th>Foto</th>
+                              <th>Nombre</th>
+                              <th>Vertical</th>
+                              <th>Precio</th>
+                              <th>Web</th>
+                              <th>Venta</th>
+                              <th>Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {listaProductosVendedorModal.map((p) => {
+                              const fotos = urlsFotosProducto({
+                                imagen_url: p.imagen_url ?? null,
+                                imagenes_extra: p.imagenes_extra ?? null,
+                              });
+                              const thumb = fotos[0] ?? null;
+                              const mod = claseAprobacion(p.aprobacion_publica);
+                              return (
+                                <tr key={p.id}>
+                                  <td className="dashboard-admin-td-fotos">
+                                    {thumb ? (
+                                      <img
+                                        src={urlImagenProductoVariante(thumb, 'miniatura') ?? thumb}
+                                        alt=""
+                                        className="dashboard-admin-producto-thumb"
+                                        width={160}
+                                        height={160}
+                                        loading="lazy"
+                                        decoding="async"
+                                      />
+                                    ) : (
+                                      <span className="dashboard-admin-sin-foto">Sin foto</span>
+                                    )}
+                                  </td>
+                                  <td>{p.nombre}</td>
+                                  <td>{p.vertical === 'moto' ? 'Moto' : 'Auto'}</td>
+                                  <td>
+                                    {p.precio_usd != null
+                                      ? `${etiquetaMoneda(p.moneda)} ${formatearPrecioProducto(p.precio_usd)}`
+                                      : '—'}
+                                  </td>
+                                  <td>
+                                    <span
+                                      className={`dashboard-admin-status ${
+                                        mod === 'ok' ? 'ok' : mod === 'pendiente' ? 'pendiente' : 'rechazado'
+                                      }`}
+                                    >
+                                      {etiquetaAprobacion(p.aprobacion_publica)}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <span className={`dashboard-admin-status ${p.activo ? 'ok' : 'warn'}`}>
+                                      {p.activo ? 'Activo' : 'Pausado'}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <div className="dashboard-admin-acciones-producto">
+                                      <button
+                                        type="button"
+                                        className="dashboard-admin-btn"
+                                        onClick={() => setProductoEditandoAdmin(p)}
+                                      >
+                                        Editar
+                                      </button>
+                                      {p.activo ? (
+                                        <button
+                                          type="button"
+                                          className="dashboard-admin-btn warn"
+                                          disabled={accionando === `producto-${p.id}`}
+                                          onClick={() => void setProductoActivo(p.id, false)}
+                                        >
+                                          Pausar
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="dashboard-admin-btn ok"
+                                          disabled={accionando === `producto-${p.id}`}
+                                          onClick={() => void setProductoActivo(p.id, true)}
+                                        >
+                                          Activar
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="dashboard-kpi-modal-footer">
+                <button
+                  type="button"
+                  className="dashboard-kpi-modal-cerrar"
+                  onClick={() => {
+                    setModalProductosVendedor(null);
+                    setListaProductosVendedorModal(null);
+                    setErrProductosVendedorModal(null);
+                  }}
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
           </div>
         )}

@@ -420,6 +420,15 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   background: #e2e8f0;
 }
 
+/* Editor de producto por encima del modal de productos del vendedor (z-index 4000). */
+.dashboard-admin-editor-sobre-modal {
+  z-index: 5000;
+}
+
+.dashboard-admin-productos-vendedor-panel {
+  max-width: 1100px;
+}
+
 .dashboard-kpi-modal-body {
   padding: 1rem 1.15rem;
   overflow: auto;
