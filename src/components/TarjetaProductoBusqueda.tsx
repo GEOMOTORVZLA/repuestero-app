@@ -11,6 +11,7 @@ import {
   mensajeWhatsappCompartirRepuesto,
 } from '../utils/enlaceCompartirProducto';
 import { etiquetaDisponibilidadAviso } from '../utils/avisoProductoPublicacion';
+import { VisorFotoProducto } from './VisorFotoProducto';
 import './BusquedaRepuestos.css';
 
 /** Producto mínimo para listados de búsqueda / categoría */
@@ -66,12 +67,26 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
   const requiereLogin = !user;
   const fotos = useMemo(() => urlsFotosProducto(p), [p.id, p.imagen_url, p.imagenes_extra]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(fotos[0] ?? null);
+  const [visorAbierto, setVisorAbierto] = useState(false);
 
   useEffect(() => {
     if (expandida) {
       setPreviewUrl(fotos[0] ?? null);
+    } else {
+      setVisorAbierto(false);
     }
   }, [expandida, fotos]);
+
+  const indiceFotoActiva = useMemo(() => {
+    if (!previewUrl) return 0;
+    const i = fotos.indexOf(previewUrl);
+    return i >= 0 ? i : 0;
+  }, [fotos, previewUrl]);
+
+  const abrirVisor = () => {
+    if (!previewUrl || fotos.length === 0) return;
+    setVisorAbierto(true);
+  };
 
   const thumb = fotoPrincipalTarjeta(p);
   const etiquetaDisponibilidad = etiquetaDisponibilidadAviso(p.disponibilidad_aviso);
@@ -192,15 +207,22 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
             >
               <div className="busqueda-repuestos-card-galeria-vista">
                 {previewUrl ? (
-                  <img
-                    src={urlImagenProductoVariante(previewUrl, 'vista') ?? previewUrl}
-                    alt={`Vista ampliada de ${p.nombre}`}
-                    width={1080}
-                    height={1080}
-                    loading="lazy"
-                    decoding="async"
-                    sizes="(max-width: 900px) 92vw, 720px"
-                  />
+                  <button
+                    type="button"
+                    className="busqueda-repuestos-card-galeria-vista-btn"
+                    onClick={abrirVisor}
+                    aria-label={`Ver foto de ${p.nombre} a pantalla completa`}
+                  >
+                    <img
+                      src={urlImagenProductoVariante(previewUrl, 'vista') ?? previewUrl}
+                      alt={`Vista de ${p.nombre}`}
+                      width={1080}
+                      height={1080}
+                      loading="lazy"
+                      decoding="async"
+                      sizes="(max-width: 900px) 92vw, 720px"
+                    />
+                  </button>
                 ) : (
                   <div className="busqueda-repuestos-card-foto-placeholder busqueda-repuestos-card-galeria-placeholder">
                     Sin fotos registradas
@@ -249,7 +271,8 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
             </div>
             {fotos.length > 0 && (
               <p className="busqueda-repuestos-card-galeria-hint">
-                Pasa el cursor sobre cada miniatura para verla ampliada. En móvil, pulsa una miniatura.
+                Toca la foto para verla a pantalla completa. En móvil, elige una miniatura y luego toca la foto
+                grande. Cierra con Cerrar o el botón atrás del teléfono.
               </p>
             )}
             {requiereLogin && (
@@ -288,6 +311,14 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
       >
         <IconoCompartir />
       </button>
+      {visorAbierto && fotos.length > 0 && (
+        <VisorFotoProducto
+          fotos={fotos}
+          indiceInicial={indiceFotoActiva}
+          alt={`Foto ampliada de ${p.nombre}`}
+          onCerrar={() => setVisorAbierto(false)}
+        />
+      )}
     </article>
   );
 }

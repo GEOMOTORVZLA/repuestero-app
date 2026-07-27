@@ -13,6 +13,7 @@ import { EliminacionCuenta } from './components/EliminacionCuenta';
 import { Dashboard } from './components/Dashboard';
 import { verticalDesdePathname, rutaInicioVertical } from './utils/verticalVehiculo';
 import { leerYConsumirMensajeAuthFlash } from './services/ensureNegocioTrasRegistro';
+import { AvisoSinConexion } from './components/AvisoSinConexion';
 import './App.css';
 
 function esElementoVisible(el: Element): boolean {
@@ -243,14 +244,17 @@ export default function App() {
   }, []);
 
   return (
-    <Routes>
-      <Route path="/" element={<AppShell />} />
-      <Route path="/motos" element={<AppShell />} />
-      <Route path="/legal/politica-divulgacion-datos" element={<PoliticaDivulgacionDatos />} />
-      <Route path="/motos/legal/politica-divulgacion-datos" element={<PoliticaDivulgacionDatos />} />
-      <Route path="/legal/eliminacion-cuenta" element={<EliminacionCuenta />} />
-      <Route path="/motos/legal/eliminacion-cuenta" element={<EliminacionCuenta />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <AvisoSinConexion />
+      <Routes>
+        <Route path="/" element={<AppShell />} />
+        <Route path="/motos" element={<AppShell />} />
+        <Route path="/legal/politica-divulgacion-datos" element={<PoliticaDivulgacionDatos />} />
+        <Route path="/motos/legal/politica-divulgacion-datos" element={<PoliticaDivulgacionDatos />} />
+        <Route path="/legal/eliminacion-cuenta" element={<EliminacionCuenta />} />
+        <Route path="/motos/legal/eliminacion-cuenta" element={<EliminacionCuenta />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
