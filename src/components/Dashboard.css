@@ -669,7 +669,7 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
 
 /* Catálogo de productos admin: evita que Nombre se coma todo el ancho */
 .dashboard-admin-table--catalogo {
-  min-width: 1180px;
+  min-width: 980px;
   table-layout: fixed;
 }
 
@@ -678,8 +678,8 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
 }
 
 .dashboard-admin-table--catalogo .dashboard-admin-producto-nombre-td {
-  width: 12rem;
-  max-width: 12rem;
+  width: 14rem;
+  max-width: 14rem;
   white-space: normal;
   word-break: break-word;
   overflow-wrap: anywhere;

@@ -2603,8 +2603,6 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           <th>Nombre</th>
                           <th>Vendedor</th>
                           <th>Categoría</th>
-                          <th>Vertical</th>
-                          <th>Vehículo</th>
                           <th>Precio</th>
                           <th>En la web</th>
                           <th>Venta</th>
@@ -2695,8 +2693,6 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             <td className="dashboard-admin-producto-nombre-td">{p.nombre}</td>
                             <td>{etiquetaVendedorDesdeProducto(p, vendedores)}</td>
                             <td>{p.categoria || '—'}</td>
-                            <td>{p.vertical === 'moto' ? 'Moto' : 'Auto'}</td>
-                            <td>{[p.marca, p.modelo, p.anio].filter(Boolean).join(' · ') || '—'}</td>
                             <td>
                               {p.precio_usd != null
                                 ? `${etiquetaMoneda(p.moneda)} ${formatearPrecioProducto(p.precio_usd)}`
