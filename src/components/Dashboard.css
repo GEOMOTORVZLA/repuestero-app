@@ -664,6 +664,31 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   width: 100%;
   border-collapse: collapse;
   min-width: 780px;
+  table-layout: auto;
+}
+
+/* Catálogo de productos admin: evita que Nombre se coma todo el ancho */
+.dashboard-admin-table--catalogo {
+  min-width: 1180px;
+  table-layout: fixed;
+}
+
+.dashboard-admin-table--catalogo .dashboard-admin-td-fotos {
+  width: 7rem;
+}
+
+.dashboard-admin-table--catalogo .dashboard-admin-producto-nombre-td {
+  width: 12rem;
+  max-width: 12rem;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-admin-table--catalogo th:last-child,
+.dashboard-admin-table--catalogo td:last-child {
+  width: 7.5rem;
+  position: static;
 }
 
 .dashboard-admin-table th,

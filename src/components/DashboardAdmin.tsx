@@ -2595,7 +2595,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     </button>
                   </div>
                   <div className="dashboard-admin-table-wrap">
-                    <table className="dashboard-admin-table">
+                    <table className="dashboard-admin-table dashboard-admin-table--catalogo">
                       <thead>
                         <tr>
                           {fotosMasivasAlcance === 'seleccionados' && <th>Seleccionar</th>}
@@ -2692,7 +2692,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                 </div>
                               )}
                             </td>
-                            <td>{p.nombre}</td>
+                            <td className="dashboard-admin-producto-nombre-td">{p.nombre}</td>
                             <td>{etiquetaVendedorDesdeProducto(p, vendedores)}</td>
                             <td>{p.categoria || '—'}</td>
                             <td>{p.vertical === 'moto' ? 'Moto' : 'Auto'}</td>
