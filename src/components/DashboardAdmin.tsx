@@ -2813,8 +2813,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     />
                     <span className="dashboard-admin-busqueda-hint">
                       Hasta {ADMIN_LIST_LIMIT} filas recientes + suspendidos por impago. Los suspendidos aparecen
-                      primero (fila naranja). Desplaza la tabla hacia la derecha para ver todas las acciones (barra
-                      abajo; o Shift + rueda). Para reactivar: <strong>+30 días</strong> / <strong>+1 año</strong>{' '}
+                      primero (fila naranja). Para reactivar: <strong>+30 días</strong> / <strong>+1 año</strong>{' '}
                       tras el pago, o <strong>Quitar bloqueo admin</strong> si lo suspendiste manualmente.
                     </span>
                   </div>
@@ -3031,8 +3030,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     />
                     <span className="dashboard-admin-busqueda-hint">
                       Hasta {ADMIN_LIST_LIMIT} filas recientes + suspendidos por impago. Los suspendidos aparecen
-                      primero (fila naranja). Desplaza la tabla hacia la derecha para ver todas las acciones (barra
-                      abajo; o Shift + rueda). Para reactivar: <strong>+30 días</strong> / <strong>+1 año</strong>{' '}
+                      primero (fila naranja). Para reactivar: <strong>+30 días</strong> / <strong>+1 año</strong>{' '}
                       tras el pago, o <strong>Quitar bloqueo admin</strong> si lo suspendiste manualmente.
                     </span>
                   </div>
