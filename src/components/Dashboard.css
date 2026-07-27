@@ -869,6 +869,13 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   margin-top: 0.35rem;
 }
 
+.dashboard-admin-acciones-producto {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 5.5rem;
+}
+
 .dashboard-admin-acciones-mini--inline {
   margin-top: 0;
   flex-wrap: nowrap;

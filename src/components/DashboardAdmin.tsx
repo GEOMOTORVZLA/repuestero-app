@@ -13,11 +13,13 @@ import { AdminCeldaAutorizacionWeb } from './AdminCeldaAutorizacionWeb';
 import { AdminCeldaUbicacion } from './AdminCeldaUbicacion';
 import { AdminCeldaUserId } from './AdminCeldaUserId';
 import { AdminModalEditarUbicacion } from './AdminModalEditarUbicacion';
+import { EditarProducto, type ProductoEditable } from './EditarProducto';
 import { etiquetaMoneda } from '../utils/monedaProducto';
 import { formatearPrecioProducto } from '../utils/precioProducto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { mensajeNegocioNoListoParaAprobar } from '../utils/validarDatosNegocio';
 import './Dashboard.css';
+import './MisProductos.css';
 
 const ADMIN_LIST_LIMIT = 250;
 /** Filas máximas en el modal de detalle KPI (evita DOM enorme con miles de productos). */
@@ -177,6 +179,8 @@ type AdminProducto = {
   stock_confirmado_at?: string | null;
   pausado_por_stock_vencido?: boolean | null;
   vertical?: string | null;
+  disponibilidad_aviso?: string | null;
+  es_oferta?: boolean | null;
   tiendas?:
     | { id?: string; nombre_comercial: string | null; nombre: string | null }
     | { id?: string; nombre_comercial: string | null; nombre: string | null }[]
@@ -535,7 +539,7 @@ function semaforoStockGestion(p: {
 
 /** Columnas del listado admin de productos (compartido entre páginas de carga). */
 const ADMIN_PRODUCTOS_SELECT =
-  'id, nombre, descripcion, comentarios, tienda_id, categoria, marca, modelo, anio, precio_usd, moneda, activo, aprobacion_publica, imagen_url, imagenes_extra, created_at, stock_confirmado_at, pausado_por_stock_vencido, vertical, tiendas(id, nombre, nombre_comercial)';
+  'id, nombre, descripcion, comentarios, tienda_id, categoria, marca, modelo, anio, precio_usd, moneda, activo, aprobacion_publica, imagen_url, imagenes_extra, created_at, stock_confirmado_at, pausado_por_stock_vencido, vertical, disponibilidad_aviso, es_oferta, tiendas(id, nombre, nombre_comercial)';
 
 const ADMIN_PRODUCTOS_PAGE = 1000;
 
@@ -580,6 +584,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [fotosMasivasSeleccionados, setFotosMasivasSeleccionados] = useState<string[]>([]);
   const [mensajeFotosMasivas, setMensajeFotosMasivas] = useState<string | null>(null);
   const [fotoActivaAdminProducto, setFotoActivaAdminProducto] = useState<Record<string, number>>({});
+  const [productoEditandoAdmin, setProductoEditandoAdmin] = useState<AdminProducto | null>(null);
   const [kpiDetalle, setKpiDetalle] = useState<AdminKpiDetalle | null>(null);
   /** Listado completo para el modal «suspendidos por impago» (el KPI cuenta todo el sistema; esto evita depender de las 250 filas del tab). */
   const [listaSuspendidasImpagoModal, setListaSuspendidasImpagoModal] = useState<AdminTienda[] | null>(null);
@@ -2708,25 +2713,35 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             </td>
                             <td>{fmtFecha(p.created_at)}</td>
                             <td>
-                              {p.activo ? (
+                              <div className="dashboard-admin-acciones-producto">
                                 <button
                                   type="button"
-                                  className="dashboard-admin-btn warn"
-                                  disabled={accionando === `producto-${p.id}` || accionando === 'bulk-productos-masivo'}
-                                  onClick={() => void setProductoActivo(p.id, false)}
+                                  className="dashboard-admin-btn"
+                                  disabled={accionando === 'bulk-productos-masivo'}
+                                  onClick={() => setProductoEditandoAdmin(p)}
                                 >
-                                  Pausar
+                                  Editar
                                 </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="dashboard-admin-btn ok"
-                                  disabled={accionando === `producto-${p.id}` || accionando === 'bulk-productos-masivo'}
-                                  onClick={() => void setProductoActivo(p.id, true)}
-                                >
-                                  Activar
-                                </button>
-                              )}
+                                {p.activo ? (
+                                  <button
+                                    type="button"
+                                    className="dashboard-admin-btn warn"
+                                    disabled={accionando === `producto-${p.id}` || accionando === 'bulk-productos-masivo'}
+                                    onClick={() => void setProductoActivo(p.id, false)}
+                                  >
+                                    Pausar
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="dashboard-admin-btn ok"
+                                    disabled={accionando === `producto-${p.id}` || accionando === 'bulk-productos-masivo'}
+                                    onClick={() => void setProductoActivo(p.id, true)}
+                                  >
+                                    Activar
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                           );
@@ -3286,6 +3301,59 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
             </>
           )}
         </main>
+        {productoEditandoAdmin && (
+          <div
+            className="mis-productos-modal-overlay"
+            role="presentation"
+            onClick={() => setProductoEditandoAdmin(null)}
+          >
+            <div
+              className="mis-productos-editor-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Editar producto (admin)"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <EditarProducto
+                producto={
+                  {
+                    id: productoEditandoAdmin.id,
+                    nombre: productoEditandoAdmin.nombre,
+                    descripcion: productoEditandoAdmin.descripcion ?? null,
+                    comentarios: productoEditandoAdmin.comentarios ?? null,
+                    categoria: productoEditandoAdmin.categoria,
+                    marca: productoEditandoAdmin.marca,
+                    modelo: productoEditandoAdmin.modelo,
+                    anio: productoEditandoAdmin.anio,
+                    precio_usd: productoEditandoAdmin.precio_usd ?? 0,
+                    moneda: productoEditandoAdmin.moneda,
+                    imagen_url: productoEditandoAdmin.imagen_url ?? null,
+                    imagenes_extra: productoEditandoAdmin.imagenes_extra ?? null,
+                    vertical: (productoEditandoAdmin.vertical === 'moto' ? 'moto' : 'auto') as VerticalVehiculo,
+                    disponibilidad_aviso: productoEditandoAdmin.disponibilidad_aviso ?? null,
+                    es_oferta: productoEditandoAdmin.es_oferta ?? false,
+                  } satisfies ProductoEditable
+                }
+                onCancel={() => setProductoEditandoAdmin(null)}
+                onSaved={(actualizado) => {
+                  setProductos((prev) =>
+                    prev.map((p) =>
+                      p.id === actualizado.id
+                        ? {
+                            ...p,
+                            ...actualizado,
+                            precio_usd: actualizado.precio_usd,
+                            vertical: actualizado.vertical ?? p.vertical,
+                          }
+                        : p
+                    )
+                  );
+                  setProductoEditandoAdmin(null);
+                }}
+              />
+            </div>
+          </div>
+        )}
         {ubicacionNegocioModal && (
           <div
             className="dashboard-kpi-modal-backdrop"
