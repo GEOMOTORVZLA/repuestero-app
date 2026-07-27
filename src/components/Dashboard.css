@@ -455,8 +455,19 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
 
 .dashboard-kpi-modal-table-wrap {
   overflow-x: auto;
+  overflow-y: auto;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
+  scrollbar-gutter: stable;
+}
+
+.dashboard-kpi-modal-table-wrap::-webkit-scrollbar {
+  height: 11px;
+}
+
+.dashboard-kpi-modal-table-wrap::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 6px;
 }
 
 .dashboard-kpi-modal-footer {
@@ -654,16 +665,40 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
 }
 
 .dashboard-admin-table-wrap {
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
+  max-width: 100%;
   background: #fff;
   border-radius: 10px;
   border: 1px solid #e2e8f0;
+  scrollbar-gutter: stable;
+}
+
+.dashboard-admin-table-wrap::-webkit-scrollbar {
+  height: 11px;
+  width: 11px;
+}
+
+.dashboard-admin-table-wrap::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 0 0 10px 10px;
+}
+
+.dashboard-admin-table-wrap::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 6px;
+  border: 2px solid #f1f5f9;
+}
+
+.dashboard-admin-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
 .dashboard-admin-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 780px;
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .dashboard-admin-table th,
@@ -682,11 +717,34 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   font-weight: 700;
 }
 
+/* Columna Acciones siempre visible al desplazar horizontalmente */
+.dashboard-admin-table thead th:last-child,
+.dashboard-admin-table tbody td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: #fff;
+  box-shadow: -8px 0 12px -8px rgba(15, 23, 42, 0.28);
+}
+
+.dashboard-admin-table thead th:last-child {
+  background: #f8fafc;
+  z-index: 3;
+}
+
 .dashboard-admin-table tr.dashboard-admin-row-impago td {
   background: #fff7ed;
 }
 
+.dashboard-admin-table tr.dashboard-admin-row-impago td:last-child {
+  background: #fff7ed;
+}
+
 .dashboard-admin-table tr.dashboard-admin-row-impago:hover td {
+  background: #ffedd5;
+}
+
+.dashboard-admin-table tr.dashboard-admin-row-impago:hover td:last-child {
   background: #ffedd5;
 }
 
@@ -1060,13 +1118,13 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
 }
 
 .dashboard-admin-acciones-td {
-  min-width: 7rem;
+  min-width: 11.5rem;
 }
 
 .dashboard-admin-acciones-fila {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 0.35rem;
 }
 
