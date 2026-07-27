@@ -14,6 +14,7 @@ import { Dashboard } from './components/Dashboard';
 import { verticalDesdePathname, rutaInicioVertical } from './utils/verticalVehiculo';
 import { leerYConsumirMensajeAuthFlash } from './services/ensureNegocioTrasRegistro';
 import { AvisoSinConexion } from './components/AvisoSinConexion';
+import { AvisoActualizacionApp } from './components/AvisoActualizacionApp';
 import './App.css';
 
 function esElementoVisible(el: Element): boolean {
@@ -246,6 +247,7 @@ export default function App() {
   return (
     <>
       <AvisoSinConexion />
+      <AvisoActualizacionApp />
       <Routes>
         <Route path="/" element={<AppShell />} />
         <Route path="/motos" element={<AppShell />} />
