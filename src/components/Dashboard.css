@@ -734,10 +734,9 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   max-width: 8rem;
 }
 
-.dashboard-admin-email-td,
-.dashboard-admin-rif-td {
-  min-width: 10rem;
-  max-width: none;
+.dashboard-admin-email-td {
+  min-width: 9rem;
+  max-width: 11rem;
   white-space: normal;
   overflow: visible;
   text-overflow: unset;
@@ -745,10 +744,51 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   word-break: break-all;
 }
 
+.dashboard-admin-rif-td {
+  width: 7rem;
+  min-width: 6.5rem;
+  max-width: 7.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: top;
+}
+
 .dashboard-admin-email-texto,
 .dashboard-admin-rif-texto {
   display: block;
   line-height: 1.35;
+}
+
+/* Vendedores / talleres: columnas más compactas para ver Acciones completas */
+.dashboard-admin-table--perfiles {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 1080px;
+}
+
+.dashboard-admin-table--perfiles .dashboard-admin-nombre-td {
+  width: 8.5rem;
+  max-width: 8.5rem;
+}
+
+.dashboard-admin-table--perfiles .dashboard-admin-rif-td {
+  width: 6.75rem;
+  max-width: 6.75rem;
+}
+
+.dashboard-admin-table--perfiles .dashboard-admin-email-td {
+  width: 10rem;
+  max-width: 10rem;
+}
+
+.dashboard-admin-table--perfiles .dashboard-admin-acciones-td {
+  width: 11rem;
+  min-width: 10.5rem;
+}
+
+.dashboard-admin-table--perfiles .dashboard-admin-acciones-fila {
+  flex-wrap: wrap;
 }
 
 .dashboard-admin-membresia-td {

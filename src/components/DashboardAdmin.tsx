@@ -2836,7 +2836,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     </button>
                   </div>
                   <div className="dashboard-admin-table-wrap">
-                    <table className="dashboard-admin-table">
+                    <table className="dashboard-admin-table dashboard-admin-table--perfiles">
                       <thead>
                         <tr>
                           <th>Nombre comercial</th>
@@ -3053,7 +3053,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     </button>
                   </div>
                   <div className="dashboard-admin-table-wrap">
-                    <table className="dashboard-admin-table">
+                    <table className="dashboard-admin-table dashboard-admin-table--perfiles">
                       <thead>
                         <tr>
                           <th>Nombre</th>
