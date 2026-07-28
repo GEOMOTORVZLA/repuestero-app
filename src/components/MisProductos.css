@@ -1090,3 +1090,25 @@
     grid-template-columns: 1fr;
   }
 }
+
+.mis-productos-acciones-masivas-porcentaje {
+  margin-top: 0.65rem;
+  padding: 0.65rem 0.7rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.mis-productos-acciones-masivas-porcentaje label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #334155;
+  max-width: 220px;
+}
+
+.mis-productos-acciones-masivas-porcentaje .mis-productos-ajuste-masivo-ayuda {
+  margin: 0.45rem 0 0;
+}

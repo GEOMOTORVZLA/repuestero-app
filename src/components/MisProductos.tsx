@@ -93,7 +93,7 @@ type FiltroEstadoProductoGestion =
 
 type FiltroVerticalMisProductos = 'todos' | VerticalVehiculo;
 
-type AccionMasivaProducto = 'pausar' | 'activar' | 'reactivar' | 'eliminar';
+type AccionMasivaProducto = 'pausar' | 'activar' | 'reactivar' | 'eliminar' | 'precios';
 type AlcanceAccionMasiva = 'filtrados' | 'seleccionados';
 
 const ACCION_MASIVA_PAGE = 80;
@@ -182,8 +182,6 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ajustePorcentaje, setAjustePorcentaje] = useState('');
-  const [ajustandoPrecios, setAjustandoPrecios] = useState(false);
-  const [mensajeAjuste, setMensajeAjuste] = useState<string | null>(null);
   const [productoEditando, setProductoEditando] = useState<ProductoPanel | null>(null);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [productoAEliminar, setProductoAEliminar] = useState<ProductoPanel | null>(null);
@@ -520,6 +518,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     if (accion === 'pausar') return 'Pausar';
     if (accion === 'activar') return 'Activar';
     if (accion === 'reactivar') return 'Reactivar (stock vencido)';
+    if (accion === 'precios') return 'Ajuste de precios (%)';
     return 'Eliminar';
   };
 
@@ -665,6 +664,17 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
       setMensajeAccionMasiva('Ningún producto del alcance aplica para esa acción.');
       return;
     }
+    if (accionMasivaTipo === 'precios') {
+      const porcentaje = Number.parseFloat(ajustePorcentaje.replace(',', '.'));
+      if (!Number.isFinite(porcentaje)) {
+        setMensajeAccionMasiva('Escribe un porcentaje válido. Ejemplo: 10 o -5.');
+        return;
+      }
+      if (porcentaje === 0) {
+        setMensajeAccionMasiva('El porcentaje no puede ser 0.');
+        return;
+      }
+    }
     if (accionMasivaTipo === 'eliminar') {
       setConfirmarEliminarMasivo(true);
       return;
@@ -752,69 +762,6 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
       setError(msg);
     } finally {
       setAplicandoFotosMasivas(false);
-    }
-  };
-
-  const aplicarAjusteMasivoPrecios = async () => {
-    const porcentaje = Number.parseFloat(ajustePorcentaje.replace(',', '.'));
-    if (!Number.isFinite(porcentaje)) {
-      setMensajeAjuste('Escribe un porcentaje válido. Ejemplo: 10 o -5.');
-      return;
-    }
-    if (porcentaje === 0) {
-      setMensajeAjuste('El porcentaje no puede ser 0.');
-      return;
-    }
-    if (!productos.length) {
-      setMensajeAjuste('No hay productos para ajustar.');
-      return;
-    }
-
-    const confirmar = window.confirm(
-      `Se ajustarán ${productos.length} producto(s) con ${porcentaje > 0 ? '+' : ''}${porcentaje}%.\n` +
-        'Los precios se redondearán a 2 decimales.'
-    );
-    if (!confirmar) return;
-
-    setAjustandoPrecios(true);
-    setMensajeAjuste(null);
-    setError(null);
-    try {
-      const actualizados: { id: string; precio_usd: number }[] = productos.map((p) => {
-        const base = Number(p.precio_usd) || 0;
-        const siguiente = Math.max(0.01, Math.round(base * (1 + porcentaje / 100) * 100) / 100);
-        return { id: p.id, precio_usd: siguiente };
-      });
-
-      for (const upd of actualizados) {
-        const { error: errUpd } = await supabase
-          .from('productos')
-          .update({ precio_usd: upd.precio_usd })
-          .eq('id', upd.id);
-        if (errUpd) throw errUpd;
-      }
-
-      setProductos((prev) =>
-        prev.map((p) => {
-          const next = actualizados.find((u) => u.id === p.id);
-          return next ? { ...p, precio_usd: next.precio_usd } : p;
-        })
-      );
-      setProductoDetalle((prev) => {
-        if (!prev) return prev;
-        const next = actualizados.find((u) => u.id === prev.id);
-        return next ? { ...prev, precio_usd: next.precio_usd } : prev;
-      });
-      setMensajeAjuste(
-        `Ajuste aplicado a ${actualizados.length} producto(s) con ${porcentaje > 0 ? '+' : ''}${porcentaje}%.`
-      );
-      setAjustePorcentaje('');
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'No se pudo aplicar el ajuste masivo.';
-      setError(msg);
-      setMensajeAjuste('No se pudo completar el ajuste de precios.');
-    } finally {
-      setAjustandoPrecios(false);
     }
   };
 
@@ -970,6 +917,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
               <option value="pausar">Pausar</option>
               <option value="activar">Activar</option>
               <option value="reactivar">Reactivar (pausados por stock vencido)</option>
+              <option value="precios">Ajuste de precios (%)</option>
               <option value="eliminar">Eliminar</option>
             </select>
           </label>
@@ -990,6 +938,26 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
             </button>
           </div>
         </div>
+        {accionMasivaTipo === 'precios' && (
+          <div className="mis-productos-acciones-masivas-porcentaje">
+            <label>
+              Porcentaje (+ o -)
+              <input
+                type="text"
+                inputMode="decimal"
+                value={ajustePorcentaje}
+                onChange={(e) => setAjustePorcentaje(e.target.value)}
+                placeholder="Ej: 10 o -5"
+                className="mis-productos-ajuste-masivo-input"
+                disabled={ejecutandoAccionMasiva}
+                aria-label="Porcentaje de ajuste de precios"
+              />
+            </label>
+            <p className="mis-productos-ajuste-masivo-ayuda">
+              Se redondea a 2 decimales y nunca baja de 0.01. Positivo aumenta; negativo disminuye.
+            </p>
+          </div>
+        )}
         {accionMasivaAlcance === 'seleccionados' && (
           <div className="mis-productos-fotos-masivas-seleccion">
             <p>
@@ -1017,42 +985,12 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         )}
         <p className="mis-productos-ajuste-masivo-ayuda">
           Objetivo actual: {productosObjetivoAccionMasiva.length} producto(s). Reactivar solo afecta
-          pausados por stock vencido; Activar sirve para cualquier pausado.
+          pausados por stock vencido; Activar sirve para cualquier pausado; el ajuste de precios
+          aplica al alcance elegido.
         </p>
         {mensajeAccionMasiva && (
           <p className="mis-productos-ajuste-masivo-mensaje">{mensajeAccionMasiva}</p>
         )}
-      </section>
-      <section className="mis-productos-ajuste-masivo" aria-label="Ajuste masivo de precios">
-        <p className="mis-productos-ajuste-masivo-titulo">Ajuste masivo de precios</p>
-        <p className="mis-productos-ajuste-masivo-descripcion">
-          Puedes ajustar tus precios de manera masiva con esta opción colocando los porcentajes que
-          deseas ajustar, positivos para aumentos y negativos para disminuciones.
-        </p>
-        <div className="mis-productos-ajuste-masivo-fila">
-          <input
-            type="text"
-            inputMode="decimal"
-            value={ajustePorcentaje}
-            onChange={(e) => setAjustePorcentaje(e.target.value)}
-            placeholder="Ej: 10 o -5"
-            className="mis-productos-ajuste-masivo-input"
-            disabled={ajustandoPrecios}
-            aria-label="Porcentaje de ajuste"
-          />
-          <button
-            type="button"
-            className="mis-productos-btn-primario mis-productos-ajuste-masivo-btn"
-            onClick={() => void aplicarAjusteMasivoPrecios()}
-            disabled={ajustandoPrecios}
-          >
-            {ajustandoPrecios ? 'Ajustando…' : 'Aplicar ajuste'}
-          </button>
-        </div>
-        <p className="mis-productos-ajuste-masivo-ayuda">
-          Se redondea a 2 decimales y nunca baja de 0.01.
-        </p>
-        {mensajeAjuste && <p className="mis-productos-ajuste-masivo-mensaje">{mensajeAjuste}</p>}
       </section>
       <section className="mis-productos-fotos-masivas" aria-label="Carga masiva de fotos">
         <div className="mis-productos-fotos-masivas-header">
