@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import { RegistroRepuestos } from './RegistroRepuestos';
 import { MisProductos } from './MisProductos';
 import { VisorMostrador } from './VisorMostrador';
+import { ResumenVendedor } from './ResumenVendedor';
 import { PerfilUsuario } from './PerfilUsuario';
 import { ImportarProductosCSV } from './ImportarProductosCSV';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
@@ -192,26 +193,7 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
             </div>
           )}
           {tab === 'resumen' && (
-            <section className="dashboard-seccion">
-              <h2 className="dashboard-seccion-titulo">Resumen</h2>
-              <div className="dashboard-kpi-grid">
-                <div className="dashboard-kpi-card">
-                  <p className="dashboard-kpi-label">Productos publicados</p>
-                  <p className="dashboard-kpi-valor">—</p>
-                  <p className="dashboard-kpi-hint">Aquí veremos el total de repuestos que tienes activos.</p>
-                </div>
-                <div className="dashboard-kpi-card">
-                  <p className="dashboard-kpi-label">Contactos recientes</p>
-                  <p className="dashboard-kpi-valor">—</p>
-                  <p className="dashboard-kpi-hint">Mostraremos los contactos de los últimos días.</p>
-                </div>
-                <div className="dashboard-kpi-card">
-                  <p className="dashboard-kpi-label">Producto más solicitado</p>
-                  <p className="dashboard-kpi-valor">—</p>
-                  <p className="dashboard-kpi-hint">Aquí verás qué repuesto recibe más interés.</p>
-                </div>
-              </div>
-            </section>
+            <ResumenVendedor vertical={vertical} refreshTrigger={refreshProductos} />
           )}
 
           {tab === 'productos' && (
