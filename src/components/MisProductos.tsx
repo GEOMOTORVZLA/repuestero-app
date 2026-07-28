@@ -344,6 +344,9 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     setBusquedaProductos(busquedaProductosInput.trim());
     setFiltroEstadoProductos(filtroEstadoProductosDraft);
     setFiltroVerticalProductos(verticalFijo ?? filtroVerticalProductosDraft);
+    // Al buscar productos, quitamos el filtro de alcance de fotos para no “esconder” el resultado.
+    setFiltroAlcanceListaAplicado(null);
+    setMensajeFotosMasivas(null);
     setCargandoFiltrosProductos(true);
     setError(null);
     try {
@@ -375,6 +378,8 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     setBusquedaProductos('');
     setFiltroEstadoProductos('todos');
     setFiltroVerticalProductos(verticalReset);
+    setFiltroAlcanceListaAplicado(null);
+    setMensajeFotosMasivas(null);
     setCargandoFiltrosProductos(true);
     setError(null);
     try {
@@ -424,10 +429,24 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     setMensajeFotosMasivas(null);
     if (fotosMasivasAlcance === 'seleccionados' && fotosMasivasSeleccionados.length === 0) {
       setMensajeFotosMasivas(
-        'No hay productos seleccionados. Márcalos en la lista o elige otro alcance y pulsa Buscar.'
+        'No hay productos seleccionados. Márcalos en la lista o elige otro alcance y pulsa Buscar en alcance.'
       );
     }
   };
+
+  const quitarFiltroAlcanceLista = () => {
+    setFiltroAlcanceListaAplicado(null);
+    setMensajeFotosMasivas(null);
+  };
+
+  const etiquetaAlcanceLista =
+    filtroAlcanceListaAplicado === 'sin_foto'
+      ? 'solo sin foto principal'
+      : filtroAlcanceListaAplicado === 'seleccionados'
+        ? 'solo seleccionados manualmente'
+        : filtroAlcanceListaAplicado === 'todos'
+          ? 'todos los visibles'
+          : null;
 
   const actualizarEtiquetasPublicacion = async (
     productoId: string,
@@ -785,6 +804,8 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
             <p className="mis-productos-ajuste-masivo-titulo">Carga masiva de fotos</p>
             <p className="mis-productos-ajuste-masivo-descripcion">
               Sube hasta 4 fotos comunes para aplicarlas a varios productos. La foto 1 será la principal.
+              El botón <strong>Buscar en alcance</strong> solo limita la lista de abajo para preparar las fotos;
+              no reemplaza el buscador de productos de arriba.
             </p>
           </div>
           <span className="mis-productos-fotos-masivas-contador">
@@ -793,7 +814,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         </div>
         <div className="mis-productos-fotos-masivas-config">
           <label>
-            Alcance
+            Alcance (solo para fotos masivas)
             <span className="mis-productos-fotos-masivas-alcance-fila">
               <select
                 value={fotosMasivasAlcance}
@@ -813,17 +834,26 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
                 onClick={buscarProductosPorAlcance}
                 disabled={aplicandoFotosMasivas}
               >
-                Buscar
+                Buscar en alcance
               </button>
             </span>
           </label>
           {filtroAlcanceListaAplicado && (
-            <p className="mis-productos-fotos-masivas-lista-filtro" role="status">
-              Lista filtrada por alcance: mostrando {productosParaLista.length} producto(s).
-              {filtroAlcanceListaAplicado === 'sin_foto' && ' (sin foto principal)'}
-              {filtroAlcanceListaAplicado === 'seleccionados' && ' (seleccionados)'}
-              {filtroAlcanceListaAplicado === 'todos' && ' (todos los visibles)'}
-            </p>
+            <div className="mis-productos-fotos-masivas-lista-filtro" role="status">
+              <p>
+                La lista de abajo está limitada por alcance de fotos ({etiquetaAlcanceLista}):{' '}
+                <strong>{productosParaLista.length}</strong> de {productosVisibles.length} producto(s)
+                del buscador.
+              </p>
+              <button
+                type="button"
+                className="mis-productos-btn-secundario"
+                onClick={quitarFiltroAlcanceLista}
+                disabled={aplicandoFotosMasivas}
+              >
+                Mostrar todos los del buscador ({productosVisibles.length})
+              </button>
+            </div>
           )}
         </div>
         {fotosMasivasAlcance === 'seleccionados' && (
@@ -1060,11 +1090,26 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
       )}
       <div className="mis-productos-grid">
         {productosParaLista.length === 0 ? (
-          <p className="mis-productos-mensaje">
-            {productosVisibles.length === 0
-              ? 'No hay productos que coincidan con la búsqueda o el filtro seleccionado.'
-              : 'No hay productos que coincidan con el alcance elegido. Prueba otro alcance y pulsa Buscar.'}
-          </p>
+          <div className="mis-productos-mensaje mis-productos-mensaje--bloque">
+            {productosVisibles.length === 0 ? (
+              <p>No hay productos que coincidan con la búsqueda o el filtro seleccionado.</p>
+            ) : (
+              <>
+                <p>
+                  Tu búsqueda encontró <strong>{productosVisibles.length}</strong> producto(s), pero el{' '}
+                  <strong>alcance de fotos masivas</strong> ({etiquetaAlcanceLista ?? 'activo'}) está ocultando
+                  la lista ({productosParaLista.length} visibles).
+                </p>
+                <button
+                  type="button"
+                  className="mis-productos-btn-primario"
+                  onClick={quitarFiltroAlcanceLista}
+                >
+                  Mostrar los {productosVisibles.length} del buscador
+                </button>
+              </>
+            )}
+          </div>
         ) : productosParaLista.map((p) => {
           const vehiculo = [p.marca, p.modelo, p.anio].filter(Boolean).join(' · ');
           const estaActivo = p.activo !== false;

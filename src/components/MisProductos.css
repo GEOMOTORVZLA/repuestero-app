@@ -222,10 +222,28 @@
 }
 
 .mis-productos-fotos-masivas-lista-filtro {
+  margin: 0.55rem 0 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.mis-productos-fotos-masivas-lista-filtro p {
   margin: 0;
-  font-size: 0.76rem;
+  font-size: 0.8rem;
   font-weight: 600;
-  color: #4338ca;
+  color: #3730a3;
+  line-height: 1.4;
+}
+
+.mis-productos-fotos-masivas-lista-filtro .mis-productos-btn-secundario {
+  width: auto;
+  min-width: 12rem;
 }
 
 .mis-productos-fotos-masivas-seleccion {
@@ -706,6 +724,28 @@
   margin: 0;
   font-size: 0.9rem;
   color: #4a5568;
+}
+
+.mis-productos-mensaje--bloque {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+}
+
+.mis-productos-mensaje--bloque p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.mis-productos-mensaje--bloque .mis-productos-btn-primario {
+  width: auto;
+  min-width: 12rem;
 }
 
 .mis-productos-error {
