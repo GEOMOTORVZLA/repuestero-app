@@ -221,9 +221,18 @@ function normalizeOptionalText(value: string): string | null {
 export function ImportarProductosCSV({
   onImportado,
   vertical = VERTICAL_AUTO,
+  modoAdmin = false,
+  tiendaIdDestino = null,
+  etiquetaDestino = null,
 }: {
   onImportado?: () => void;
   vertical?: VerticalVehiculo;
+  /** Si true, importa a la tienda elegida (panel admin). */
+  modoAdmin?: boolean;
+  /** UUID de tiendas.id destino (obligatorio en modoAdmin). */
+  tiendaIdDestino?: string | null;
+  /** Nombre comercial / tienda para mensajes. */
+  etiquetaDestino?: string | null;
 }) {
   const { user } = useAuth();
   const [archivo, setArchivo] = useState<File | null>(null);
@@ -280,7 +289,12 @@ export function ImportarProductosCSV({
 
     if (!user) {
       setEstado('error');
-      setMensaje('Debes iniciar sesión como vendedor.');
+      setMensaje(modoAdmin ? 'Debes iniciar sesión como administrador.' : 'Debes iniciar sesión como vendedor.');
+      return;
+    }
+    if (modoAdmin && !tiendaIdDestino) {
+      setEstado('error');
+      setMensaje('Selecciona el vendedor (tienda) al que se asignarán los productos.');
       return;
     }
     if (!archivo) {
@@ -289,8 +303,8 @@ export function ImportarProductosCSV({
       return;
     }
 
-    const rl = permitirAccionCliente('importar-productos', {
-      maxIntentos: 4,
+    const rl = permitirAccionCliente(modoAdmin ? 'importar-productos-admin' : 'importar-productos', {
+      maxIntentos: modoAdmin ? 12 : 4,
       ventanaMs: 10 * 60 * 1000,
       bloqueoMs: 3 * 60 * 1000,
     });
@@ -474,27 +488,38 @@ export function ImportarProductosCSV({
       return;
     }
 
-    const { data: tiendasData, error: errTiendas } = await supabase
-      .from('tiendas')
-      .select('id')
-      .eq('user_id', user.id)
-      .order('nombre')
-      .limit(1);
+    let tiendaId: string | null = null;
 
-    if (errTiendas) {
-      setEstado('error');
-      setMensaje(errTiendas.message || 'Error al cargar tu tienda.');
-      return;
+    if (modoAdmin && tiendaIdDestino) {
+      tiendaId = tiendaIdDestino;
+    } else {
+      const { data: tiendasData, error: errTiendas } = await supabase
+        .from('tiendas')
+        .select('id')
+        .eq('user_id', user.id)
+        .order('nombre')
+        .limit(1);
+
+      if (errTiendas) {
+        setEstado('error');
+        setMensaje(errTiendas.message || 'Error al cargar tu tienda.');
+        return;
+      }
+
+      const tienda = (tiendasData && tiendasData[0]) || null;
+      if (!tienda) {
+        setEstado('error');
+        setMensaje('No se encontró una tienda asociada a tu usuario. Debes completar "Mi perfil".');
+        return;
+      }
+      tiendaId = tienda.id;
     }
 
-    const tienda = (tiendasData && tiendasData[0]) || null;
-    if (!tienda) {
-      setEstado('error');
-      setMensaje('No se encontró una tienda asociada a tu usuario. Debes completar "Mi perfil".');
-      return;
-    }
-
-    setMensaje('Insertando productos...');
+    setMensaje(
+      modoAdmin
+        ? `Insertando productos en ${etiquetaDestino?.trim() || 'la tienda seleccionada'}...`
+        : 'Insertando productos...'
+    );
 
     let ok = 0;
     const erroresInsert: string[] = [];
@@ -503,7 +528,7 @@ export function ImportarProductosCSV({
     for (let i = 0; i < filas.length; i++) {
       const r = filas[i];
       const payload = {
-        tienda_id: tienda.id,
+        tienda_id: tiendaId,
         nombre: r.nombre,
         categoria: r.categoria,
         marca: r.marca,
@@ -544,7 +569,9 @@ export function ImportarProductosCSV({
 
     setEstado('ok');
     setMensaje(
-      `Importación completada: ${ok} producto(s) insertados (sin fotos). Ya están publicados y visibles en la búsqueda pública.`
+      modoAdmin
+        ? `Importación completada: ${ok} producto(s) insertados en ${etiquetaDestino?.trim() || 'la tienda'} (sin fotos). Ya están publicados.`
+        : `Importación completada: ${ok} producto(s) insertados (sin fotos). Ya están publicados y visibles en la búsqueda pública.`
     );
     onImportado?.();
   };
@@ -552,12 +579,26 @@ export function ImportarProductosCSV({
   return (
     <div className="importar-productos">
       <div className="importar-productos-header">
-        <h3 className="importar-productos-titulo">Importar productos desde Excel o CSV (sin fotos)</h3>
+        <h3 className="importar-productos-titulo">
+          {modoAdmin
+            ? 'Carga masiva de productos para un vendedor'
+            : 'Importar productos desde Excel o CSV (sin fotos)'}
+        </h3>
         <p className="importar-productos-ayuda">
-          Descarga la plantilla Excel: incluye hojas <strong>Productos</strong>,{' '}
-          <strong>Categorias</strong> y <strong>Marcas</strong> con los valores válidos para{' '}
-          {vertical === 'moto' ? 'motocicleta' : 'automóvil'}. Llena la hoja Productos (borra la fila
-          de ejemplo) y súbela aquí. Moneda: BS o USD.
+          {modoAdmin ? (
+            <>
+              Usa la <strong>misma plantilla</strong> que descarga el vendedor. Elige la vertical y el
+              vendedor activo, descarga el Excel, llénalo y súbelo aquí. Los productos se publican en
+              su tienda.
+            </>
+          ) : (
+            <>
+              Descarga la plantilla Excel: incluye hojas <strong>Productos</strong>,{' '}
+              <strong>Categorias</strong> y <strong>Marcas</strong> con los valores válidos para{' '}
+              {vertical === 'moto' ? 'motocicleta' : 'automóvil'}. Llena la hoja Productos (borra la fila
+              de ejemplo) y súbela aquí. Moneda: BS o USD.
+            </>
+          )}
         </p>
       </div>
 
@@ -590,7 +631,12 @@ export function ImportarProductosCSV({
           type="button"
           className="importar-productos-boton"
           onClick={importar}
-          disabled={estado === 'importando' || !archivo}
+          disabled={estado === 'importando' || !archivo || (modoAdmin && !tiendaIdDestino)}
+          title={
+            modoAdmin && !tiendaIdDestino
+              ? 'Selecciona primero el vendedor destino'
+              : undefined
+          }
         >
           {estado === 'importando' ? 'Importando...' : 'Importar'}
         </button>

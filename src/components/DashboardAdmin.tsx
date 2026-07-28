@@ -17,7 +17,9 @@ import { EditarProducto, type ProductoEditable } from './EditarProducto';
 import { etiquetaMoneda } from '../utils/monedaProducto';
 import { formatearPrecioProducto } from '../utils/precioProducto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
+import { VERTICAL_AUTO, VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import { mensajeNegocioNoListoParaAprobar } from '../utils/validarDatosNegocio';
+import { ImportarProductosCSV } from './ImportarProductosCSV';
 import './Dashboard.css';
 import './MisProductos.css';
 
@@ -25,7 +27,7 @@ const ADMIN_LIST_LIMIT = 250;
 /** Filas máximas en el modal de detalle KPI (evita DOM enorme con miles de productos). */
 const ADMIN_KPI_MODAL_ROWS = 250;
 const ADMIN_TIENDAS_SELECT =
-  'id, user_id, nombre, nombre_comercial, rif, telefono, email, estado, ciudad, latitud, longitud, bloqueado, aprobacion_estado, created_at, membresia_hasta';
+  'id, user_id, nombre, nombre_comercial, rif, telefono, email, estado, ciudad, latitud, longitud, bloqueado, aprobacion_estado, created_at, membresia_hasta, vertical';
 
 const ADMIN_TALLERES_SELECT =
   'id, user_id, nombre, nombre_comercial, rif, especialidad, telefono, email, estado, ciudad, latitud, longitud, bloqueado, aprobacion_estado, created_at, membresia_hasta';
@@ -203,6 +205,7 @@ type AdminTienda = {
   aprobacion_estado?: string | null;
   created_at?: string | null;
   membresia_hasta?: string | null;
+  vertical?: string | null;
 };
 
 type AdminPerfilMembresia = {
@@ -562,6 +565,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [filtroEstadoProductosAdminDraft, setFiltroEstadoProductosAdminDraft] =
     useState<FiltroEstadoProductoGestion>('todos');
   const [cargandoFiltrosProductos, setCargandoFiltrosProductos] = useState(false);
+  const [adminImportVertical, setAdminImportVertical] = useState<VerticalVehiculo>(VERTICAL_AUTO);
+  const [adminImportTiendaId, setAdminImportTiendaId] = useState('');
   const [bulkProductosAccion, setBulkProductosAccion] = useState<AccionMasivaProductosAdmin>('');
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -929,6 +934,28 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       return la.localeCompare(lb, 'es');
     });
   }, [vendedores]);
+
+  /** Vendedores activos (aprobados y no bloqueados) para carga masiva admin. */
+  const vendedoresActivosImportAdmin = useMemo(() => {
+    return vendedores
+      .filter((v) => {
+        if ((v.aprobacion_estado ?? 'aprobado') !== 'aprobado') return false;
+        if (v.bloqueado === true) return false;
+        const vert = (v.vertical ?? 'auto') === 'moto' ? 'moto' : 'auto';
+        return vert === adminImportVertical;
+      })
+      .sort((a, b) => {
+        const la = (a.nombre_comercial || a.nombre || '').toLocaleLowerCase('es');
+        const lb = (b.nombre_comercial || b.nombre || '').toLocaleLowerCase('es');
+        return la.localeCompare(lb, 'es');
+      });
+  }, [vendedores, adminImportVertical]);
+
+  const adminImportEtiquetaVendedor = useMemo(() => {
+    const v = vendedores.find((x) => x.id === adminImportTiendaId);
+    if (!v) return null;
+    return v.nombre_comercial?.trim() || v.nombre?.trim() || v.id;
+  }, [vendedores, adminImportTiendaId]);
 
   const vendedoresVisibles = useMemo(() => {
     let list = [...vendedores];
@@ -2346,6 +2373,62 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
               {tab === 'productos' && (
                 <section className="dashboard-seccion">
                   <h2 className="dashboard-seccion-titulo">Productos publicados</h2>
+
+                  <div className="dashboard-admin-import-vendedor" aria-label="Carga masiva para vendedor">
+                    <h3 className="dashboard-admin-import-vendedor-titulo">
+                      Carga masiva de repuestos para un vendedor
+                    </h3>
+                    <p className="dashboard-admin-import-vendedor-ayuda">
+                      Misma plantilla Excel/CSV que usa el vendedor. Elige vertical y un vendedor activo;
+                      los productos se asignan a su tienda. Si falla el insert, ejecuta en Supabase{' '}
+                      <code>supabase-admin-insertar-productos.sql</code>.
+                    </p>
+                    <div className="dashboard-admin-import-vendedor-controles">
+                      <label>
+                        Vertical del catálogo
+                        <select
+                          value={adminImportVertical}
+                          onChange={(e) => {
+                            const next = e.target.value === VERTICAL_MOTO ? VERTICAL_MOTO : VERTICAL_AUTO;
+                            setAdminImportVertical(next);
+                            setAdminImportTiendaId('');
+                          }}
+                        >
+                          <option value={VERTICAL_AUTO}>Automóvil</option>
+                          <option value={VERTICAL_MOTO}>Motocicleta</option>
+                        </select>
+                      </label>
+                      <label>
+                        Vendedor activo
+                        <select
+                          value={adminImportTiendaId}
+                          onChange={(e) => setAdminImportTiendaId(e.target.value)}
+                        >
+                          <option value="">Selecciona un vendedor…</option>
+                          {vendedoresActivosImportAdmin.map((v) => (
+                            <option key={v.id} value={v.id}>
+                              {(v.nombre_comercial?.trim() || v.nombre?.trim() || v.id) +
+                                (v.rif?.trim() ? ` · ${v.rif.trim()}` : '')}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    {vendedoresActivosImportAdmin.length === 0 && (
+                      <p className="dashboard-texto-placeholder">
+                        No hay vendedores activos (aprobados y sin bloqueo) en esta vertical.
+                      </p>
+                    )}
+                    <ImportarProductosCSV
+                      key={`admin-import-${adminImportVertical}-${adminImportTiendaId || 'none'}`}
+                      modoAdmin
+                      vertical={adminImportVertical}
+                      tiendaIdDestino={adminImportTiendaId || null}
+                      etiquetaDestino={adminImportEtiquetaVendedor}
+                      onImportado={() => void cargar()}
+                    />
+                  </div>
+
                   <div className="dashboard-admin-filtros-productos">
                     <div className="dashboard-admin-filtro-vertical dashboard-admin-filtro-producto-buscar">
                       <label htmlFor="admin-buscar-productos">Buscar producto</label>
