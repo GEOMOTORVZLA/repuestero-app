@@ -162,6 +162,17 @@
   line-height: 1.3;
 }
 
+.visor-mostrador-descripcion {
+  margin: 0.35rem 0 0;
+  font-size: 0.88rem;
+  color: #334155;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .visor-mostrador-avisos {
   display: flex;
   flex-wrap: wrap;

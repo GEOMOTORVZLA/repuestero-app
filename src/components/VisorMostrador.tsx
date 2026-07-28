@@ -225,6 +225,9 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
                 <p className="visor-mostrador-nombre">{p.nombre}</p>
                 {vehiculo && <p className="visor-mostrador-vehiculo">{vehiculo}</p>}
                 {p.categoria && <p className="visor-mostrador-categoria">{p.categoria}</p>}
+                {p.descripcion?.trim() && (
+                  <p className="visor-mostrador-descripcion">{p.descripcion.trim()}</p>
+                )}
                 <div className="visor-mostrador-avisos">
                   {!activo && (
                     <span className="visor-mostrador-badge visor-mostrador-badge--pausado">Pausado</span>

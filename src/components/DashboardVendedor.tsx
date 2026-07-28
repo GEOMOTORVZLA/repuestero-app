@@ -113,6 +113,13 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
         <nav className="dashboard-menu">
           <button
             type="button"
+            className={`dashboard-menu-item dashboard-menu-item--mostrador ${tab === 'mostrador' ? 'activo' : ''}`}
+            onClick={() => setTab('mostrador')}
+          >
+            VISOR DE MOSTRADOR
+          </button>
+          <button
+            type="button"
             className={`dashboard-menu-item ${tab === 'resumen' ? 'activo' : ''}`}
             onClick={() => setTab('resumen')}
           >
@@ -124,13 +131,6 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
             onClick={() => setTab('productos')}
           >
             Editar productos
-          </button>
-          <button
-            type="button"
-            className={`dashboard-menu-item ${tab === 'mostrador' ? 'activo' : ''}`}
-            onClick={() => setTab('mostrador')}
-          >
-            Visor de mostrador
           </button>
           <button
             type="button"
@@ -170,12 +170,12 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
         </header>
 
         <main className="dashboard-contenido">
-          {bannerTienda && (
+          {tab !== 'mostrador' && bannerTienda && (
             <div className="dashboard-cuenta-banners" role="region" aria-label="Estado de tu cuenta">
               <EstadoCuentaNegocioBanner etiqueta="Vendedor / tienda" banner={bannerTienda} />
             </div>
           )}
-          {avisoNormasEliminados > 0 && (
+          {tab !== 'mostrador' && avisoNormasEliminados > 0 && (
             <div className="dashboard-aviso-normas" role="alert">
               <p className="dashboard-aviso-normas-texto">
                 Se eliminaron {avisoNormasEliminados} productos de tus publicaciones por no cumplir con
@@ -316,6 +316,13 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
       <nav className="dashboard-nav-movil" aria-label="Navegación del panel">
         <button
           type="button"
+          className={`dashboard-nav-movil-item dashboard-nav-movil-item--mostrador ${tab === 'mostrador' ? 'activo' : ''}`}
+          onClick={() => setTab('mostrador')}
+        >
+          MOSTRADOR
+        </button>
+        <button
+          type="button"
           className={`dashboard-nav-movil-item ${tab === 'resumen' ? 'activo' : ''}`}
           onClick={() => setTab('resumen')}
         >
@@ -327,13 +334,6 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
           onClick={() => setTab('productos')}
         >
           Editar
-        </button>
-        <button
-          type="button"
-          className={`dashboard-nav-movil-item ${tab === 'mostrador' ? 'activo' : ''}`}
-          onClick={() => setTab('mostrador')}
-        >
-          Mostrador
         </button>
         <button
           type="button"

@@ -50,6 +50,25 @@
   background: #2c5282;
 }
 
+.dashboard-menu-item--mostrador {
+  background: #facc15;
+  color: #0f172a;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.dashboard-menu-item--mostrador:hover {
+  background: #eab308;
+  color: #0f172a;
+}
+
+.dashboard-menu-item--mostrador.activo {
+  background: #ca8a04;
+  color: #0f172a;
+  box-shadow: inset 0 0 0 2px rgba(15, 23, 42, 0.2);
+}
+
 .dashboard-main {
   flex: 1;
   display: flex;
@@ -1429,6 +1448,21 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
     background: #1e3a5f;
     color: #fff;
     box-shadow: 0 2px 8px rgba(30, 58, 95, 0.35);
+  }
+
+  .dashboard-panel-movil .dashboard-nav-movil-item--mostrador {
+    background: #facc15;
+    color: #0f172a;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+  }
+
+  .dashboard-panel-movil .dashboard-nav-movil-item--mostrador:hover,
+  .dashboard-panel-movil .dashboard-nav-movil-item--mostrador.activo {
+    background: #eab308;
+    color: #0f172a;
+    box-shadow: 0 2px 8px rgba(202, 138, 4, 0.35);
   }
 
   .dashboard-panel-movil .dashboard-header {
