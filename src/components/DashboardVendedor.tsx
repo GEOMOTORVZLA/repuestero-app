@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../supabaseClient';
 import { RegistroRepuestos } from './RegistroRepuestos';
 import { MisProductos } from './MisProductos';
+import { VisorMostrador } from './VisorMostrador';
 import { PerfilUsuario } from './PerfilUsuario';
 import { ImportarProductosCSV } from './ImportarProductosCSV';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
@@ -12,7 +13,7 @@ import type { BannerEstadoCuenta } from '../utils/estadoCuentaVendedorTaller';
 import { EstadoCuentaNegocioBanner } from './EstadoCuentaNegocioBanner';
 import './Dashboard.css';
 
-type TabId = 'resumen' | 'productos' | 'estadisticas' | 'perfil';
+type TabId = 'resumen' | 'productos' | 'mostrador' | 'estadisticas' | 'perfil';
 
 interface DashboardVendedorProps {
   onVolverInicio?: () => void;
@@ -122,7 +123,14 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
             className={`dashboard-menu-item ${tab === 'productos' ? 'activo' : ''}`}
             onClick={() => setTab('productos')}
           >
-            Mis productos
+            Editar productos
+          </button>
+          <button
+            type="button"
+            className={`dashboard-menu-item ${tab === 'mostrador' ? 'activo' : ''}`}
+            onClick={() => setTab('mostrador')}
+          >
+            Visor de mostrador
           </button>
           <button
             type="button"
@@ -209,7 +217,7 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
           {tab === 'productos' && (
             <section className="dashboard-seccion">
               <div className="dashboard-seccion-header">
-                <h2 className="dashboard-seccion-titulo">Mis productos</h2>
+                <h2 className="dashboard-seccion-titulo">Editar productos</h2>
                 <button
                   type="button"
                   className="dashboard-btn-accion dashboard-btn-accion--principal"
@@ -269,6 +277,19 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
             </section>
           )}
 
+          {tab === 'mostrador' && (
+            <section className="dashboard-seccion">
+              <h2 className="dashboard-seccion-titulo">Visor de mostrador</h2>
+              <p className="dashboard-productos-toolbar-hint">
+                Consulta rápida de tu catálogo de <strong>{etiquetaVertical}</strong> frente al cliente. Busca como
+                en la app pública; toca la foto para ampliarla sin ralentizar el listado.
+              </p>
+              <div className="dashboard-card">
+                <VisorMostrador vertical={vertical} refreshTrigger={refreshProductos} />
+              </div>
+            </section>
+          )}
+
           {tab === 'estadisticas' && (
             <section className="dashboard-seccion">
               <h2 className="dashboard-seccion-titulo">Estadísticas de contacto</h2>
@@ -305,7 +326,14 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
           className={`dashboard-nav-movil-item ${tab === 'productos' ? 'activo' : ''}`}
           onClick={() => setTab('productos')}
         >
-          Productos
+          Editar
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'mostrador' ? 'activo' : ''}`}
+          onClick={() => setTab('mostrador')}
+        >
+          Mostrador
         </button>
         <button
           type="button"
