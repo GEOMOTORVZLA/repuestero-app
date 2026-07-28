@@ -1038,3 +1038,55 @@
 }
 
 
+
+.mis-productos-acciones-masivas {
+  margin: 0.85rem 0 1rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.mis-productos-acciones-masivas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.65rem;
+  align-items: end;
+  margin-top: 0.55rem;
+}
+
+.mis-productos-acciones-masivas-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.mis-productos-acciones-masivas-grid select {
+  min-height: 34px;
+  padding: 0.42rem 0.55rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.85rem;
+  color: #1f2937;
+}
+
+.mis-productos-acciones-masivas-ejecutar {
+  display: flex;
+  align-items: end;
+}
+
+.mis-productos-acciones-masivas-ejecutar .mis-productos-btn-primario,
+.mis-productos-acciones-masivas-ejecutar .mis-productos-btn-eliminar {
+  min-height: 34px;
+  width: 100%;
+}
+
+@media (max-width: 520px) {
+  .mis-productos-acciones-masivas-grid {
+    grid-template-columns: 1fr;
+  }
+}

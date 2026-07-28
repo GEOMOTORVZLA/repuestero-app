@@ -335,6 +335,37 @@
   background: #2c5282;
 }
 
+@keyframes dashboard-btn-titilar {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.55);
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.88;
+    box-shadow: 0 0 0 6px rgba(234, 179, 8, 0);
+    transform: scale(1.03);
+  }
+}
+
+.dashboard-btn-accion--titilar {
+  background: #eab308;
+  color: #111827;
+  animation: dashboard-btn-titilar 1.35s ease-in-out infinite;
+}
+
+.dashboard-btn-accion--titilar:hover {
+  background: #facc15;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-btn-accion--titilar {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.45);
+  }
+}
+
 .dashboard-kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

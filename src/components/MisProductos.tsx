@@ -93,6 +93,11 @@ type FiltroEstadoProductoGestion =
 
 type FiltroVerticalMisProductos = 'todos' | VerticalVehiculo;
 
+type AccionMasivaProducto = 'pausar' | 'activar' | 'reactivar' | 'eliminar';
+type AlcanceAccionMasiva = 'filtrados' | 'seleccionados';
+
+const ACCION_MASIVA_PAGE = 80;
+
 const PRODUCTOS_VENDEDOR_SELECT =
   'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, aprobacion_publica, created_at, stock_confirmado_at, pausado_por_stock_vencido, vertical, disponibilidad_aviso, es_oferta';
 
@@ -212,6 +217,11 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
       () => (vertical === 'auto' || vertical === 'moto' ? vertical : 'todos')
     );
   const [cargandoFiltrosProductos, setCargandoFiltrosProductos] = useState(false);
+  const [accionMasivaAlcance, setAccionMasivaAlcance] = useState<AlcanceAccionMasiva>('filtrados');
+  const [accionMasivaTipo, setAccionMasivaTipo] = useState<AccionMasivaProducto>('pausar');
+  const [ejecutandoAccionMasiva, setEjecutandoAccionMasiva] = useState(false);
+  const [mensajeAccionMasiva, setMensajeAccionMasiva] = useState<string | null>(null);
+  const [confirmarEliminarMasivo, setConfirmarEliminarMasivo] = useState(false);
 
   useEffect(() => {
     if (!verticalFijo) return;
@@ -499,6 +509,169 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     setFotosMasivasSeleccionados([]);
   };
 
+  const productosObjetivoAccionMasiva = useMemo(() => {
+    if (accionMasivaAlcance === 'seleccionados') {
+      return productosVisibles.filter((p) => fotosMasivasSeleccionados.includes(p.id));
+    }
+    return productosVisibles;
+  }, [accionMasivaAlcance, productosVisibles, fotosMasivasSeleccionados]);
+
+  const etiquetarAccionMasiva = (accion: AccionMasivaProducto) => {
+    if (accion === 'pausar') return 'Pausar';
+    if (accion === 'activar') return 'Activar';
+    if (accion === 'reactivar') return 'Reactivar (stock vencido)';
+    return 'Eliminar';
+  };
+
+  const filtrarObjetivosPorAccion = (lista: ProductoPanel[], accion: AccionMasivaProducto) => {
+    if (accion === 'pausar') return lista.filter((p) => p.activo !== false);
+    if (accion === 'activar') return lista.filter((p) => p.activo === false);
+    if (accion === 'reactivar') {
+      return lista.filter((p) => {
+        if (p.activo !== false) return false;
+        if (p.pausado_por_stock_vencido) return true;
+        return semaforoStockProducto(p).clase === 'vencido';
+      });
+    }
+    return lista;
+  };
+
+  const aplicarChunksIds = async (
+    ids: string[],
+    run: (chunk: string[]) => Promise<{ error: { message?: string } | null }>
+  ) => {
+    for (let i = 0; i < ids.length; i += ACCION_MASIVA_PAGE) {
+      const chunk = ids.slice(i, i + ACCION_MASIVA_PAGE);
+      const { error: errChunk } = await run(chunk);
+      if (errChunk) {
+        return { error: errChunk.message || 'Error al aplicar la acción masiva.', processed: i };
+      }
+    }
+    return { error: null as string | null, processed: ids.length };
+  };
+
+  const ejecutarAccionMasivaConfirmada = async () => {
+    const accion = accionMasivaTipo;
+    const candidatos = productosObjetivoAccionMasiva;
+    const objetivos = filtrarObjetivosPorAccion(candidatos, accion);
+    const omitidos = candidatos.length - objetivos.length;
+
+    if (!objetivos.length) {
+      setMensajeAccionMasiva('Ningún producto del alcance aplica para esa acción.');
+      setConfirmarEliminarMasivo(false);
+      return;
+    }
+
+    setEjecutandoAccionMasiva(true);
+    setMensajeAccionMasiva(null);
+    setError(null);
+
+    try {
+      const ids = objetivos.map((p) => p.id);
+      const ahoraIso = new Date().toISOString();
+
+      if (accion === 'eliminar') {
+        const res = await aplicarChunksIds(ids, async (chunk) =>
+          supabase.from('productos').delete().in('id', chunk)
+        );
+        if (res.error) {
+          setError(res.error);
+          setMensajeAccionMasiva('No se pudo completar la eliminación masiva.');
+          return;
+        }
+        const idSet = new Set(ids);
+        setProductos((prev) => prev.filter((p) => !idSet.has(p.id)));
+        setFotosMasivasSeleccionados((prev) => prev.filter((id) => !idSet.has(id)));
+        setConfirmarEliminarMasivo(false);
+        setMensajeAccionMasiva(
+          'Eliminados ' + ids.length + ' producto(s).' + (omitidos > 0 ? ' Omitidos: ' + omitidos + '.' : '')
+        );
+        return;
+      }
+
+      if (accion === 'pausar') {
+        const res = await aplicarChunksIds(ids, async (chunk) =>
+          supabase.from('productos').update({ activo: false }).in('id', chunk)
+        );
+        if (res.error) {
+          setError(res.error);
+          setMensajeAccionMasiva('No se pudo completar la pausa masiva.');
+          return;
+        }
+        const idSet = new Set(ids);
+        setProductos((prev) => prev.map((p) => (idSet.has(p.id) ? { ...p, activo: false } : p)));
+        setMensajeAccionMasiva(
+          'Pausados ' + ids.length + ' producto(s).' + (omitidos > 0 ? ' Ya pausados omitidos: ' + omitidos + '.' : '')
+        );
+        return;
+      }
+
+      const patch = {
+        activo: true,
+        stock_confirmado_at: ahoraIso,
+        pausado_por_stock_vencido: false,
+      };
+      const res = await aplicarChunksIds(ids, async (chunk) =>
+        supabase.from('productos').update(patch).in('id', chunk)
+      );
+      if (res.error) {
+        setError(res.error);
+        setMensajeAccionMasiva('No se pudo completar la activación masiva.');
+        return;
+      }
+      const idSet = new Set(ids);
+      setProductos((prev) =>
+        prev.map((p) =>
+          idSet.has(p.id)
+            ? {
+                ...p,
+                activo: true,
+                stock_confirmado_at: ahoraIso,
+                pausado_por_stock_vencido: false,
+              }
+            : p
+        )
+      );
+      const verbo = accion === 'reactivar' ? 'Reactivados' : 'Activados';
+      setMensajeAccionMasiva(
+        verbo +
+          ' ' +
+          ids.length +
+          ' producto(s).' +
+          (omitidos > 0 ? ' Omitidos (no aplicaban): ' + omitidos + '.' : '')
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error en la acción masiva.');
+      setMensajeAccionMasiva('No se pudo completar la acción masiva.');
+    } finally {
+      setEjecutandoAccionMasiva(false);
+    }
+  };
+
+  const solicitarEjecutarAccionMasiva = () => {
+    setMensajeAccionMasiva(null);
+    setError(null);
+    if (accionMasivaAlcance === 'seleccionados' && fotosMasivasSeleccionados.length === 0) {
+      setMensajeAccionMasiva('Marca al menos un producto en la lista o cambia el alcance a filtrados.');
+      return;
+    }
+    const candidatos = productosObjetivoAccionMasiva;
+    const objetivos = filtrarObjetivosPorAccion(candidatos, accionMasivaTipo);
+    if (!candidatos.length) {
+      setMensajeAccionMasiva('No hay productos en el alcance elegido. Aplica filtros primero.');
+      return;
+    }
+    if (!objetivos.length) {
+      setMensajeAccionMasiva('Ningún producto del alcance aplica para esa acción.');
+      return;
+    }
+    if (accionMasivaTipo === 'eliminar') {
+      setConfirmarEliminarMasivo(true);
+      return;
+    }
+    void ejecutarAccionMasivaConfirmada();
+  };
+
   const aplicarFotosMasivas = async () => {
     setMensajeFotosMasivas(null);
     setError(null);
@@ -767,6 +940,89 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
           filtros aplicados.
         </p>
       </section>
+      <section className="mis-productos-acciones-masivas" aria-label="Acciones masivas sobre productos">
+        <p className="mis-productos-ajuste-masivo-titulo">Acciones sobre productos filtrados</p>
+        <p className="mis-productos-ajuste-masivo-descripcion">
+          Elige el alcance y la acción, luego pulsa <strong>Ejecutar</strong>. Puedes aplicar a todos los
+          filtrados o marcar productos uno a uno (alcance &quot;Solo seleccionados&quot;).
+        </p>
+        <div className="mis-productos-acciones-masivas-grid">
+          <label>
+            Alcance
+            <select
+              value={accionMasivaAlcance}
+              onChange={(e) => setAccionMasivaAlcance(e.target.value as AlcanceAccionMasiva)}
+              disabled={ejecutandoAccionMasiva}
+            >
+              <option value="filtrados">Todos los filtrados ({productosVisibles.length})</option>
+              <option value="seleccionados">
+                Solo seleccionados ({fotosMasivasSeleccionados.length})
+              </option>
+            </select>
+          </label>
+          <label>
+            Acción
+            <select
+              value={accionMasivaTipo}
+              onChange={(e) => setAccionMasivaTipo(e.target.value as AccionMasivaProducto)}
+              disabled={ejecutandoAccionMasiva}
+            >
+              <option value="pausar">Pausar</option>
+              <option value="activar">Activar</option>
+              <option value="reactivar">Reactivar (pausados por stock vencido)</option>
+              <option value="eliminar">Eliminar</option>
+            </select>
+          </label>
+          <div className="mis-productos-acciones-masivas-ejecutar">
+            <button
+              type="button"
+              className={
+                accionMasivaTipo === 'eliminar'
+                  ? 'mis-productos-btn-eliminar'
+                  : 'mis-productos-btn-primario'
+              }
+              disabled={ejecutandoAccionMasiva || cargando}
+              onClick={() => solicitarEjecutarAccionMasiva()}
+            >
+              {ejecutandoAccionMasiva
+                ? 'Ejecutando…'
+                : 'Ejecutar: ' + etiquetarAccionMasiva(accionMasivaTipo)}
+            </button>
+          </div>
+        </div>
+        {accionMasivaAlcance === 'seleccionados' && (
+          <div className="mis-productos-fotos-masivas-seleccion">
+            <p>
+              Seleccionados: {fotosMasivasSeleccionados.length}. Marca los productos en la lista inferior.
+            </p>
+            <div className="mis-productos-fotos-masivas-acciones">
+              <button
+                type="button"
+                className="mis-productos-btn-secundario"
+                onClick={seleccionarTodosProductosFotosMasivas}
+                disabled={ejecutandoAccionMasiva}
+              >
+                Seleccionar visibles ({productosVisibles.length})
+              </button>
+              <button
+                type="button"
+                className="mis-productos-btn-secundario"
+                onClick={limpiarSeleccionFotosMasivas}
+                disabled={ejecutandoAccionMasiva || fotosMasivasSeleccionados.length === 0}
+              >
+                Limpiar selección
+              </button>
+            </div>
+          </div>
+        )}
+        <p className="mis-productos-ajuste-masivo-ayuda">
+          Objetivo actual: {productosObjetivoAccionMasiva.length} producto(s). Reactivar solo afecta
+          pausados por stock vencido; Activar sirve para cualquier pausado.
+        </p>
+        {mensajeAccionMasiva && (
+          <p className="mis-productos-ajuste-masivo-mensaje">{mensajeAccionMasiva}</p>
+        )}
+      </section>
       <section className="mis-productos-ajuste-masivo" aria-label="Ajuste masivo de precios">
         <p className="mis-productos-ajuste-masivo-titulo">Ajuste masivo de precios</p>
         <p className="mis-productos-ajuste-masivo-descripcion">
@@ -1018,6 +1274,38 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
           </div>
         </div>
       )}
+      {confirmarEliminarMasivo && (
+        <div className="mis-productos-modal-overlay">
+          <div className="mis-productos-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mis-productos-modal-titulo">Eliminar productos</h3>
+            <p className="mis-productos-modal-texto">
+              Vas a eliminar{' '}
+              <strong>
+                {filtrarObjetivosPorAccion(productosObjetivoAccionMasiva, 'eliminar').length}
+              </strong>{' '}
+              producto(s). Esta acción no se puede deshacer.
+            </p>
+            <div className="mis-productos-modal-acciones">
+              <button
+                type="button"
+                className="mis-productos-btn-eliminar"
+                disabled={ejecutandoAccionMasiva}
+                onClick={() => void ejecutarAccionMasivaConfirmada()}
+              >
+                {ejecutandoAccionMasiva ? 'Eliminando…' : 'Sí, eliminar'}
+              </button>
+              <button
+                type="button"
+                className="mis-productos-btn-secundario"
+                disabled={ejecutandoAccionMasiva}
+                onClick={() => setConfirmarEliminarMasivo(false)}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {productoAEliminar && (
         <div className="mis-productos-modal-overlay">
           <div className="mis-productos-modal" onClick={(e) => e.stopPropagation()}>
@@ -1122,13 +1410,14 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
             <article
               key={p.id}
               className={`mis-productos-card${
-                fotosMasivasAlcance === 'seleccionados' && seleccionadoFotosMasivas
+                (fotosMasivasAlcance === 'seleccionados' || accionMasivaAlcance === 'seleccionados') &&
+                seleccionadoFotosMasivas
                   ? ' mis-productos-card--seleccionada'
                   : ''
               }`}
               onClick={() => setProductoDetalle(p)}
             >
-              {fotosMasivasAlcance === 'seleccionados' && (
+              {(fotosMasivasAlcance === 'seleccionados' || accionMasivaAlcance === 'seleccionados') && (
                 <label
                   className="mis-productos-card-selector"
                   onClick={(e) => e.stopPropagation()}
@@ -1137,7 +1426,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
                     type="checkbox"
                     checked={seleccionadoFotosMasivas}
                     onChange={(e) => toggleProductoFotoMasiva(p.id, e.target.checked)}
-                    disabled={aplicandoFotosMasivas}
+                    disabled={aplicandoFotosMasivas || ejecutandoAccionMasiva}
                   />
                   Seleccionar
                 </label>

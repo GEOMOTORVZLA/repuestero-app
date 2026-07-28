@@ -202,10 +202,12 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
                 <h2 className="dashboard-seccion-titulo">Editar productos</h2>
                 <button
                   type="button"
-                  className="dashboard-btn-accion dashboard-btn-accion--principal"
+                  className={`dashboard-btn-accion dashboard-btn-accion--principal${
+                    mostrarNuevoProducto ? '' : ' dashboard-btn-accion--titilar'
+                  }`}
                   onClick={() => setMostrarNuevoProducto((v) => !v)}
                 >
-                  {mostrarNuevoProducto ? 'Cerrar formulario' : 'Agregar producto nuevo'}
+                  {mostrarNuevoProducto ? 'Cerrar formulario' : 'Publicar producto nuevo'}
                 </button>
               </div>
               <div
