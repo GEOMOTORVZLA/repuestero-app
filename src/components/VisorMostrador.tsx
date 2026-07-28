@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../supabaseClient';
-import { terminosBusquedaProducto } from '../utils/busquedaProductosTexto';
+import { productoCoincideTextoFlexible } from '../utils/busquedaProductosTexto';
 import { urlImagenProductoVariante } from '../utils/imagenProducto';
 import { urlsFotosProducto } from '../utils/productoImagenesExtra';
 import { etiquetaMoneda } from '../utils/monedaProducto';
@@ -64,15 +64,12 @@ async function cargarProductosVendedor(
   return { productos: acumulado, error: null };
 }
 
-/** Misma logica de terminos/campos que la busqueda publica (AND por palabra, min. 2 caracteres). */
-function coincideBusquedaPublica(p: ProductoMostrador, texto: string): boolean {
-  const terminos = terminosBusquedaProducto(texto);
-  if (terminos.length === 0) return true;
-  const fuente = [p.nombre, p.descripcion, p.comentarios, p.marca, p.modelo, p.categoria]
-    .filter(Boolean)
-    .join(' ')
-    .toLocaleLowerCase('es');
-  return terminos.every((t) => fuente.includes(t.toLocaleLowerCase('es')));
+/** Busqueda flexible solo del Visor: multi-palabra AND, plural/singular y typo leve. */
+function coincideBusquedaVisor(p: ProductoMostrador, texto: string): boolean {
+  return productoCoincideTextoFlexible(
+    [p.nombre, p.descripcion, p.comentarios, p.marca, p.modelo, p.categoria],
+    texto
+  );
 }
 
 type VisorMostradorProps = {
@@ -125,7 +122,7 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
   const visibles = useMemo(() => {
     return productos
       .filter((p) => (soloActivos ? p.activo !== false : true))
-      .filter((p) => coincideBusquedaPublica(p, busqueda))
+      .filter((p) => coincideBusquedaVisor(p, busqueda))
       .sort((a, b) => {
         const aAct = a.activo !== false ? 0 : 1;
         const bAct = b.activo !== false ? 0 : 1;

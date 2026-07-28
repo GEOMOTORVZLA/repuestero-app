@@ -52,3 +52,99 @@ export function aplicarTerminosTextoABusquedaProductos<T extends QueryConOr>(
   }
   return q;
 }
+
+/** Quita acentos para comparar (es/ES). */
+export function normalizarTextoBusqueda(s: string): string {
+  return s
+    .toLocaleLowerCase('es')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+/** Variantes simples singular/plural en espa\u00f1ol (espirales <-> espiral). */
+export function variantesFormaPalabra(termino: string): string[] {
+  const t = normalizarTextoBusqueda(termino).replace(/[^a-z0-9]/g, '');
+  if (t.length < 2) return t ? [t] : [];
+  const out = new Set([t]);
+  if (t.endsWith('es') && t.length >= 5) {
+    out.add(t.slice(0, -2));
+    out.add(t.slice(0, -1));
+  } else if (t.endsWith('s') && t.length >= 4) {
+    out.add(t.slice(0, -1));
+  } else {
+    out.add(t + 's');
+    out.add(t + 'es');
+  }
+  return [...out].filter((v) => v.length >= 2);
+}
+
+function distanciaLevenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const m = a.length;
+  const n = b.length;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  let curr = Array.from({ length: n + 1 }, () => 0);
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    const tmp = prev;
+    prev = curr;
+    curr = tmp;
+  }
+  return prev[n];
+}
+
+function maxDistanciaTypo(len: number): number {
+  if (len <= 3) return 0;
+  if (len <= 6) return 1;
+  return 2;
+}
+
+/** Una palabra del usuario coincide con el texto del producto (substring, plural o typo leve). */
+export function terminoCoincideEnTextoFlexible(termino: string, textoFuente: string): boolean {
+  const fuente = normalizarTextoBusqueda(textoFuente);
+  if (!fuente) return false;
+  const variantes = variantesFormaPalabra(termino);
+  if (variantes.length === 0) return true;
+
+  for (const v of variantes) {
+    if (fuente.includes(v)) return true;
+  }
+
+  const tokens = fuente.split(/[^a-z0-9]+/).filter((tok) => tok.length >= 2);
+
+  for (const tok of tokens) {
+    for (const v of variantes) {
+      if (tok === v) return true;
+      if (tok.length >= 4 && v.length >= 4 && (tok.startsWith(v) || v.startsWith(tok))) return true;
+      const maxD = Math.min(maxDistanciaTypo(v.length), maxDistanciaTypo(tok.length));
+      if (maxD > 0 && Math.abs(tok.length - v.length) <= maxD && distanciaLevenshtein(tok, v) <= maxD) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Coincidencia flexible multi-palabra (AND), pensada para listas en memoria
+ * (p. ej. Visor de mostrador). No altera la b\u00fasqueda p\u00fablica por Supabase.
+ */
+export function productoCoincideTextoFlexible(
+  campos: Array<string | number | null | undefined>,
+  texto: string
+): boolean {
+  const terminos = terminosBusquedaProducto(texto);
+  if (terminos.length === 0) return true;
+  const fuente = campos
+    .filter((c) => c != null && String(c).trim() !== '')
+    .map((c) => String(c))
+    .join(' ');
+  if (!fuente.trim()) return false;
+  return terminos.every((t) => terminoCoincideEnTextoFlexible(t, fuente));
+}
