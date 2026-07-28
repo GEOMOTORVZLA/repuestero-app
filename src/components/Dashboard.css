@@ -311,6 +311,15 @@
   color: #2d3748;
 }
 
+.dashboard-seccion-titulo--mostrador-busqueda {
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
 .dashboard-btn-accion {
   padding: 0.45rem 0.9rem;
   font-size: 0.85rem;
