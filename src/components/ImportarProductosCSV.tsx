@@ -380,10 +380,10 @@ export function ImportarProductosCSV({
     const filas: ParsedRow[] = [];
     const erroresFila: string[] = [];
 
-    // hasta 200 para no saturar en un intento
-    if (dataRows.length > 200) {
+    // hasta 500 filas por archivo (vendedor y admin)
+    if (dataRows.length > 500) {
       setEstado('error');
-      setMensaje('Para esta prueba, el archivo no debe tener más de 200 filas.');
+      setMensaje('El archivo no debe tener más de 500 filas de productos.');
       return;
     }
 
