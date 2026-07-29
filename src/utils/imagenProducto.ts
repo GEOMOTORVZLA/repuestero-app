@@ -1,5 +1,5 @@
 /**
- * Imágenes de producto: límites de subida y variantes (thumbnails vía Supabase Storage).
+ * Imágenes de producto: límites de subida y variantes (thumbnails via Supabase Storage).
  *
  * La transformación `/render/image/` requiere que el proyecto tenga habilitadas
  * las transformaciones de imagen en Storage. Si no, define en `.env`:
@@ -12,6 +12,9 @@ export const TARGET_BYTES_FOTO_PRODUCTO = 1200 * 1024;
 
 const MARKER_OBJECT_PUBLIC = '/storage/v1/object/public/';
 const MARKER_RENDER = '/storage/v1/render/image/public/';
+
+const TIMEOUT_CARGAR_IMAGEN_MS = 20000;
+const TIMEOUT_TO_BLOB_MS = 12000;
 
 function transformacionDesactivada(): boolean {
   return import.meta.env.VITE_SUPABASE_SIN_TRANSFORMACION_IMAGEN === '1';
@@ -71,17 +74,65 @@ export function mensajeMaxTamanoFoto(): string {
   return `Cada imagen no debe superar ${MAX_MB_FOTO_PRODUCTO} MB. Comprímela o elige otra.`;
 }
 
+function conTimeout<T>(promesa: Promise<T>, ms: number, mensaje: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = window.setTimeout(() => reject(new Error(mensaje)), ms);
+    promesa.then(
+      (v) => {
+        window.clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        window.clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
+
 function blobDesdeCanvas(
   canvas: HTMLCanvasElement,
   type: string,
   quality: number
 ): Promise<Blob | null> {
-  return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), type, quality));
+  return new Promise((resolve) => {
+    try {
+      canvas.toBlob((blob) => resolve(blob), type, quality);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function blobDesdeCanvasConTimeout(
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality: number
+): Promise<Blob | null> {
+  try {
+    return await conTimeout(
+      blobDesdeCanvas(canvas, type, quality),
+      TIMEOUT_TO_BLOB_MS,
+      `toBlob timeout ${type}`
+    );
+  } catch {
+    return null;
+  }
+}
+
+function cargarImagenDesdeObjectUrl(objectUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('No se pudo leer la imagen.'));
+    el.src = objectUrl;
+  });
 }
 
 /**
  * Comprime y redimensiona imágenes antes de subirlas a Storage.
- * Devuelve WebP/JPEG optimizado y mantiene tamaño <= límite cuando es posible.
+ * En Android/WebView prioriza JPEG si WebP se cuelga o falla.
+ * Si no puede optimizar, devuelve el archivo original (si cabe en el limite).
  */
 export async function optimizarImagenProductoParaStorage(
   file: File,
@@ -91,24 +142,28 @@ export async function optimizarImagenProductoParaStorage(
     maxLado?: number;
   }
 ): Promise<File> {
-  if (!file.type.startsWith('image/')) return file;
+  if (!file.type.startsWith('image/') && !/\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name)) {
+    return file;
+  }
 
   const targetBytes = opts?.targetBytes ?? TARGET_BYTES_FOTO_PRODUCTO;
   const maxBytes = opts?.maxBytes ?? MAX_BYTES_FOTO_PRODUCTO;
-  const maxLado = opts?.maxLado ?? 2200;
+  const maxLado = opts?.maxLado ?? 1600;
 
   const objectUrl = URL.createObjectURL(file);
   try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = () => reject(new Error('No se pudo leer la imagen.'));
-      el.src = objectUrl;
-    });
+    const img = await conTimeout(
+      cargarImagenDesdeObjectUrl(objectUrl),
+      TIMEOUT_CARGAR_IMAGEN_MS,
+      'La imagen tardó demasiado en cargarse. Prueba otra foto o una más liviana.'
+    );
 
     let width = img.naturalWidth || img.width;
     let height = img.naturalHeight || img.height;
-    if (!width || !height) return file;
+    if (!width || !height) {
+      if (file.size <= maxBytes) return file;
+      throw new Error('No se pudo leer el tamaño de la imagen.');
+    }
 
     const escala = Math.min(1, maxLado / Math.max(width, height));
     width = Math.max(1, Math.round(width * escala));
@@ -118,52 +173,73 @@ export async function optimizarImagenProductoParaStorage(
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return file;
+    if (!ctx) {
+      if (file.size <= maxBytes) return file;
+      throw new Error('Este dispositivo no pudo procesar la imagen.');
+    }
     ctx.drawImage(img, 0, 0, width, height);
 
-    const mimePreferido = 'image/webp';
-    const mimeFallback = 'image/jpeg';
-    let quality = 0.9;
-    let blob = await blobDesdeCanvas(canvas, mimePreferido, quality);
-    let mime = blob ? mimePreferido : mimeFallback;
+    // WebP a veces no responde en WebView Android; JPEG es mas fiable.
+    const preferWebp = !/Android/i.test(navigator.userAgent || '');
+    const mimePreferido = preferWebp ? 'image/webp' : 'image/jpeg';
+    const mimeFallback = preferWebp ? 'image/jpeg' : 'image/webp';
+    let quality = 0.85;
+
+    let blob = await blobDesdeCanvasConTimeout(canvas, mimePreferido, quality);
+    let mime = mimePreferido;
     if (!blob) {
-      blob = await blobDesdeCanvas(canvas, mimeFallback, quality);
-      if (!blob) return file;
+      blob = await blobDesdeCanvasConTimeout(canvas, mimeFallback, quality);
+      mime = mimeFallback;
+      if (!blob) {
+        if (file.size <= maxBytes) return file;
+        throw new Error('No se pudo comprimir la imagen en este dispositivo. Prueba otra foto.');
+      }
     }
 
     let intentos = 0;
     while ((blob.size > targetBytes || blob.size > maxBytes) && intentos < 7) {
       quality -= 0.06;
-      if (quality < 0.66) break;
-      const next = await blobDesdeCanvas(canvas, mime, quality);
+      if (quality < 0.55) break;
+      const next = await blobDesdeCanvasConTimeout(canvas, mime, quality);
       if (!next) break;
       blob = next;
       intentos += 1;
     }
 
-    // Si aún pesa demasiado, segundo paso: bajar resolución adicional.
     if (blob.size > maxBytes) {
       const shrink = Math.sqrt(maxBytes / blob.size);
-      const w2 = Math.max(1, Math.round(width * Math.max(0.55, shrink)));
-      const h2 = Math.max(1, Math.round(height * Math.max(0.55, shrink)));
+      const w2 = Math.max(1, Math.round(width * Math.max(0.5, shrink)));
+      const h2 = Math.max(1, Math.round(height * Math.max(0.5, shrink)));
       const canvas2 = document.createElement('canvas');
       canvas2.width = w2;
       canvas2.height = h2;
       const ctx2 = canvas2.getContext('2d');
       if (ctx2) {
         ctx2.drawImage(canvas, 0, 0, w2, h2);
-        const next2 = await blobDesdeCanvas(canvas2, mime, Math.max(0.56, quality - 0.06));
+        const next2 = await blobDesdeCanvasConTimeout(canvas2, mime, Math.max(0.5, quality - 0.06));
         if (next2) blob = next2;
       }
     }
 
+    if (blob.size > maxBytes) {
+      if (file.size <= maxBytes) return file;
+      throw new Error(
+        `La imagen sigue pesando más de ${MAX_MB_FOTO_PRODUCTO} MB tras comprimir. Elige otra más liviana.`
+      );
+    }
+
     if (blob.size >= file.size && file.size <= maxBytes) return file;
     const ext = mime === 'image/webp' ? 'webp' : 'jpg';
-    const nombreBase = file.name.replace(/\.[^.]+$/, '');
+    const nombreBase = file.name.replace(/\.[^.]+$/, '') || 'foto';
     return new File([blob], `${nombreBase}.${ext}`, {
       type: mime,
       lastModified: Date.now(),
     });
+  } catch (e) {
+    if (file.size <= maxBytes) return file;
+    throw e instanceof Error
+      ? e
+      : new Error('No se pudo optimizar la imagen. Prueba otra foto.');
   } finally {
     URL.revokeObjectURL(objectUrl);
   }

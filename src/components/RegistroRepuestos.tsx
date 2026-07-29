@@ -213,142 +213,155 @@ export function RegistroRepuestos({
       return;
     }
     setEstado('registrando');
-    setMensaje('Optimizando imágenes y registrando repuesto...');
+    setMensaje('Optimizando foto principal…');
 
-    const fotoPrincipalLista = await optimizarImagenProductoParaStorage(fotoPrincipal, {
-      maxBytes: MAX_BYTES_FOTO_PRODUCTO,
-    });
-    if (fotoPrincipalLista.size > MAX_BYTES_FOTO_PRODUCTO) {
-      registrandoRef.current = false;
-      setEstado('error');
-      setMensaje(
-        `La foto principal no debe superar ${MAX_MB_FOTO_PRODUCTO} MB. Comprímela o elige otra.`
-      );
-      return;
-    }
-    const fotosExtraListas = await Promise.all(
-      fotosExtraSlots.map(async (f) => {
-        if (!f) return null;
-        return await optimizarImagenProductoParaStorage(f, {
-          maxBytes: MAX_BYTES_FOTO_PRODUCTO,
-        });
-      })
-    );
-    const fotoExtraGrande = fotosExtraListas.find((f) => f && f.size > MAX_BYTES_FOTO_PRODUCTO);
-    if (fotoExtraGrande) {
-      registrandoRef.current = false;
-      setEstado('error');
-      setMensaje(
-        `Cada foto adicional no debe superar ${MAX_MB_FOTO_PRODUCTO} MB. Comprímelas o elige otra.`
-      );
-      return;
-    }
-
-    const payload: Record<string, unknown> = {
-      tienda_id: tienda.id,
-      nombre: nombre.trim(),
-      categoria,
-      marca: marca === 'Otra' ? null : marca,
-      modelo: modelo.trim() || null,
-      anio: anio ? parseInt(anio, 10) : null,
-      // usamos un solo campo de texto para la breve descripción
-      descripcion: comentarios.trim() || null,
-      comentarios: comentarios.trim() || null,
-      precio_usd: precioNum,
-      moneda: moneda,
-      disponibilidad_aviso: disponibilidadAviso,
-      es_oferta: esOferta,
-      stock_actual: 0,
-      activo: true,
-      aprobacion_publica: 'aprobado',
-      stock_confirmado_at: new Date().toISOString(),
-      pausado_por_stock_vencido: false,
-      vertical,
-    };
-
-    const { data: insertData, error } = await supabase
-      .from('productos')
-      .insert(payload)
-      .select('id')
-      .single();
-
-    if (error || !insertData) {
-      registrandoRef.current = false;
-      setEstado('error');
-      setMensaje(error?.message || 'Error al guardar.');
-      return;
-    }
-
-    const productoId = insertData.id as string;
-
-    // Subir imágenes a Supabase Storage (bucket "productos")
-    const bucket = supabase.storage.from('productos');
-    const principalExt = fotoPrincipalLista.name.split('.').pop() || 'jpg';
-    const principalPath = `${productoId}/principal.${principalExt}`;
-
-    const { error: upPrincipalError } = await bucket.upload(principalPath, fotoPrincipalLista, {
-      upsert: true,
-    });
-
-    if (upPrincipalError) {
-      await supabase.from('productos').delete().eq('id', productoId);
-      registrandoRef.current = false;
-      setEstado('error');
-      setMensaje('Error al subir la foto principal. Intenta de nuevo.');
-      return;
-    }
-
-    const { data: principalPublic } = bucket.getPublicUrl(principalPath);
-    const imagenPrincipalUrl = principalPublic.publicUrl;
-
-    const slotsUrls: (string | null)[] = [null, null, null, null];
-    for (let i = 0; i < MAX_FOTOS_EXTRA; i += 1) {
-      const file = fotosExtraListas[i];
-      if (!file) continue;
-      const ext = file.name.split('.').pop() || 'jpg';
-      const extraPath = `${productoId}/extra-${i + 1}.${ext}`;
-      const { error: upExtraError } = await bucket.upload(extraPath, file, { upsert: true });
-      if (!upExtraError) {
-        const { data: extraPublic } = bucket.getPublicUrl(extraPath);
-        slotsUrls[i] = extraPublic.publicUrl;
+    try {
+      const fotoPrincipalLista = await optimizarImagenProductoParaStorage(fotoPrincipal, {
+        maxBytes: MAX_BYTES_FOTO_PRODUCTO,
+      });
+      if (fotoPrincipalLista.size > MAX_BYTES_FOTO_PRODUCTO) {
+        setEstado('error');
+        setMensaje(
+          `La foto principal no debe superar ${MAX_MB_FOTO_PRODUCTO} MB. Comprímela o elige otra.`
+        );
+        return;
       }
-    }
 
-    const tieneExtras = slotsUrls.some((s) => s != null && String(s).trim() !== '');
-    const { error: updateError } = await supabase
-      .from('productos')
-      .update({
-        imagen_url: imagenPrincipalUrl,
-        imagenes_extra: tieneExtras ? slotsUrls : null,
-      })
-      .eq('id', productoId);
+      setMensaje('Optimizando fotos adicionales…');
+      const fotosExtraListas = await Promise.all(
+        fotosExtraSlots.map(async (f) => {
+          if (!f) return null;
+          return await optimizarImagenProductoParaStorage(f, {
+            maxBytes: MAX_BYTES_FOTO_PRODUCTO,
+          });
+        })
+      );
+      const fotoExtraGrande = fotosExtraListas.find((f) => f && f.size > MAX_BYTES_FOTO_PRODUCTO);
+      if (fotoExtraGrande) {
+        setEstado('error');
+        setMensaje(
+          `Cada foto adicional no debe superar ${MAX_MB_FOTO_PRODUCTO} MB. Comprímelas o elige otra.`
+        );
+        return;
+      }
 
-    if (updateError) {
-      await supabase.from('productos').delete().eq('id', productoId);
-      registrandoRef.current = false;
+      setMensaje('Guardando producto…');
+      const payload: Record<string, unknown> = {
+        tienda_id: tienda.id,
+        nombre: nombre.trim(),
+        categoria,
+        marca: marca === 'Otra' ? null : marca,
+        modelo: modelo.trim() || null,
+        anio: anio ? parseInt(anio, 10) : null,
+        // usamos un solo campo de texto para la breve descripción
+        descripcion: comentarios.trim() || null,
+        comentarios: comentarios.trim() || null,
+        precio_usd: precioNum,
+        moneda: moneda,
+        disponibilidad_aviso: disponibilidadAviso,
+        es_oferta: esOferta,
+        stock_actual: 0,
+        activo: true,
+        aprobacion_publica: 'aprobado',
+        stock_confirmado_at: new Date().toISOString(),
+        pausado_por_stock_vencido: false,
+        vertical,
+      };
+
+      const { data: insertData, error } = await supabase
+        .from('productos')
+        .insert(payload)
+        .select('id')
+        .single();
+
+      if (error || !insertData) {
+        setEstado('error');
+        setMensaje(error?.message || 'Error al guardar.');
+        return;
+      }
+
+      const productoId = insertData.id as string;
+
+      setMensaje('Subiendo fotos…');
+      // Subir imágenes a Supabase Storage (bucket "productos")
+      const bucket = supabase.storage.from('productos');
+      const principalExt = fotoPrincipalLista.name.split('.').pop() || 'jpg';
+      const principalPath = `${productoId}/principal.${principalExt}`;
+
+      const { error: upPrincipalError } = await bucket.upload(principalPath, fotoPrincipalLista, {
+        upsert: true,
+      });
+
+      if (upPrincipalError) {
+        await supabase.from('productos').delete().eq('id', productoId);
+        setEstado('error');
+        setMensaje(
+          upPrincipalError.message
+            ? `Error al subir la foto principal: ${upPrincipalError.message}`
+            : 'Error al subir la foto principal. Intenta de nuevo.'
+        );
+        return;
+      }
+
+      const { data: principalPublic } = bucket.getPublicUrl(principalPath);
+      const imagenPrincipalUrl = principalPublic.publicUrl;
+
+      const slotsUrls: (string | null)[] = [null, null, null, null];
+      for (let i = 0; i < MAX_FOTOS_EXTRA; i += 1) {
+        const file = fotosExtraListas[i];
+        if (!file) continue;
+        const ext = file.name.split('.').pop() || 'jpg';
+        const extraPath = `${productoId}/extra-${i + 1}.${ext}`;
+        const { error: upExtraError } = await bucket.upload(extraPath, file, { upsert: true });
+        if (!upExtraError) {
+          const { data: extraPublic } = bucket.getPublicUrl(extraPath);
+          slotsUrls[i] = extraPublic.publicUrl;
+        }
+      }
+
+      const tieneExtras = slotsUrls.some((s) => s != null && String(s).trim() !== '');
+      const { error: updateError } = await supabase
+        .from('productos')
+        .update({
+          imagen_url: imagenPrincipalUrl,
+          imagenes_extra: tieneExtras ? slotsUrls : null,
+        })
+        .eq('id', productoId);
+
+      if (updateError) {
+        await supabase.from('productos').delete().eq('id', productoId);
+        setEstado('error');
+        setMensaje(updateError.message || 'Error al asociar las fotos al repuesto.');
+        return;
+      }
+
+      setEstado('ok');
+      setMensaje(
+        '¡Producto registrado! Ya está publicado y visible en la búsqueda pública de Geomotor.'
+      );
+      onProductoRegistrado?.();
+      setNombre('');
+      setCategoria('');
+      setMarca('');
+      setModelo('');
+      setAnio('');
+      setComentarios('');
+      setPrecio('');
+      setMoneda('BS');
+      setDisponibilidadAviso('');
+      setEsOferta(false);
+      setFotoPrincipal(null);
+      setFotosExtraSlots(slotsArchivosExtraVacios());
+    } catch (e) {
       setEstado('error');
-      setMensaje(updateError.message || 'Error al asociar las fotos al repuesto.');
-      return;
+      setMensaje(
+        e instanceof Error
+          ? e.message
+          : 'No se pudo registrar el producto. Revisa la foto e intenta de nuevo.'
+      );
+    } finally {
+      registrandoRef.current = false;
     }
-
-    registrandoRef.current = false;
-    setEstado('ok');
-    setMensaje(
-      '¡Producto registrado! Ya está publicado y visible en la búsqueda pública de Geomotor.'
-    );
-    onProductoRegistrado?.();
-    setNombre('');
-    setCategoria('');
-    setMarca('');
-    setModelo('');
-    setAnio('');
-    setComentarios('');
-    setPrecio('');
-    setMoneda('BS');
-    setDisponibilidadAviso('');
-    setEsOferta(false);
-    setFotoPrincipal(null);
-    setFotosExtraSlots(slotsArchivosExtraVacios());
   };
 
   if (cargandoTienda) {
