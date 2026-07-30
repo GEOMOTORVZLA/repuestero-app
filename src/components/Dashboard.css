@@ -1201,6 +1201,65 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   padding: 0.75rem 1.25rem 0;
 }
 
+.dashboard-admin-perfil-modal {
+  width: min(720px, 96vw);
+  max-height: min(92vh, 900px);
+  overflow: auto;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.28);
+}
+
+.dashboard-admin-perfil-cuerpo {
+  padding: 0 1.25rem 1.1rem;
+}
+
+.dashboard-admin-perfil-ayuda {
+  margin: 0 0 0.85rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+.dashboard-admin-perfil-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem 0.75rem;
+}
+
+.dashboard-admin-perfil-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.dashboard-admin-perfil-grid input,
+.dashboard-admin-perfil-grid select {
+  min-height: 36px;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.dashboard-admin-perfil-modal .dashboard-admin-ubicacion-acciones {
+  justify-content: flex-start;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+@media (max-width: 640px) {
+  .dashboard-admin-perfil-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .dashboard-admin-userid-btn {
   border: none;
   background: none;

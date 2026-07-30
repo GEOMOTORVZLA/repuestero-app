@@ -72,22 +72,60 @@ export function RegistroRepuestos({
     if (!user) return;
     const cargarTiendas = async () => {
       setCargandoTienda(true);
-      const { data, error } = await supabase
-        .from('tiendas')
-        .select('id, nombre, nombre_comercial')
-        .eq('user_id', user.id)
-        .eq('vertical', vertical)
-        .order('nombre');
+      setAvisoTiendaIncompleta(null);
 
-      if (!error && data && data.length > 0) {
-        setTiendas(data ?? []);
+      // Una sola tienda por usuario (índice único en BD). No filtrar por vertical al buscarla:
+      // si filtramos por moto/auto y la fila ya existe con la otra vertical, el insert falla en silencio.
+      const { data: existentes, error: errExistentes } = await supabase
+        .from('tiendas')
+        .select('id, nombre, nombre_comercial, vertical')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      if (errExistentes) {
+        setTiendas([]);
+        setAvisoTiendaIncompleta(
+          `No se pudo cargar tu tienda: ${errExistentes.message}. Revisa tu conexión o ve a Perfil y guarda de nuevo.`
+        );
+        setCargandoTienda(false);
+        return;
+      }
+
+      const tiendaExistente = existentes?.[0] ?? null;
+      if (tiendaExistente) {
+        if (tiendaExistente.vertical !== vertical) {
+          const { error: errVertical } = await supabase
+            .from('tiendas')
+            .update({ vertical })
+            .eq('id', tiendaExistente.id);
+          if (errVertical) {
+            setTiendas([]);
+            setAvisoTiendaIncompleta(
+              `Tu tienda está registrada como ${
+                tiendaExistente.vertical === 'moto' ? 'motocicleta' : 'automóvil'
+              } y no se pudo alinear con este panel (${
+                vertical === 'moto' ? 'motocicleta' : 'automóvil'
+              }): ${errVertical.message}. Ve a Perfil, guarda y vuelve.`
+            );
+            setCargandoTienda(false);
+            return;
+          }
+        }
+        setTiendas([
+          {
+            id: tiendaExistente.id,
+            nombre: tiendaExistente.nombre,
+            nombre_comercial: tiendaExistente.nombre_comercial,
+          },
+        ]);
         setCargandoTienda(false);
         return;
       }
 
       // Si no existe tienda, solo la creamos si el registro dejó metadata completa.
-      const md = (user as any)?.user_metadata ?? {};
-      const perfil = md?.perfil_vendedor ?? null;
+      const md = (user as { user_metadata?: Record<string, unknown> })?.user_metadata ?? {};
+      const perfil = (md.perfil_vendedor ?? null) as Record<string, unknown> | null;
 
       if (!perfilVendedorMetadataListo(perfil)) {
         setTiendas([]);
@@ -98,14 +136,8 @@ export function RegistroRepuestos({
         return;
       }
 
-      setAvisoTiendaIncompleta(null);
-
       const nombreAuto =
-        (perfil?.nombre_comercial ||
-          perfil?.nombre ||
-          user.email ||
-          'Mi tienda') as string;
-
+        (perfil?.nombre_comercial || perfil?.nombre || user.email || 'Mi tienda') as string;
       const rifAuto = (perfil?.rif ?? null) as string | null;
       const estadoAuto = (perfil?.estado ?? null) as string | null;
       const ciudadAuto = (perfil?.ciudad ?? null) as string | null;
@@ -140,7 +172,22 @@ export function RegistroRepuestos({
       });
 
       if (insertErr) {
+        // Carrera / índice único: otro proceso creó la tienda; reintentar lectura.
+        const { data: reintento } = await supabase
+          .from('tiendas')
+          .select('id, nombre, nombre_comercial')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true })
+          .limit(1);
+        if (reintento && reintento.length > 0) {
+          setTiendas(reintento);
+          setCargandoTienda(false);
+          return;
+        }
         setTiendas([]);
+        setAvisoTiendaIncompleta(
+          `No se pudo preparar tu tienda automáticamente (${insertErr.message}). Ve a Perfil, completa teléfono y ubicación, guarda y vuelve aquí.`
+        );
         setCargandoTienda(false);
         return;
       }
@@ -149,13 +196,13 @@ export function RegistroRepuestos({
         .from('tiendas')
         .select('id, nombre, nombre_comercial')
         .eq('user_id', user.id)
-        .eq('vertical', vertical)
-        .order('nombre');
+        .order('created_at', { ascending: true })
+        .limit(1);
 
       setTiendas(data2 ?? []);
       setCargandoTienda(false);
     };
-    cargarTiendas();
+    void cargarTiendas();
   }, [user, vertical]);
 
   const registrarRepuesto = async () => {

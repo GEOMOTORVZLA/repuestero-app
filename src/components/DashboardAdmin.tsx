@@ -13,6 +13,10 @@ import { AdminCeldaAutorizacionWeb } from './AdminCeldaAutorizacionWeb';
 import { AdminCeldaUbicacion } from './AdminCeldaUbicacion';
 import { AdminCeldaUserId } from './AdminCeldaUserId';
 import { AdminModalEditarUbicacion } from './AdminModalEditarUbicacion';
+import {
+  AdminModalEditarPerfilVendedor,
+  type PerfilVendedorAdminEditable,
+} from './AdminModalEditarPerfilVendedor';
 import { EditarProducto, type ProductoEditable } from './EditarProducto';
 import { etiquetaMoneda } from '../utils/monedaProducto';
 import { formatearPrecioProducto } from '../utils/precioProducto';
@@ -621,6 +625,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     latitud: number | null;
     longitud: number | null;
   } | null>(null);
+  const [perfilVendedorModal, setPerfilVendedorModal] = useState<PerfilVendedorAdminEditable | null>(null);
 
   const cargarProductos = async (opts?: { conIndicadorFiltros?: boolean }) => {
     const conIndicador = opts?.conIndicadorFiltros === true;
@@ -1321,6 +1326,63 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
         );
       }
       setUbicacionNegocioModal(null);
+    }
+    setAccionando(null);
+  };
+
+  const guardarPerfilVendedor = async (datos: {
+    nombre: string;
+    nombre_comercial: string;
+    rif: string;
+    telefono: string;
+    email: string;
+    estado: string;
+    ciudad: string;
+    vertical: VerticalVehiculo;
+    latitud: number | null;
+    longitud: number | null;
+  }) => {
+    if (!perfilVendedorModal) return;
+    const tiendaId = perfilVendedorModal.id;
+    setAccionando(`perfil-tienda-${tiendaId}`);
+    const { error: rpcError } = await supabase.rpc('admin_actualizar_tienda_perfil', {
+      p_tienda_id: tiendaId,
+      p_nombre: datos.nombre,
+      p_nombre_comercial: datos.nombre_comercial,
+      p_rif: datos.rif || null,
+      p_telefono: datos.telefono,
+      p_email: datos.email || null,
+      p_estado: datos.estado,
+      p_ciudad: datos.ciudad,
+      p_vertical: datos.vertical,
+      p_latitud: datos.latitud,
+      p_longitud: datos.longitud,
+    });
+    if (rpcError) {
+      setError(
+        `No se pudo actualizar el perfil: ${rpcError.message}. ¿Ejecutaste en Supabase supabase-admin-actualizar-tienda-perfil.sql?`
+      );
+    } else {
+      setVendedores((prev) =>
+        prev.map((t) =>
+          t.id === tiendaId
+            ? {
+                ...t,
+                nombre: datos.nombre,
+                nombre_comercial: datos.nombre_comercial,
+                rif: datos.rif || null,
+                telefono: datos.telefono,
+                email: datos.email || null,
+                estado: datos.estado,
+                ciudad: datos.ciudad,
+                vertical: datos.vertical,
+                latitud: datos.latitud,
+                longitud: datos.longitud,
+              }
+            : t
+        )
+      );
+      setPerfilVendedorModal(null);
     }
     setAccionando(null);
   };
@@ -2923,6 +2985,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       <thead>
                         <tr>
                           <th>Nombre comercial</th>
+                          <th>Vertical</th>
                           <th>RIF</th>
                           <th>Teléfono</th>
                           <th>Correo</th>
@@ -2940,7 +3003,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       <tbody>
                         {vendedoresVisibles.length === 0 ? (
                           <tr>
-                            <td colSpan={13} className="dashboard-texto-placeholder">
+                            <td colSpan={14} className="dashboard-texto-placeholder">
                               {filtroSoloSuspendidosImpago
                                 ? 'Ningún vendedor suspendido en el listado cargado. Quita el filtro o recarga la pestaña.'
                                 : 'No hay vendedores en el listado.'}
@@ -2958,6 +3021,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           >
                             <td className="dashboard-admin-texto-td dashboard-admin-nombre-td">
                               {celdaTextoUnaLineaAdmin(v.nombre_comercial || v.nombre)}
+                            </td>
+                            <td className="dashboard-admin-texto-td">
+                              {(v.vertical ?? 'auto') === 'moto' ? 'Moto' : 'Auto'}
                             </td>
                             <td className="dashboard-admin-rif-td">{celdaRifAdmin(v.rif)}</td>
                             <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(v.telefono)}</td>
@@ -3023,6 +3089,15 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             </td>
                             <td className="dashboard-admin-acciones-td">
                               <div className="dashboard-admin-acciones-fila">
+                                <button
+                                  type="button"
+                                  className="dashboard-admin-btn dashboard-admin-btn--compacto"
+                                  disabled={accionando === `perfil-tienda-${v.id}`}
+                                  onClick={() => setPerfilVendedorModal(v)}
+                                  title="Editar datos del perfil del vendedor"
+                                >
+                                  Perfil
+                                </button>
                                 <button
                                   type="button"
                                   className="dashboard-admin-btn dashboard-admin-btn--compacto"
@@ -3665,6 +3740,27 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
               onCerrar={() => {
                 if (accionando?.startsWith('ubic-')) return;
                 setUbicacionNegocioModal(null);
+              }}
+            />
+          </div>
+        )}
+        {perfilVendedorModal && (
+          <div
+            className="dashboard-kpi-modal-backdrop"
+            role="presentation"
+            onClick={() => {
+              if (accionando === `perfil-tienda-${perfilVendedorModal.id}`) return;
+              setPerfilVendedorModal(null);
+            }}
+          >
+            <AdminModalEditarPerfilVendedor
+              tienda={perfilVendedorModal}
+              correoFallback={emailNegocioAdmin(perfilVendedorModal, emailsPorUserId)}
+              guardando={accionando === `perfil-tienda-${perfilVendedorModal.id}`}
+              onGuardar={(datos) => void guardarPerfilVendedor(datos)}
+              onCerrar={() => {
+                if (accionando === `perfil-tienda-${perfilVendedorModal.id}`) return;
+                setPerfilVendedorModal(null);
               }}
             />
           </div>
