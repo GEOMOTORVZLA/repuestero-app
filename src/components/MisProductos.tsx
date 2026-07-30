@@ -765,17 +765,9 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     }
   };
 
-  const alertaStock = (
-    <div className="mis-productos-alerta-stock" role="status">
-      <strong>Control de inventario:</strong> todo producto con más de 20 días sin actualización de stock
-      será pausado automáticamente y dejará de verse en búsquedas públicas hasta que lo reactives.
-    </div>
-  );
-
   if (cargando) {
     return (
       <div className="mis-productos">
-        {alertaStock}
         <p className="mis-productos-mensaje">Cargando tus productos…</p>
       </div>
     );
@@ -784,7 +776,6 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
   if (error) {
     return (
       <div className="mis-productos">
-        {alertaStock}
         <p className="mis-productos-mensaje mis-productos-error">{error}</p>
       </div>
     );
@@ -793,9 +784,8 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
   if (productos.length === 0) {
     return (
       <div className="mis-productos">
-        {alertaStock}
         <p className="mis-productos-mensaje">
-          Aún no tienes productos registrados. Usa el botón &quot;Vender nuevo producto&quot; para crear tu
+          Aún no tienes productos registrados. Usa el botón &quot;Publicar producto&quot; para crear tu
           primera publicación.
         </p>
       </div>
@@ -804,7 +794,6 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
 
   return (
     <div className="mis-productos">
-      {alertaStock}
       <section className="mis-productos-filtros" aria-label="Buscar y filtrar productos">
         <div>
           <p className="mis-productos-ajuste-masivo-titulo">Buscar y filtrar mis productos</p>

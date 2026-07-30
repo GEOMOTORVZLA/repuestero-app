@@ -14,7 +14,7 @@ import type { BannerEstadoCuenta } from '../utils/estadoCuentaVendedorTaller';
 import { EstadoCuentaNegocioBanner } from './EstadoCuentaNegocioBanner';
 import './Dashboard.css';
 
-type TabId = 'resumen' | 'productos' | 'mostrador' | 'estadisticas' | 'perfil';
+type TabId = 'resumen' | 'productos' | 'mostrador' | 'perfil';
 
 interface DashboardVendedorProps {
   onVolverInicio?: () => void;
@@ -135,13 +135,6 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
           </button>
           <button
             type="button"
-            className={`dashboard-menu-item ${tab === 'estadisticas' ? 'activo' : ''}`}
-            onClick={() => setTab('estadisticas')}
-          >
-            Estadísticas
-          </button>
-          <button
-            type="button"
             className={`dashboard-menu-item ${tab === 'perfil' ? 'activo' : ''}`}
             onClick={() => setTab('perfil')}
           >
@@ -155,7 +148,7 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
           <div className="dashboard-header-titulos">
             <h1 className="dashboard-titulo">Panel de vendedor</h1>
             <p className="dashboard-subtitulo">
-              Gestiona tus repuestos, tu tienda y revisa métricas de contactos.
+              Gestiona tus repuestos y tu tienda.
             </p>
           </div>
           <div className="dashboard-usuario">
@@ -171,12 +164,12 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
         </header>
 
         <main className="dashboard-contenido">
-          {tab !== 'mostrador' && bannerTienda && (
+          {tab === 'resumen' && bannerTienda && (
             <div className="dashboard-cuenta-banners" role="region" aria-label="Estado de tu cuenta">
               <EstadoCuentaNegocioBanner etiqueta="Vendedor / tienda" banner={bannerTienda} />
             </div>
           )}
-          {tab !== 'mostrador' && avisoNormasEliminados > 0 && (
+          {tab === 'resumen' && avisoNormasEliminados > 0 && (
             <div className="dashboard-aviso-normas" role="alert">
               <p className="dashboard-aviso-normas-texto">
                 Se eliminaron {avisoNormasEliminados} productos de tus publicaciones por no cumplir con
@@ -198,8 +191,7 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
 
           {tab === 'productos' && (
             <section className="dashboard-seccion">
-              <div className="dashboard-seccion-header">
-                <h2 className="dashboard-seccion-titulo">Editar productos</h2>
+              <div className="dashboard-seccion-header dashboard-seccion-header--solo-accion">
                 <button
                   type="button"
                   className={`dashboard-btn-accion dashboard-btn-accion--principal${
@@ -207,8 +199,13 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
                   }`}
                   onClick={() => setMostrarNuevoProducto((v) => !v)}
                 >
-                  {mostrarNuevoProducto ? 'Cerrar formulario' : 'Publicar producto nuevo'}
+                  {mostrarNuevoProducto ? 'Cerrar formulario' : 'Publicar producto'}
                 </button>
+              </div>
+              <div className="mis-productos-alerta-stock mis-productos-alerta-stock--titilar" role="alert">
+                <strong>Control de inventario:</strong> todo producto con más de 20 días sin actualización de
+                stock será pausado automáticamente y dejará de verse en búsquedas públicas hasta que lo
+                reactives.
               </div>
               <div
                 className="dashboard-productos-toolbar"
@@ -243,7 +240,7 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
                     className="dashboard-btn-accion"
                     onClick={() => setMostrarImportarCSV((v) => !v)}
                   >
-                    {mostrarImportarCSV ? 'Cerrar importación' : 'Importar productos (CSV/XLSX)'}
+                    {mostrarImportarCSV ? 'Cerrar importación' : 'Importar productos (xlsx)'}
                   </button>
                 </div>
               </div>
@@ -276,18 +273,6 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
             </section>
           )}
 
-          {tab === 'estadisticas' && (
-            <section className="dashboard-seccion">
-              <h2 className="dashboard-seccion-titulo">Estadísticas de contacto</h2>
-              <div className="dashboard-card">
-                <p className="dashboard-texto-placeholder">
-                  Aquí agregaremos gráficos y tablas con los productos más contactados, contactos por día y otros
-                  indicadores clave para tus ventas.
-                </p>
-              </div>
-            </section>
-          )}
-
           {tab === 'perfil' && (
             <section className="dashboard-seccion">
               <h2 className="dashboard-seccion-titulo">Mi perfil</h2>
@@ -304,8 +289,10 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
           type="button"
           className={`dashboard-nav-movil-item dashboard-nav-movil-item--mostrador ${tab === 'mostrador' ? 'activo' : ''}`}
           onClick={() => setTab('mostrador')}
+          title="Visor de mostrador"
+          aria-label="Visor de mostrador"
         >
-          MOSTRADOR
+          Visor
         </button>
         <button
           type="button"
@@ -320,13 +307,6 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
           onClick={() => setTab('productos')}
         >
           Editar
-        </button>
-        <button
-          type="button"
-          className={`dashboard-nav-movil-item ${tab === 'estadisticas' ? 'activo' : ''}`}
-          onClick={() => setTab('estadisticas')}
-        >
-          Estadísticas
         </button>
         <button
           type="button"

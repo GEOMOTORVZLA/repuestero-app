@@ -129,71 +129,6 @@ function normalizeHeader(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, '_');
 }
 
-/** Excel en español/LATAM suele usar `;` al exportar CSV; nuestro template usa `,`. */
-function detectCsvDelimiter(firstLine: string): ',' | ';' {
-  const line = firstLine.replace(/\r$/, '');
-  const commas = line.split(',').length - 1;
-  const semis = line.split(';').length - 1;
-  return semis > commas ? ';' : ',';
-}
-
-// CSV/sep parser con soporte de comillas dobles (campos con separador dentro).
-function parseDelimited(text: string, delimiter: ',' | ';'): string[][] {
-  const input = text.replace(/^\uFEFF/, '');
-  const rows: string[][] = [];
-  let current: string[] = [];
-  let field = '';
-  let inQuotes = false;
-  const sep = delimiter;
-
-  for (let i = 0; i < input.length; i++) {
-    const ch = input[i];
-
-    if (ch === '"') {
-      const next = input[i + 1];
-      if (inQuotes && next === '"') {
-        field += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-
-    if (!inQuotes && ch === sep) {
-      current.push(field.trim());
-      field = '';
-      continue;
-    }
-
-    if (!inQuotes && (ch === '\n' || ch === '\r')) {
-      if (ch === '\r' && input[i + 1] === '\n') i++;
-      current.push(field.trim());
-      field = '';
-      if (current.length > 1 || current.some((c) => c !== '')) rows.push(current);
-      current = [];
-      continue;
-    }
-
-    field += ch;
-  }
-
-  if (field.length > 0 || current.length > 0) {
-    current.push(field.trim());
-    if (current.length > 1 || current.some((c) => c !== '')) rows.push(current);
-  }
-
-  return rows;
-}
-
-function parseCSV(text: string): string[][] {
-  const input = text.replace(/^\uFEFF/, '');
-  const firstNl = input.search(/\r?\n/);
-  const firstLine = firstNl === -1 ? input : input.slice(0, firstNl);
-  const delimiter = detectCsvDelimiter(firstLine);
-  return parseDelimited(input, delimiter);
-}
-
 function parseXLSXToRows(arrayBuffer: ArrayBuffer): string[][] {
   const workbook = XLSX.read(arrayBuffer, { type: 'array' });
   const sheetName = sheetNameProductosImport(workbook);
@@ -257,28 +192,8 @@ export function ImportarProductosCSV({
     return m;
   }, [vertical]);
 
-  const templateHeaders = PLANTILLA_IMPORT_HEADERS;
-
   const descargarTemplate = () => {
     descargarPlantillaImportacion(vertical);
-  };
-
-  /** CSV con UTF-8 BOM para Excel; comas como en la spec internacional. */
-  const descargarTemplateCsv = () => {
-    const line = templateHeaders.join(',');
-    const blob = new Blob(['\uFEFF' + line + '\n'], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'template_productos.csv';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
-
-  const leerArchivo = async (file: File): Promise<string> => {
-    return await file.text();
   };
 
   const importar = async () => {
@@ -299,7 +214,7 @@ export function ImportarProductosCSV({
     }
     if (!archivo) {
       setEstado('error');
-      setMensaje('Selecciona un archivo CSV, XLS o XLSX.');
+      setMensaje('Selecciona un archivo Excel (.xlsx o .xls).');
       return;
     }
 
@@ -322,27 +237,28 @@ export function ImportarProductosCSV({
     }
 
     const ext = (archivo.name.split('.').pop() ?? '').toLowerCase();
+    if (ext === 'csv') {
+      setEstado('error');
+      setMensaje('La importación CSV está suspendida por ahora. Usa la plantilla Excel (.xlsx).');
+      return;
+    }
     const esExcelBinario = ext === 'xlsx' || ext === 'xls';
+    if (!esExcelBinario) {
+      setEstado('error');
+      setMensaje('Solo se admite Excel (.xlsx o .xls). Descarga la plantilla e inténtalo de nuevo.');
+      return;
+    }
 
     setEstado('importando');
-    setMensaje(esExcelBinario ? 'Leyendo Excel...' : 'Leyendo CSV...');
+    setMensaje('Leyendo Excel...');
 
     let parsed: string[][];
     try {
-      if (esExcelBinario) {
-        const buffer = await archivo.arrayBuffer();
-        parsed = parseXLSXToRows(buffer);
-      } else {
-        const text = await leerArchivo(archivo);
-        parsed = parseCSV(text);
-      }
-    } catch (e: any) {
+      const buffer = await archivo.arrayBuffer();
+      parsed = parseXLSXToRows(buffer);
+    } catch {
       setEstado('error');
-      setMensaje(
-        esExcelBinario
-          ? 'No se pudo leer el archivo Excel (.xls / .xlsx).'
-          : 'No se pudo leer el archivo CSV.'
-      );
+      setMensaje('No se pudo leer el archivo Excel (.xls / .xlsx).');
       return;
     }
 
@@ -582,7 +498,7 @@ export function ImportarProductosCSV({
         <h3 className="importar-productos-titulo">
           {modoAdmin
             ? 'Carga masiva de productos para un vendedor'
-            : 'Importar productos desde Excel o CSV (sin fotos)'}
+            : 'Importar productos desde Excel (.xlsx, sin fotos)'}
         </h3>
         <p className="importar-productos-ayuda">
           {modoAdmin ? (
@@ -604,7 +520,7 @@ export function ImportarProductosCSV({
 
       <input
         type="file"
-        accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         onChange={(e) => setArchivo(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
         disabled={estado === 'importando'}
       />
@@ -617,14 +533,6 @@ export function ImportarProductosCSV({
           disabled={estado === 'importando'}
         >
           Descargar plantilla Excel (.xlsx) con categorías y marcas
-        </button>
-        <button
-          type="button"
-          onClick={descargarTemplateCsv}
-          className="importar-productos-link"
-          disabled={estado === 'importando'}
-        >
-          Descargar CSV (opcional)
         </button>
 
         <button

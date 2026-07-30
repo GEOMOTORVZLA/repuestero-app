@@ -2086,7 +2086,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   }
 
   return (
-    <div className="dashboard">
+    <div className="dashboard dashboard-admin dashboard-panel-movil">
       <aside className="dashboard-sidebar">
         {email && (
           <div className="dashboard-sidebar-usuario">
@@ -2379,7 +2379,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       Carga masiva de repuestos para un vendedor
                     </h3>
                     <p className="dashboard-admin-import-vendedor-ayuda">
-                      Misma plantilla Excel/CSV que usa el vendedor. Elige vertical y un vendedor activo;
+                      Misma plantilla Excel (.xlsx) que usa el vendedor. Elige vertical y un vendedor activo;
                       los productos se asignan a su tienda. Si falla el insert, ejecuta en Supabase{' '}
                       <code>supabase-admin-insertar-productos.sql</code>.
                     </p>
@@ -3771,6 +3771,51 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           </div>
         )}
       </div>
+
+      <nav className="dashboard-nav-movil" aria-label="Navegación del panel admin">
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'resumen' ? 'activo' : ''}`}
+          onClick={() => setTab('resumen')}
+        >
+          Inicio
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'usuarios' ? 'activo' : ''}`}
+          onClick={() => setTab('usuarios')}
+        >
+          Usuarios
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'productos' ? 'activo' : ''}`}
+          onClick={() => setTab('productos')}
+        >
+          Productos
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'vendedores' ? 'activo' : ''}`}
+          onClick={() => setTab('vendedores')}
+        >
+          Vendedores
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'talleres' ? 'activo' : ''}`}
+          onClick={() => setTab('talleres')}
+        >
+          Talleres
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'compradores' ? 'activo' : ''}`}
+          onClick={() => setTab('compradores')}
+        >
+          Compradores
+        </button>
+      </nav>
     </div>
   );
 }

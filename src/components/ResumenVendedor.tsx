@@ -86,6 +86,15 @@ function formatearFechaMembresia(iso: string | null): string {
   });
 }
 
+/** Formato corto venezolano para la tarjeta KPI: DD/MM/YYYY */
+function formatearFechaMembresiaCorta(iso: string | null): string {
+  if (!iso) return '—';
+  const solo = iso.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(solo)) return solo;
+  const [y, m, d] = solo.split('-');
+  return `${d}/${m}/${y}`;
+}
+
 function diasHastaMembresia(iso: string | null): number | null {
   if (!iso) return null;
   const solo = iso.slice(0, 10);
@@ -259,7 +268,7 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
         >
           <p className="dashboard-kpi-label">Membresía mensual</p>
           <p className="dashboard-kpi-valor">
-            {cargando ? '…' : membresiaHasta ? membresiaHasta.slice(0, 10) : '—'}
+            {cargando ? '…' : formatearFechaMembresiaCorta(membresiaHasta)}
           </p>
           <p className="dashboard-kpi-hint">
             {diasMemb == null

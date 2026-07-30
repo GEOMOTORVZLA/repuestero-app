@@ -227,6 +227,14 @@
   gap: 0.75rem;
 }
 
+.dashboard-seccion-header--solo-accion {
+  justify-content: stretch;
+}
+
+.dashboard-seccion-header--solo-accion .dashboard-btn-accion {
+  width: 100%;
+}
+
 .dashboard-productos-toolbar {
   display: flex;
   flex-direction: column;
@@ -340,12 +348,10 @@
   100% {
     opacity: 1;
     box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.55);
-    transform: scale(1);
   }
   50% {
     opacity: 0.88;
     box-shadow: 0 0 0 6px rgba(234, 179, 8, 0);
-    transform: scale(1.03);
   }
 }
 
@@ -1493,6 +1499,14 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
 
   .dashboard-panel-movil {
     padding-bottom: calc(3.75rem + env(safe-area-inset-bottom, 0px));
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .dashboard-panel-movil .dashboard-main,
+  .dashboard-panel-movil .dashboard-contenido {
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   .dashboard-panel-movil .dashboard-nav-movil {
@@ -1501,29 +1515,38 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
     bottom: 0;
     left: 0;
     right: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
     z-index: 200;
     align-items: stretch;
-    justify-content: space-around;
-    gap: 0.35rem;
-    padding: 0.45rem 0.5rem calc(0.45rem + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between;
+    gap: 0.25rem;
+    padding: 0.4rem 0.4rem calc(0.4rem + env(safe-area-inset-bottom, 0px));
     background: #fff;
     border-top: 1px solid #e2e8f0;
     box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
   }
 
   .dashboard-panel-movil .dashboard-nav-movil-item {
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
-    padding: 0.55rem 0.35rem;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem 0.2rem;
     border: none;
     border-radius: 8px;
     background: #2c5282;
     color: #fff;
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     font-weight: 600;
-    line-height: 1.2;
+    line-height: 1.15;
     text-align: center;
     cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     transition: background 0.15s ease, box-shadow 0.15s ease;
   }
 
@@ -1537,12 +1560,21 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
     box-shadow: 0 2px 8px rgba(30, 58, 95, 0.35);
   }
 
+  .dashboard-panel-movil .dashboard-nav-movil-item:focus,
+  .dashboard-panel-movil .dashboard-nav-movil-item:focus-visible {
+    outline: none;
+  }
+
+  .dashboard-panel-movil .dashboard-nav-movil-item.activo:focus-visible {
+    box-shadow: 0 0 0 2px #fff, 0 0 0 3px #2c5282;
+  }
+
   .dashboard-panel-movil .dashboard-nav-movil-item--mostrador {
     background: #facc15;
     color: #0f172a;
     font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.01em;
+    text-transform: none;
+    letter-spacing: 0;
   }
 
   .dashboard-panel-movil .dashboard-nav-movil-item--mostrador:hover,
@@ -1608,10 +1640,13 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
 
   .dashboard-vendedor .dashboard-btn-accion--principal {
     padding: 1.3rem 1rem;
-    font-size: 1.76rem;
+    font-size: clamp(1.1rem, 5.5vw, 1.76rem);
     font-weight: 700;
     line-height: 1.2;
     box-shadow: 0 4px 14px rgba(30, 58, 95, 0.28);
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
   }
 
   .dashboard-vendedor .dashboard-productos-toolbar {
@@ -1657,6 +1692,17 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   .dashboard-vendedor .registro-repuestos select,
   .dashboard-vendedor .registro-repuestos input {
     font-size: 16px;
+  }
+
+  .dashboard-admin.dashboard-panel-movil .dashboard-nav-movil {
+    gap: 0.2rem;
+    padding: 0.35rem 0.25rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .dashboard-admin.dashboard-panel-movil .dashboard-nav-movil-item {
+    font-size: 0.62rem;
+    padding: 0.5rem 0.15rem;
+    line-height: 1.15;
   }
 }
 
