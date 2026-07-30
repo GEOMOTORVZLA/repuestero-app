@@ -243,6 +243,12 @@ export function VendedoresCercaDeMi({
   const [sugerenciasVendedorAbiertas, setSugerenciasVendedorAbiertas] = useState(false);
   const [indiceSugerenciaVendedor, setIndiceSugerenciaVendedor] = useState(-1);
   const wrapBusquedaVendedorRef = useRef<HTMLDivElement>(null);
+  const enlaceTiendaAbiertoOkRef = useRef<string | null>(null);
+  const onRequiereLoginRef = useRef(onRequiereLoginParaCatalogo);
+  const onLimpiarEnlaceTiendaRef = useRef(onLimpiarEnlaceTienda);
+  onRequiereLoginRef.current = onRequiereLoginParaCatalogo;
+  onLimpiarEnlaceTiendaRef.current = onLimpiarEnlaceTienda;
+  const userId = user?.id ?? null;
 
   const reiniciarBusquedaVendedor = () => {
     setBusquedaVendedorInput('');
@@ -257,6 +263,7 @@ export function VendedoresCercaDeMi({
     setTiendaProductosAbiertaSnap(null);
     setProductoExpandidoId(null);
     reiniciarBusquedaVendedor();
+    enlaceTiendaAbiertoOkRef.current = null;
     onLimpiarEnlaceTienda?.();
   };
 
@@ -428,8 +435,6 @@ export function VendedoresCercaDeMi({
     };
   }, [tiendaProductosAbiertaId, overlayVendedoresActivo]);
 
-  const enlaceTiendaProcesadoRef = useRef<string | null>(null);
-
   useEffect(() => {
     if (!overlayVendedoresActivo) return;
     const onKey = (e: KeyboardEvent) => {
@@ -442,7 +447,7 @@ export function VendedoresCercaDeMi({
   }, [overlayVendedoresActivo, contactarTienda]);
 
   useEffect(() => {
-    enlaceTiendaProcesadoRef.current = null;
+    enlaceTiendaAbiertoOkRef.current = null;
     setTiendas([]);
     setHayMas(false);
     setUbicado(false);
@@ -456,15 +461,15 @@ export function VendedoresCercaDeMi({
 
   useEffect(() => {
     if (!tiendaIdDesdeEnlace) {
-      enlaceTiendaProcesadoRef.current = null;
+      enlaceTiendaAbiertoOkRef.current = null;
       return;
     }
-    if (!user) {
-      onRequiereLoginParaCatalogo?.();
+    if (!userId) {
+      onRequiereLoginRef.current?.();
       return;
     }
-    if (enlaceTiendaProcesadoRef.current === tiendaIdDesdeEnlace) return;
-    enlaceTiendaProcesadoRef.current = tiendaIdDesdeEnlace;
+    // Solo omitir si ya abrimos con éxito este id (reintentar si un fetch se canceló).
+    if (enlaceTiendaAbiertoOkRef.current === tiendaIdDesdeEnlace) return;
 
     let cancelled = false;
     void (async () => {
@@ -483,7 +488,7 @@ export function VendedoresCercaDeMi({
         setMensaje(
           'No se encontró el catálogo del vendedor compartido, o no está disponible en esta sección (auto/moto).'
         );
-        onLimpiarEnlaceTienda?.();
+        onLimpiarEnlaceTiendaRef.current?.();
         return;
       }
 
@@ -496,6 +501,7 @@ export function VendedoresCercaDeMi({
         longitud: Number(t.longitud) || 0,
       });
       setProductoExpandidoId(null);
+      enlaceTiendaAbiertoOkRef.current = tiendaIdDesdeEnlace;
 
       const cacheKey = claveCacheProductosTienda(t.id);
       setProductosPorTienda((prev) => ({
@@ -522,7 +528,7 @@ export function VendedoresCercaDeMi({
     return () => {
       cancelled = true;
     };
-  }, [tiendaIdDesdeEnlace, user, vertical, onRequiereLoginParaCatalogo, onLimpiarEnlaceTienda]);
+  }, [tiendaIdDesdeEnlace, userId, vertical]);
 
   const cerrarOverlayVendedores = () => {
     setUbicado(false);

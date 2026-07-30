@@ -58,8 +58,40 @@ export function mensajeWhatsappCompartirRepuesto(nombreProducto: string, url: st
 /** Query param para abrir el catálogo de una tienda/vendedor (?tienda=uuid). */
 export const PARAM_TIENDA_COMPARTIDA = 'tienda';
 
+/** Sobrevive al desmontar Landing al pedir login (Auth a pantalla completa). */
+const STORAGE_TIENDA_CATALOGO_PENDIENTE = 'geomotor_tienda_catalogo_pendiente';
+
 export function esIdTiendaUuid(valor: string): boolean {
   return esIdProductoUuid(valor);
+}
+
+export function guardarTiendaCatalogoPendiente(tiendaId: string): void {
+  const id = tiendaId.trim();
+  if (!esIdTiendaUuid(id) || typeof sessionStorage === 'undefined') return;
+  try {
+    sessionStorage.setItem(STORAGE_TIENDA_CATALOGO_PENDIENTE, id);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function leerTiendaCatalogoPendiente(): string | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(STORAGE_TIENDA_CATALOGO_PENDIENTE)?.trim() ?? '';
+    return esIdTiendaUuid(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+export function limpiarTiendaCatalogoPendiente(): void {
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    sessionStorage.removeItem(STORAGE_TIENDA_CATALOGO_PENDIENTE);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function construirUrlTiendaCompartida(tiendaId: string, vertical: VerticalVehiculo): string {

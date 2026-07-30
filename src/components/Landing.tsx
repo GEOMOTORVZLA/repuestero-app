@@ -19,7 +19,15 @@ import imgCorreasBandas from '../assets/categoria-correas-bandas.png';
 import imgBujiasEncendido from '../assets/categoria-bujias-encendido.png';
 import imgLucesFaros from '../assets/categoria-luces-faros.png';
 import { BusquedaTalleres } from './BusquedaTalleres';
-import { PARAM_REPUESTO_COMPARTIDO, PARAM_TIENDA_COMPARTIDA, esIdProductoUuid, esIdTiendaUuid } from '../utils/enlaceCompartirProducto';
+import {
+  PARAM_REPUESTO_COMPARTIDO,
+  PARAM_TIENDA_COMPARTIDA,
+  esIdProductoUuid,
+  esIdTiendaUuid,
+  guardarTiendaCatalogoPendiente,
+  leerTiendaCatalogoPendiente,
+  limpiarTiendaCatalogoPendiente,
+} from '../utils/enlaceCompartirProducto';
 import {
   mensajeWhatsappSoporteGeomotor,
   TELEFONO_SOPORTE_GEOMOTOR,
@@ -85,11 +93,16 @@ export function Landing({
 
   const tiendaIdDesdeUrl = useMemo(() => {
     const raw = searchParams.get(PARAM_TIENDA_COMPARTIDA)?.trim();
-    if (!raw || !esIdTiendaUuid(raw)) return null;
-    return raw;
+    if (raw && esIdTiendaUuid(raw)) return raw;
+    return leerTiendaCatalogoPendiente();
   }, [searchParams]);
 
+  useEffect(() => {
+    if (tiendaIdDesdeUrl) guardarTiendaCatalogoPendiente(tiendaIdDesdeUrl);
+  }, [tiendaIdDesdeUrl]);
+
   const limpiarEnlaceTiendaUrl = useCallback(() => {
+    limpiarTiendaCatalogoPendiente();
     if (!searchParams.has(PARAM_TIENDA_COMPARTIDA)) return;
     const next = new URLSearchParams(searchParams);
     next.delete(PARAM_TIENDA_COMPARTIDA);
@@ -98,8 +111,9 @@ export function Landing({
   }, [navigate, location.pathname, searchParams]);
 
   const pedirLoginParaCatalogoCompartido = useCallback(() => {
+    if (tiendaIdDesdeUrl) guardarTiendaCatalogoPendiente(tiendaIdDesdeUrl);
     onMostrarLogin?.();
-  }, [onMostrarLogin]);
+  }, [onMostrarLogin, tiendaIdDesdeUrl]);
 
   const esMoto = vertical === 'moto';
   const heroSlides = useMemo(() => (esMoto ? HERO_IMAGENES_MOTO : HERO_IMAGENES_AUTO), [esMoto]);
