@@ -12,6 +12,11 @@ import {
 } from '../constants/googleMapsNavUi';
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
 import { mensajeWhatsappVendedorZona, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
+import {
+  abrirWhatsappConTexto,
+  construirUrlTiendaCompartida,
+  mensajeWhatsappCompartirCatalogoVendedor,
+} from '../utils/enlaceCompartirProducto';
 import './VendedoresCercaDeMi.css';
 import './avisoSeleccionarEstado.css';
 import './BusquedaRepuestos.css';
@@ -22,6 +27,12 @@ const PRODUCTOS_VENDEDOR_CERCA_PAGE = 1000;
 
 export interface VendedoresCercaDeMiProps {
   vertical?: VerticalVehiculo;
+  /** ?tienda=uuid desde enlace compartido: abrir catálogo (requiere sesión). */
+  tiendaIdDesdeEnlace?: string | null;
+  /** Limpia el query param al cerrar el catálogo abierto por enlace. */
+  onLimpiarEnlaceTienda?: () => void;
+  /** Si llega enlace sin sesión, pedir login desde Landing. */
+  onRequiereLoginParaCatalogo?: () => void;
 }
 
 export interface TiendaCerca {
@@ -192,7 +203,23 @@ function distanciaKm(
   return R * c;
 }
 
-export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCercaDeMiProps) {
+function IconoCompartirCatalogo() {
+  return (
+    <svg viewBox="0 0 24 24" width={22} height={22} aria-hidden="true" focusable="false">
+      <path
+        fill="currentColor"
+        d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"
+      />
+    </svg>
+  );
+}
+
+export function VendedoresCercaDeMi({
+  vertical = VERTICAL_AUTO,
+  tiendaIdDesdeEnlace = null,
+  onLimpiarEnlaceTienda,
+  onRequiereLoginParaCatalogo,
+}: VendedoresCercaDeMiProps) {
   const { user } = useAuth();
   const [tiendas, setTiendas] = useState<TiendaCerca[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -230,6 +257,7 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
     setTiendaProductosAbiertaSnap(null);
     setProductoExpandidoId(null);
     reiniciarBusquedaVendedor();
+    onLimpiarEnlaceTienda?.();
   };
 
   const construirQueryTiendas = () => {
@@ -391,6 +419,18 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
   }, [overlayVendedoresActivo]);
 
   useEffect(() => {
+    if (!tiendaProductosAbiertaId) return;
+    if (overlayVendedoresActivo) return; // ya bloquea scroll el overlay de zona
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [tiendaProductosAbiertaId, overlayVendedoresActivo]);
+
+  const enlaceTiendaProcesadoRef = useRef<string | null>(null);
+
+  useEffect(() => {
     if (!overlayVendedoresActivo) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
@@ -402,6 +442,7 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
   }, [overlayVendedoresActivo, contactarTienda]);
 
   useEffect(() => {
+    enlaceTiendaProcesadoRef.current = null;
     setTiendas([]);
     setHayMas(false);
     setUbicado(false);
@@ -412,6 +453,76 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
     setProductoExpandidoId(null);
     reiniciarBusquedaVendedor();
   }, [vertical]);
+
+  useEffect(() => {
+    if (!tiendaIdDesdeEnlace) {
+      enlaceTiendaProcesadoRef.current = null;
+      return;
+    }
+    if (!user) {
+      onRequiereLoginParaCatalogo?.();
+      return;
+    }
+    if (enlaceTiendaProcesadoRef.current === tiendaIdDesdeEnlace) return;
+    enlaceTiendaProcesadoRef.current = tiendaIdDesdeEnlace;
+
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from('tiendas')
+        .select(
+          'id, user_id, nombre, nombre_comercial, rif, estado, ciudad, latitud, longitud, telefono, direccion, metodos_pago'
+        )
+        .eq('id', tiendaIdDesdeEnlace)
+        .eq('vertical', vertical)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (error || !data) {
+        setMensaje(
+          'No se encontró el catálogo del vendedor compartido, o no está disponible en esta sección (auto/moto).'
+        );
+        onLimpiarEnlaceTienda?.();
+        return;
+      }
+
+      const t = data as TiendaCerca;
+      reiniciarBusquedaVendedor();
+      setTiendaProductosAbiertaId(t.id);
+      setTiendaProductosAbiertaSnap({
+        ...t,
+        latitud: Number(t.latitud) || 0,
+        longitud: Number(t.longitud) || 0,
+      });
+      setProductoExpandidoId(null);
+
+      const cacheKey = claveCacheProductosTienda(t.id);
+      setProductosPorTienda((prev) => ({
+        ...prev,
+        [cacheKey]: { productos: [], cargando: true, error: null },
+      }));
+
+      const res = await fetchProductosPublicosTienda(t.id, vertical);
+      if (cancelled) return;
+      if (res.error) {
+        setProductosPorTienda((prev) => ({
+          ...prev,
+          [cacheKey]: { productos: [], cargando: false, error: res.error },
+        }));
+        return;
+      }
+      setProductosPorTienda((prev) => ({
+        ...prev,
+        [cacheKey]: { productos: res.productos, cargando: false, error: null },
+      }));
+      document.getElementById('vendedores-cerca')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tiendaIdDesdeEnlace, user, vertical, onRequiereLoginParaCatalogo, onLimpiarEnlaceTienda]);
 
   const cerrarOverlayVendedores = () => {
     setUbicado(false);
@@ -538,12 +649,7 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
     }
   };
 
-  const cargarProductosDeVendedor = async (t: TiendaCerca) => {
-    if (tiendaProductosAbiertaId === t.id) {
-      cerrarProductosVendedor();
-      return;
-    }
-
+  const abrirCatalogoTienda = async (t: TiendaCerca) => {
     reiniciarBusquedaVendedor();
     setTiendaProductosAbiertaId(t.id);
     setTiendaProductosAbiertaSnap(t);
@@ -578,6 +684,23 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
         error: null,
       },
     }));
+  };
+
+  const cargarProductosDeVendedor = async (t: TiendaCerca) => {
+    if (tiendaProductosAbiertaId === t.id) {
+      cerrarProductosVendedor();
+      return;
+    }
+    await abrirCatalogoTienda(t);
+  };
+
+  const compartirCatalogoVendedor = (t: TiendaCerca) => {
+    if (!user) {
+      onRequiereLoginParaCatalogo?.();
+      return;
+    }
+    const url = construirUrlTiendaCompartida(t.id, vertical);
+    void abrirWhatsappConTexto(mensajeWhatsappCompartirCatalogoVendedor(nombreTienda(t), url));
   };
 
   const urlWhatsAppContactarVendedor =
@@ -734,6 +857,20 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
                                   )}
                                 </div>
                               </div>
+                              <button
+                                type="button"
+                                className="vendedores-cerca-card-compartir"
+                                onClick={() => compartirCatalogoVendedor(t)}
+                                disabled={!user}
+                                title={
+                                  !user
+                                    ? 'Inicia sesión para compartir el catálogo'
+                                    : 'Compartir catálogo de este vendedor por WhatsApp'
+                                }
+                                aria-label={`Compartir catálogo de ${nombreTienda(t)} por WhatsApp`}
+                              >
+                                <IconoCompartirCatalogo />
+                              </button>
                               <div className="vendedores-cerca-card-botones">
                                 <button
                                   type="button"
@@ -774,7 +911,11 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
                 )}
               </div>
             </div>
-            {tiendaProductosAbierta && (
+          </div>
+        </div>
+      )}
+
+      {tiendaProductosAbierta && (
               <div
                 className="vendedores-cerca-productos-overlay"
                 role="dialog"
@@ -807,7 +948,7 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
                       className="resultados-busqueda-pagina-panel-cerrar"
                       onClick={cerrarProductosVendedor}
                     >
-                      Volver a vendedores
+                      {overlayVendedoresActivo ? 'Volver a vendedores' : 'Cerrar'}
                     </button>
                   </div>
                   {!estadoProductosVendedorAbierto?.cargando &&
@@ -979,9 +1120,6 @@ export function VendedoresCercaDeMi({ vertical = VERTICAL_AUTO }: VendedoresCerc
                   </div>
                 </div>
               </div>
-            )}
-          </div>
-        </div>
       )}
 
       {contactarTienda && (

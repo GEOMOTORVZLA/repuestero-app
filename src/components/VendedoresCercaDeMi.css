@@ -361,6 +361,69 @@
   gap: 0.35rem;
 }
 
+.vendedores-cerca-card-compartir {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  margin: 0 0.15rem;
+  border-radius: 9999px;
+  border: 1px solid #1da851;
+  background: #25d366;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(18, 140, 126, 0.35);
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+}
+
+.vendedores-cerca-card-compartir:hover:not(:disabled) {
+  background: #20bd5a;
+  border-color: #128c7e;
+  box-shadow: 0 2px 8px rgba(18, 140, 126, 0.45);
+}
+
+.vendedores-cerca-card-compartir:focus-visible {
+  outline: 2px solid #128c7e;
+  outline-offset: 2px;
+}
+
+.vendedores-cerca-card-compartir:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.vendedores-cerca-card-compartir:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.35);
+}
+
+.vendedores-cerca-card-compartir svg {
+  display: block;
+}
+
+@media (max-width: 640px) {
+  .vendedores-cerca-card-cuerpo {
+    flex-wrap: wrap;
+  }
+
+  .vendedores-cerca-card-compartir {
+    order: 2;
+  }
+
+  .vendedores-cerca-card-botones {
+    order: 3;
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .vendedores-cerca-card-botones .vendedores-cerca-card-btn {
+    flex: 1;
+  }
+}
+
 .vendedores-cerca-card-btn {
   padding: 0.45rem 0.8rem;
   font-size: 0.8125rem;

@@ -19,7 +19,7 @@ import imgCorreasBandas from '../assets/categoria-correas-bandas.png';
 import imgBujiasEncendido from '../assets/categoria-bujias-encendido.png';
 import imgLucesFaros from '../assets/categoria-luces-faros.png';
 import { BusquedaTalleres } from './BusquedaTalleres';
-import { PARAM_REPUESTO_COMPARTIDO, esIdProductoUuid } from '../utils/enlaceCompartirProducto';
+import { PARAM_REPUESTO_COMPARTIDO, PARAM_TIENDA_COMPARTIDA, esIdProductoUuid, esIdTiendaUuid } from '../utils/enlaceCompartirProducto';
 import {
   mensajeWhatsappSoporteGeomotor,
   TELEFONO_SOPORTE_GEOMOTOR,
@@ -82,6 +82,24 @@ export function Landing({
     if (!raw || !esIdProductoUuid(raw)) return null;
     return raw;
   }, [searchParams]);
+
+  const tiendaIdDesdeUrl = useMemo(() => {
+    const raw = searchParams.get(PARAM_TIENDA_COMPARTIDA)?.trim();
+    if (!raw || !esIdTiendaUuid(raw)) return null;
+    return raw;
+  }, [searchParams]);
+
+  const limpiarEnlaceTiendaUrl = useCallback(() => {
+    if (!searchParams.has(PARAM_TIENDA_COMPARTIDA)) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete(PARAM_TIENDA_COMPARTIDA);
+    const q = next.toString();
+    navigate({ pathname: location.pathname, search: q ? `?${q}` : '' }, { replace: true });
+  }, [navigate, location.pathname, searchParams]);
+
+  const pedirLoginParaCatalogoCompartido = useCallback(() => {
+    onMostrarLogin?.();
+  }, [onMostrarLogin]);
 
   const esMoto = vertical === 'moto';
   const heroSlides = useMemo(() => (esMoto ? HERO_IMAGENES_MOTO : HERO_IMAGENES_AUTO), [esMoto]);
@@ -149,7 +167,7 @@ export function Landing({
   }, [productoIdDesdeUrl]);
 
   const overlayLandingActivo =
-    vistaBusquedaRepuestos.activa || Boolean(categoriaSeleccionada);
+    vistaBusquedaRepuestos.activa || Boolean(categoriaSeleccionada) || Boolean(tiendaIdDesdeUrl);
   const ocultarWhatsappFlotante = overlayLandingActivo || landingIaModalCapas > 0;
   const urlWhatsappSoporte = urlWhatsAppGeomotor(
     TELEFONO_SOPORTE_GEOMOTOR,
@@ -284,7 +302,12 @@ export function Landing({
         </div>
       )}
 
-      <VendedoresCercaDeMi vertical={vertical} />
+      <VendedoresCercaDeMi
+        vertical={vertical}
+        tiendaIdDesdeEnlace={tiendaIdDesdeUrl}
+        onLimpiarEnlaceTienda={limpiarEnlaceTiendaUrl}
+        onRequiereLoginParaCatalogo={pedirLoginParaCatalogoCompartido}
+      />
 
       <section className="landing-categorias">
         <h2 className="landing-seccion-titulo">

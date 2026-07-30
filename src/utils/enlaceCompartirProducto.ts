@@ -55,6 +55,25 @@ export function mensajeWhatsappCompartirRepuesto(nombreProducto: string, url: st
   return `Mira ${n} en Geomotor:\n${url}`;
 }
 
+/** Query param para abrir el catálogo de una tienda/vendedor (?tienda=uuid). */
+export const PARAM_TIENDA_COMPARTIDA = 'tienda';
+
+export function esIdTiendaUuid(valor: string): boolean {
+  return esIdProductoUuid(valor);
+}
+
+export function construirUrlTiendaCompartida(tiendaId: string, vertical: VerticalVehiculo): string {
+  const base = baseUrlSitioPublicoCompartir();
+  const path = rutaInicioVertical(vertical);
+  const q = new URLSearchParams({ [PARAM_TIENDA_COMPARTIDA]: tiendaId.trim() });
+  return `${base}${path}?${q.toString()}`;
+}
+
+export function mensajeWhatsappCompartirCatalogoVendedor(nombreTienda: string, url: string): string {
+  const n = nombreTienda.trim() || 'este vendedor';
+  return `Mira el catálogo de repuestos de ${n} en Geomotor (inicia sesión para ver los productos):\n${url}`;
+}
+
 export async function abrirWhatsappConTexto(texto: string): Promise<void> {
   const u = `https://wa.me/?text=${encodeURIComponent(texto)}`;
   const pl = Capacitor.getPlatform();
