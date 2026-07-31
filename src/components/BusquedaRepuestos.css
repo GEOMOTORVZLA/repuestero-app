@@ -38,11 +38,19 @@
 }
 
 .busqueda-repuestos-pagina-layout {
-  display: grid;
-  grid-template-columns: min(260px, 32vw) minmax(0, 1fr);
-  gap: 1.5rem;
-  align-items: start;
+  display: block;
   width: 100%;
+  max-width: 52rem;
+  margin: 0 auto;
+}
+
+.busqueda-repuestos-pagina-main {
+  width: 100%;
+  min-width: 0;
+}
+
+.busqueda-repuestos-sidebar {
+  display: none;
 }
 
 .busqueda-repuestos-sidebar {
@@ -95,10 +103,6 @@
   min-width: 14rem;
   padding: 0.65rem 1.25rem;
   font-size: 0.95rem;
-}
-
-.busqueda-repuestos-pagina-main {
-  min-width: 0;
 }
 
 .busqueda-repuestos-titulo--pagina {

@@ -3,8 +3,6 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { CATEGORIAS_PRODUCTO } from '../data/categoriasProducto';
 import { CATEGORIAS_PRODUCTO_MOTO } from '../data/categoriasProductoMoto';
-import { MARCAS_VEHICULOS } from '../data/marcasVehiculos';
-import { MARCAS_MOTOS } from '../data/marcasMotos';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import * as XLSX from 'xlsx';
@@ -16,12 +14,10 @@ import './ImportarProductosCSV.css';
 
 type ModoImportacion = 'alta' | 'sincronizar';
 
+/** Plantilla simple: marca/modelo/año van en comentarios/descripción. */
 const PLANTILLA_ALTA_HEADERS = [
   'nombre',
   'categoria',
-  'marca',
-  'modelo',
-  'anio',
   'comentarios',
   'precio',
   'moneda',
@@ -32,9 +28,6 @@ const PLANTILLA_SYNC_HEADERS = [
   'codigo',
   'nombre',
   'categoria',
-  'marca',
-  'modelo',
-  'anio',
   'comentarios',
   'precio',
   'moneda',
@@ -48,7 +41,6 @@ const EJEMPLO_CODIGO_PLANTILLA = 'EJEMPLO-001';
 function listasPlantillaImport(vertical: VerticalVehiculo) {
   return {
     categorias: vertical === 'moto' ? [...CATEGORIAS_PRODUCTO_MOTO] : [...CATEGORIAS_PRODUCTO],
-    marcas: vertical === 'moto' ? [...MARCAS_MOTOS] : [...MARCAS_VEHICULOS],
   };
 }
 
@@ -57,10 +49,7 @@ function filaEjemploAlta(vertical: VerticalVehiculo): string[] {
     return [
       EJEMPLO_NOMBRE_PLANTILLA,
       'Frenos',
-      'Yamaha',
-      'YBR 125',
-      '2022',
-      'Pastillas delanteras originales',
+      'Pastillas delanteras Yamaha YBR 125 2022',
       '18.50',
       'USD',
       '5',
@@ -69,10 +58,7 @@ function filaEjemploAlta(vertical: VerticalVehiculo): string[] {
   return [
     EJEMPLO_NOMBRE_PLANTILLA,
     'Filtros',
-    'Toyota',
-    'Corolla',
-    '2020',
-    'Filtro de aceite compatible',
+    'Filtro de aceite Toyota Corolla 2020',
     '25.50',
     'USD',
     '10',
@@ -80,8 +66,7 @@ function filaEjemploAlta(vertical: VerticalVehiculo): string[] {
 }
 
 function filaEjemploSync(vertical: VerticalVehiculo): string[] {
-  const alta = filaEjemploAlta(vertical);
-  return [EJEMPLO_CODIGO_PLANTILLA, ...alta];
+  return [EJEMPLO_CODIGO_PLANTILLA, ...filaEjemploAlta(vertical)];
 }
 
 function sheetListaReferenciaPlantilla(titulo: string, valores: readonly string[]): XLSX.WorkSheet {
@@ -118,7 +103,7 @@ function nombreArchivoPlantilla(vertical: VerticalVehiculo, modo: ModoImportacio
 }
 
 function descargarPlantillaImportacion(vertical: VerticalVehiculo, modo: ModoImportacion): void {
-  const { categorias, marcas } = listasPlantillaImport(vertical);
+  const { categorias } = listasPlantillaImport(vertical);
   const headers = modo === 'sincronizar' ? [...PLANTILLA_SYNC_HEADERS] : [...PLANTILLA_ALTA_HEADERS];
   const ejemplo = modo === 'sincronizar' ? filaEjemploSync(vertical) : filaEjemploAlta(vertical);
   const wsProductos = XLSX.utils.aoa_to_sheet([headers, ejemplo]);
@@ -127,22 +112,16 @@ function descargarPlantillaImportacion(vertical: VerticalVehiculo, modo: ModoImp
       ? [
           { wch: 18 },
           { wch: 34 },
-          { wch: 30 },
-          { wch: 22 },
-          { wch: 18 },
-          { wch: 8 },
-          { wch: 36 },
+          { wch: 28 },
+          { wch: 42 },
           { wch: 10 },
           { wch: 8 },
           { wch: 10 },
         ]
       : [
           { wch: 34 },
-          { wch: 30 },
-          { wch: 22 },
-          { wch: 18 },
-          { wch: 8 },
-          { wch: 36 },
+          { wch: 28 },
+          { wch: 42 },
           { wch: 10 },
           { wch: 8 },
           { wch: 10 },
@@ -150,7 +129,6 @@ function descargarPlantillaImportacion(vertical: VerticalVehiculo, modo: ModoImp
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, wsProductos, PLANTILLA_SHEET_PRODUCTOS);
   XLSX.utils.book_append_sheet(wb, sheetListaReferenciaPlantilla('categoria', categorias), 'Categorias');
-  XLSX.utils.book_append_sheet(wb, sheetListaReferenciaPlantilla('marca', marcas), 'Marcas');
   XLSX.writeFile(wb, nombreArchivoPlantilla(vertical, modo), { compression: true });
 }
 
@@ -168,9 +146,6 @@ type ParsedRow = {
   codigo: string | null;
   nombre: string;
   categoria: string;
-  marca: string | null;
-  modelo: string | null;
-  anio: number | null;
   comentarios: string | null;
   precio: number;
   moneda: Moneda;
@@ -196,11 +171,6 @@ function parseXLSXToRows(arrayBuffer: ArrayBuffer): string[][] {
       })
     )
     .filter((r) => r.some((c) => c !== ''));
-}
-
-function normalizeOptionalText(value: string): string | null {
-  const v = value.trim();
-  return v ? v : null;
 }
 
 async function mapaCodigosExistentesTienda(
@@ -262,15 +232,6 @@ export function ImportarProductosCSV({
     const m = new Map<string, string>();
     const lista = vertical === 'moto' ? CATEGORIAS_PRODUCTO_MOTO : CATEGORIAS_PRODUCTO;
     for (const c of lista) m.set(c.toUpperCase(), c);
-    return m;
-  }, [vertical]);
-  const marcasLookup = useMemo(() => {
-    const m = new Map<string, string>();
-    const lista = vertical === 'moto' ? MARCAS_MOTOS : MARCAS_VEHICULOS;
-    for (const b of lista) m.set(b.toUpperCase(), b);
-    if (vertical === 'moto') {
-      m.set('KEEWAY', 'Empire Keeway');
-    }
     return m;
   }, [vertical]);
 
@@ -372,8 +333,8 @@ export function ImportarProductosCSV({
     };
 
     const REQUIRED = esSync
-      ? (['codigo', 'nombre', 'categoria', 'marca', 'precio', 'moneda'] as const)
-      : (['nombre', 'categoria', 'marca', 'precio', 'moneda'] as const);
+      ? (['codigo', 'nombre', 'categoria', 'precio', 'moneda'] as const)
+      : (['nombre', 'categoria', 'precio', 'moneda'] as const);
     const missingHeaders = REQUIRED.filter((k) => headerMap.get(normalizeHeader(k)) === undefined);
     if (missingHeaders.length) {
       setEstado('error');
@@ -425,9 +386,6 @@ export function ImportarProductosCSV({
 
       const nombre = nombreRaw.toUpperCase();
       const categoria = get(row, 'categoria').trim();
-      const marcaRaw = get(row, 'marca').trim();
-      const modelo = normalizeOptionalText(get(row, 'modelo'));
-      const anioRaw = get(row, 'anio');
       const comentariosRaw = get(row, 'comentarios') || get(row, 'descripcion') || '';
       const precioRaw = get(row, 'precio');
       const monedaRaw = get(row, 'moneda');
@@ -445,16 +403,6 @@ export function ImportarProductosCSV({
         erroresFila.push(`Fila ${rowNumber}: "categoria" no es válida (${categoria || 'vacío'}).`);
         continue;
       }
-      if (!marcaRaw) {
-        erroresFila.push(`Fila ${rowNumber}: falta "marca".`);
-        continue;
-      }
-      const marcaRawUpper = marcaRaw.toUpperCase();
-      const marca = marcaRawUpper === 'OTRA' ? null : marcasLookup.get(marcaRawUpper) ?? null;
-      if (marcaRawUpper !== 'OTRA' && !marca) {
-        erroresFila.push(`Fila ${rowNumber}: "marca" no es válida (${marcaRaw}).`);
-        continue;
-      }
 
       const precio = parsePrecioProducto(precioRaw);
       if (precio == null) {
@@ -468,16 +416,6 @@ export function ImportarProductosCSV({
           `Fila ${rowNumber}: "moneda" no reconocida (${monedaRaw || 'vacío'}). Usa BS o USD.`
         );
         continue;
-      }
-
-      let anio: number | null = null;
-      if (anioRaw.trim()) {
-        const n = parseInt(anioRaw.trim(), 10);
-        if (Number.isNaN(n)) {
-          erroresFila.push(`Fila ${rowNumber}: "anio" inválido (${anioRaw}).`);
-          continue;
-        }
-        anio = n;
       }
 
       const comentarios = comentariosRaw.trim();
@@ -499,9 +437,6 @@ export function ImportarProductosCSV({
         codigo: codigoNorm || null,
         nombre,
         categoria: categoriaFinal,
-        marca,
-        modelo,
-        anio,
         comentarios: comentarios.length ? comentarios : null,
         precio,
         moneda,
@@ -604,9 +539,9 @@ export function ImportarProductosCSV({
         tienda_id: tiendaId,
         nombre: r.nombre,
         categoria: r.categoria,
-        marca: r.marca,
-        modelo: r.modelo,
-        anio: r.anio,
+        marca: null,
+        modelo: null,
+        anio: null,
         descripcion: r.comentarios,
         comentarios: r.comentarios,
         precio_usd: r.precio,
@@ -720,15 +655,15 @@ export function ImportarProductosCSV({
       <p className="importar-productos-ayuda">
         {esSync ? (
           <>
-            Descarga la <strong>plantilla de sincronizar</strong> (incluye columna{' '}
-            <strong>codigo</strong> obligatoria). Máx. 1000 filas por archivo. Los productos con
-            cantidad 0 se pausan sin borrar fotos. Los que no vienen en el archivo no se tocan.
+            Descarga la <strong>plantilla de sincronizar</strong> (columna <strong>codigo</strong> obligatoria).
+            Máx. 1000 filas. Pon marca, modelo y año en <strong>comentarios</strong>. Cantidad 0 pausa sin
+            borrar fotos. Lo que no viene en el archivo no se toca.
           </>
         ) : (
           <>
-            Descarga la plantilla de alta: hojas <strong>Productos</strong>, <strong>Categorias</strong> y{' '}
-            <strong>Marcas</strong>. Si quieres sincronizar después, puedes incluir{' '}
-            <code>codigo</code> también en el alta (opcional).
+            Plantilla simple: <strong>nombre</strong>, <strong>categoria</strong>,{' '}
+            <strong>comentarios</strong> (ahí va marca/modelo/año), <strong>precio</strong>,{' '}
+            <strong>moneda</strong> y <strong>cantidad</strong>. Hoja Categorias de referencia incluida.
           </>
         )}
       </p>

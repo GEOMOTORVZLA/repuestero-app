@@ -5,9 +5,6 @@ import {
   registrarContactoProducto,
   usuarioDebeRegistrarHistorialContactos,
 } from '../services/historialContactosProducto';
-import { MARCAS_MODELOS, ANOS } from '../data/marcasModelos';
-import { MARCAS_VEHICULOS } from '../data/marcasVehiculos';
-import { MARCAS_MOTOS, getModelosPorMarcaMoto } from '../data/marcasMotos';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
@@ -123,9 +120,6 @@ function queryProductosSugerencias(textoBusquedaTrim: string, vertical: Vertical
 
 type ParamsBusquedaProductos = {
   texto: string;
-  marca: string;
-  modelo: string;
-  anio: string;
 };
 
 function ordenarPorUbicacionUsuario(
@@ -189,13 +183,8 @@ export function BusquedaRepuestos({
 }: BusquedaRepuestosProps) {
   const { user } = useAuth();
   const esCompacto = variant === 'compact';
-  const esMoto = vertical === 'moto';
-  const marcasOpciones = esMoto ? [...MARCAS_MOTOS] : [...MARCAS_VEHICULOS];
   const wrapTextoRef = useRef<HTMLDivElement>(null);
   const [textoBusqueda, setTextoBusqueda] = useState('');
-  const [marca, setMarca] = useState('');
-  const [modelo, setModelo] = useState('');
-  const [anio, setAnio] = useState('');
   const [sugerencias, setSugerencias] = useState<SugerenciaRepuesto[]>([]);
   const [hayMasSugerencias, setHayMasSugerencias] = useState(false);
   const [cargandoMasSugerencias, setCargandoMasSugerencias] = useState(false);
@@ -213,15 +202,8 @@ export function BusquedaRepuestos({
   const [mensaje, setMensaje] = useState('');
   const paramsUltimaBusquedaRef = useRef<ParamsBusquedaProductos | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [filtrosAbiertos, setFiltrosAbiertos] = useState(true);
   /** En página completa: texto introductorio bajo el título; se oculta al ejecutar una búsqueda válida */
   const [mostrarIntroBusquedaPagina, setMostrarIntroBusquedaPagina] = useState(true);
-
-  const modelosOpciones = marca
-    ? esMoto
-      ? getModelosPorMarcaMoto(marca)
-      : MARCAS_MODELOS[marca] ?? []
-    : [];
 
   useEffect(() => {
     if (
@@ -313,10 +295,6 @@ export function BusquedaRepuestos({
     query = aplicarFiltroStockPublico(query);
     query = aplicarTerminosTextoABusquedaProductos(query, p.texto);
 
-    if (p.marca) query = query.eq('marca', p.marca);
-    if (p.modelo) query = query.eq('modelo', p.modelo);
-    if (p.anio) query = query.eq('anio', parseInt(p.anio, 10));
-
     return query.order('nombre').order('id');
   };
 
@@ -335,11 +313,11 @@ export function BusquedaRepuestos({
 
   const buscar = async (textoOverride?: string) => {
     const texto = (textoOverride !== undefined ? textoOverride : textoBusqueda).trim();
-    if (!texto && !marca.trim() && !modelo.trim() && !anio.trim()) {
-      setMensaje('Escribe qué repuesto buscas o aplica al menos un filtro.');
+    if (!texto) {
+      setMensaje('Escribe qué repuesto buscas (marca, modelo o año pueden ir en el texto).');
       return;
     }
-    if (texto && terminosBusquedaProducto(texto).length === 0 && !marca.trim() && !modelo.trim() && !anio.trim()) {
+    if (terminosBusquedaProducto(texto).length === 0) {
       setMensaje('Escribe al menos una palabra clave de 2 caracteres o más.');
       return;
     }
@@ -360,9 +338,6 @@ export function BusquedaRepuestos({
 
     setMostrarIntroBusquedaPagina(false);
     setBuscando(true);
-    if (!esCompacto) {
-      setFiltrosAbiertos(false);
-    }
     setCargandoMasResultados(false);
     setMensaje('');
     setDropdownAbierto(false);
@@ -370,12 +345,7 @@ export function BusquedaRepuestos({
     setIndiceSugerencia(-1);
     setHayMasResultados(false);
 
-    const params: ParamsBusquedaProductos = {
-      texto,
-      marca: marca.trim(),
-      modelo: modelo.trim(),
-      anio: anio.trim(),
-    };
+    const params: ParamsBusquedaProductos = { texto };
 
     let ubicacionActual = userLocation;
     if (!ubicacionActual) {
@@ -389,7 +359,6 @@ export function BusquedaRepuestos({
     if (error) {
       setMensaje(error.message || 'Error al buscar.');
       setResultados([]);
-      setFiltrosAbiertos(true);
       setBuscando(false);
       paramsUltimaBusquedaRef.current = null;
       setSugerencias([]);
@@ -409,11 +378,6 @@ export function BusquedaRepuestos({
       ubicacionActual ? ordenarPorUbicacionUsuario(primeraPagina, ubicacionActual) : primeraPagina
     );
     setHayMasResultados(hayMas);
-    if (primeraPagina.length > 0) {
-      setFiltrosAbiertos(false);
-    } else {
-      setFiltrosAbiertos(true);
-    }
     if (!primeraPagina.length) {
       setMensaje('No hay repuestos que coincidan con tu búsqueda.');
       paramsUltimaBusquedaRef.current = null;
@@ -534,7 +498,6 @@ export function BusquedaRepuestos({
       setDropdownAbierto(false);
       setIndiceSugerencia(-1);
       setMostrarIntroBusquedaPagina(false);
-      setFiltrosAbiertos(false);
 
       const { data, error } = await supabase
         .from('productos')
@@ -886,103 +849,16 @@ export function BusquedaRepuestos({
             </div>
           )}
 
-          <div
-            className={`busqueda-repuestos-pagina-layout ${
-              resultados.length > 0 || buscando ? 'filtros-ocultables' : ''
-            } ${filtrosAbiertos ? 'filtros-abiertos' : ''}`}
-          >
-            <aside
-              id="busqueda-filtros-sidebar"
-              className="busqueda-repuestos-sidebar"
-              aria-label="Filtros de búsqueda"
-            >
-              <h3 className="busqueda-repuestos-sidebar-titulo">Filtra tu búsqueda</h3>
-              <div className="busqueda-repuestos-sidebar-filtros">
-                <div className="busqueda-repuestos-campo">
-                  <label htmlFor="marca">Marca</label>
-                  <select
-                    id="marca"
-                    value={marca}
-                    onChange={(e) => {
-                      setMarca(e.target.value);
-                      setModelo('');
-                    }}
-                    disabled={buscando}
-                  >
-                    <option value="">Selecciona la marca</option>
-                    {marcasOpciones.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="busqueda-repuestos-campo">
-                  <label htmlFor="modelo">Modelo</label>
-                  <select
-                    id="modelo"
-                    value={modelo}
-                    onChange={(e) => setModelo(e.target.value)}
-                    disabled={buscando || !marca}
-                  >
-                    <option value="">Todos los modelos</option>
-                    {modelosOpciones.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="busqueda-repuestos-campo">
-                  <label htmlFor="anio">Año</label>
-                  <select
-                    id="anio"
-                    value={anio}
-                    onChange={(e) => setAnio(e.target.value)}
-                    disabled={buscando}
-                  >
-                    <option value="">Cualquier año</option>
-                    {ANOS.map((a) => (
-                      <option key={a} value={a}>
-                        {a}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <button
-                  type="button"
-                  className="busqueda-repuestos-btn busqueda-repuestos-btn--sidebar"
-                  onClick={() => void buscar()}
-                  disabled={buscando}
-                >
-                  {buscando ? 'Buscando...' : 'Aplicar filtros'}
-                </button>
-              </div>
-            </aside>
-
+          <div className="busqueda-repuestos-pagina-layout">
             <div className="busqueda-repuestos-pagina-main">
-              {resultados.length > 0 && (
-                <div className="busqueda-repuestos-filtro-movil-barra">
-                  <button
-                    type="button"
-                    className="busqueda-repuestos-filtro-movil-btn"
-                    onClick={() => setFiltrosAbiertos((v) => !v)}
-                    aria-expanded={filtrosAbiertos}
-                    aria-controls="busqueda-filtros-sidebar"
-                  >
-                    {filtrosAbiertos ? 'Ocultar filtro' : 'Filtro'}
-                  </button>
-                </div>
-              )}
               {mostrarIntroBusquedaPagina && (
                 <>
-                  <h2 className="busqueda-repuestos-titulo busqueda-repuestos-titulo--pagina">Resultados de búsqueda</h2>
+                  <h2 className="busqueda-repuestos-titulo busqueda-repuestos-titulo--pagina">
+                    Resultados de búsqueda
+                  </h2>
                   <p className="busqueda-repuestos-subtitulo busqueda-repuestos-subtitulo--pagina">
-                    Puedes cambiar las palabras de búsqueda aquí. Para afinar por vehículo usa la columna izquierda y pulsa{' '}
-                    <strong>Aplicar filtros</strong>.
+                    Escribe el repuesto y, si quieres, la marca, modelo o año en el mismo texto. Ejemplo:{' '}
+                    <strong>amortiguador Cherokee 2005</strong>.
                   </p>
                 </>
               )}
