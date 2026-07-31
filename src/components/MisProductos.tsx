@@ -977,7 +977,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
             <p className="mis-productos-ajuste-masivo-titulo">Carga masiva de fotos</p>
             <p className="mis-productos-ajuste-masivo-descripcion">
               Sube hasta 4 fotos comunes para aplicarlas a varios productos. La foto 1 será la principal.
-              Usa el buscador de productos de arriba (mismo criterio inteligente que el Visor de mostrador:
+              Usa el buscador de esta sección (mismo criterio inteligente que el Visor de mostrador:
               varias palabras, singular/plural y errores leves) para ubicar el producto o el grupo.
               El botón <strong>Buscar en alcance</strong> solo limita la lista de abajo por alcance de fotos.
             </p>
@@ -987,6 +987,35 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
           </span>
         </div>
         <div className="mis-productos-fotos-masivas-config">
+          <label htmlFor="mis-productos-fotos-busqueda">
+            Buscar producto (inteligente)
+            <span className="mis-productos-fotos-masivas-alcance-fila">
+              <input
+                id="mis-productos-fotos-busqueda"
+                type="search"
+                value={busquedaProductosInput}
+                onChange={(e) => setBusquedaProductosInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void aplicarFiltrosMisProductos();
+                  }
+                }}
+                placeholder="Ej: amortiguador espiral, bateria, Cheroke..."
+                disabled={aplicandoFotosMasivas || cargandoFiltrosProductos}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button
+                type="button"
+                className="mis-productos-btn-secundario mis-productos-fotos-masivas-buscar"
+                onClick={() => void aplicarFiltrosMisProductos()}
+                disabled={aplicandoFotosMasivas || cargandoFiltrosProductos}
+              >
+                {cargandoFiltrosProductos ? 'Buscando…' : 'Buscar'}
+              </button>
+            </span>
+          </label>
           <label>
             Alcance (solo para fotos masivas)
             <span className="mis-productos-fotos-masivas-alcance-fila">

@@ -2619,8 +2619,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         <h3>Fotos masivas por vendedor</h3>
                         <p>
                           Usa hasta 4 fotos comunes: la foto 1 será principal y las demás adicionales.
-                          Filtra productos con el buscador de arriba (mismo criterio inteligente que el Visor
-                          de mostrador) y elige vendedor/alcance aquí.
+                          Filtra con el buscador de esta sección (mismo criterio inteligente que el Visor
+                          de mostrador) y elige vendedor/alcance.
                         </p>
                       </div>
                       <span className="dashboard-admin-busqueda-hint">
@@ -2628,6 +2628,35 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </span>
                     </div>
                     <div className="dashboard-admin-fotos-masivas-grid">
+                      <label htmlFor="admin-fotos-busqueda-inteligente">
+                        Buscar producto (inteligente)
+                        <span className="dashboard-admin-fotos-busqueda-fila">
+                          <input
+                            id="admin-fotos-busqueda-inteligente"
+                            type="search"
+                            value={busquedaProductosAdminDraft}
+                            onChange={(e) => setBusquedaProductosAdminDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                void aplicarFiltrosProductosAdmin();
+                              }
+                            }}
+                            placeholder="Varias palabras, plural, typos leves..."
+                            disabled={accionando === 'bulk-fotos-productos' || cargandoFiltrosProductos}
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                          <button
+                            type="button"
+                            className="dashboard-admin-btn"
+                            onClick={() => void aplicarFiltrosProductosAdmin()}
+                            disabled={accionando === 'bulk-fotos-productos' || cargandoFiltrosProductos}
+                          >
+                            {cargandoFiltrosProductos ? 'Buscando…' : 'Buscar'}
+                          </button>
+                        </span>
+                      </label>
                       <label>
                         Vendedor
                         <select

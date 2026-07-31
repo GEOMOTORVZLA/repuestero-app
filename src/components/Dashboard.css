@@ -1465,7 +1465,8 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
 }
 
 .dashboard-admin-fotos-masivas select,
-.dashboard-admin-fotos-masivas input[type='file'] {
+.dashboard-admin-fotos-masivas input[type='file'],
+.dashboard-admin-fotos-masivas input[type='search'] {
   width: 100%;
   padding: 0.42rem 0.5rem;
   border: 1px solid #cbd5e1;
@@ -1475,11 +1476,35 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   font-weight: 400;
 }
 
+.dashboard-admin-fotos-masivas-grid > label:has(#admin-fotos-busqueda-inteligente) {
+  grid-column: 1 / -1;
+}
+
+.dashboard-admin-fotos-busqueda-fila {
+  display: flex;
+  gap: 0.45rem;
+  align-items: stretch;
+}
+
+.dashboard-admin-fotos-busqueda-fila input[type='search'] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dashboard-admin-fotos-busqueda-fila .dashboard-admin-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .dashboard-admin-fotos-masivas label span {
   font-size: 0.72rem;
   font-weight: 500;
   color: #64748b;
   word-break: break-all;
+}
+
+.dashboard-admin-fotos-masivas label .dashboard-admin-fotos-busqueda-fila {
+  word-break: normal;
 }
 
 .dashboard-admin-fotos-masivas-mensaje {
