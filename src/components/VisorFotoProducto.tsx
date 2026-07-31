@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { urlImagenProductoVariante } from '../utils/imagenProducto';
 import './VisorFotoProducto.css';
 
@@ -11,7 +12,9 @@ type VisorFotoProductoProps = {
 
 /**
  * Visor a pantalla completa: carga la variante grande solo al abrir.
- * Compatible con el botón atrás de Android (role="dialog" + botón Cerrar).
+ * Se monta en document.body (portal) para tapar buscadores/modales del panel
+ * y no quedar debajo de barras sticky por stacking context.
+ * Compatible con el boton atras de Android (role="dialog" + boton Cerrar).
  */
 export function VisorFotoProducto({ fotos, indiceInicial, alt, onCerrar }: VisorFotoProductoProps) {
   const [indice, setIndice] = useState(() =>
@@ -50,12 +53,13 @@ export function VisorFotoProducto({ fotos, indiceInicial, alt, onCerrar }: Visor
   }, [fotos.length, onCerrar]);
 
   if (fotos.length === 0) return null;
+  if (typeof document === 'undefined') return null;
 
   const url = fotos[indice] ?? fotos[0];
   const srcGrande = urlImagenProductoVariante(url, 'vista') ?? url;
   const hayVarias = fotos.length > 1;
 
-  return (
+  return createPortal(
     <div
       className="visor-foto-producto"
       role="dialog"
@@ -85,7 +89,7 @@ export function VisorFotoProducto({ fotos, indiceInicial, alt, onCerrar }: Visor
               aria-label="Foto anterior"
               onClick={() => setIndice((i) => (i <= 0 ? fotos.length - 1 : i - 1))}
             >
-              ‹
+              {'‹'}
             </button>
           )}
           <img
@@ -104,11 +108,12 @@ export function VisorFotoProducto({ fotos, indiceInicial, alt, onCerrar }: Visor
               aria-label="Foto siguiente"
               onClick={() => setIndice((i) => (i >= fotos.length - 1 ? 0 : i + 1))}
             >
-              ›
+              {'›'}
             </button>
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

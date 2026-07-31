@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../supabaseClient';
 import { productoCoincideTextoFlexible } from '../utils/busquedaProductosTexto';
-import { urlImagenProductoVariante } from '../utils/imagenProducto';
 import { urlsFotosProducto } from '../utils/productoImagenesExtra';
 import { etiquetaMoneda } from '../utils/monedaProducto';
 import { formatearPrecioProducto } from '../utils/precioProducto';
 import { etiquetaDisponibilidadAviso } from '../utils/avisoProductoPublicacion';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
+import { etiquetaStockActual } from '../utils/stockActualInventario';
+import { ImagenProducto } from './ImagenProducto';
 import { VisorFotoProducto } from './VisorFotoProducto';
 import './VisorMostrador.css';
 
@@ -28,10 +29,11 @@ type ProductoMostrador = {
   vertical?: VerticalVehiculo | null;
   disponibilidad_aviso?: string | null;
   es_oferta?: boolean | null;
+  stock_actual?: number | null;
 };
 
 const SELECT =
-  'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, vertical, disponibilidad_aviso, es_oferta';
+  'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, vertical, disponibilidad_aviso, es_oferta, stock_actual';
 const PAGE = 1000;
 
 async function cargarProductosVendedor(
@@ -206,8 +208,9 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
                 title={thumb ? 'Toca para ver la foto grande' : 'Sin foto'}
               >
                 {thumb ? (
-                  <img
-                    src={urlImagenProductoVariante(thumb, 'miniatura') ?? thumb}
+                  <ImagenProducto
+                    url={thumb}
+                    variante="miniatura"
                     alt=""
                     width={160}
                     height={160}
@@ -229,6 +232,13 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
                   {!activo && (
                     <span className="visor-mostrador-badge visor-mostrador-badge--pausado">Pausado</span>
                   )}
+                  <span className="visor-mostrador-badge visor-mostrador-badge--stock">
+                    {etiquetaStockActual(
+                      p.stock_actual != null && Number.isFinite(Number(p.stock_actual))
+                        ? Number(p.stock_actual)
+                        : null
+                    )}
+                  </span>
                   {disp && <span className="visor-mostrador-badge">{disp}</span>}
                   {p.es_oferta && (
                     <span className="visor-mostrador-badge visor-mostrador-badge--oferta">OFERTA</span>

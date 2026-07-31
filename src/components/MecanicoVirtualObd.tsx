@@ -312,7 +312,8 @@ export function MecanicoVirtualObd({
         )
         .eq('activo', true)
         .eq('aprobacion_publica', 'aprobado')
-        .eq('vertical', vertical);
+        .eq('vertical', vertical)
+        .or('stock_actual.is.null,stock_actual.gt.0');
 
       if (marcaVehiculo) query = query.eq('marca', marcaVehiculo);
 

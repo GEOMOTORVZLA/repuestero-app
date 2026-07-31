@@ -5,10 +5,11 @@ import {
   MAX_BYTES_FOTO_PRODUCTO,
   MAX_MB_FOTO_PRODUCTO,
   optimizarImagenProductoParaStorage,
-  urlImagenProductoVariante,
+  subirImagenProductoConMiniatura,
 } from '../utils/imagenProducto';
 import { urlsFotosProducto } from '../utils/productoImagenesExtra';
 import { EspecialidadTallerCeldaAdmin } from './EspecialidadTallerCeldaAdmin';
+import { ImagenProducto } from './ImagenProducto';
 import { AdminCeldaAutorizacionWeb } from './AdminCeldaAutorizacionWeb';
 import { AdminCeldaUbicacion } from './AdminCeldaUbicacion';
 import { AdminCeldaUserId } from './AdminCeldaUserId';
@@ -24,6 +25,7 @@ import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO, VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import { mensajeNegocioNoListoParaAprobar } from '../utils/validarDatosNegocio';
 import { ImportarProductosCSV } from './ImportarProductosCSV';
+import { productoCoincideTextoFlexible } from '../utils/busquedaProductosTexto';
 import './Dashboard.css';
 import './MisProductos.css';
 
@@ -184,6 +186,7 @@ type AdminProducto = {
   created_at?: string | null;
   stock_confirmado_at?: string | null;
   pausado_por_stock_vencido?: boolean | null;
+  stock_actual?: number | null;
   vertical?: string | null;
   disponibilidad_aviso?: string | null;
   es_oferta?: boolean | null;
@@ -546,7 +549,7 @@ function semaforoStockGestion(p: {
 
 /** Columnas del listado admin de productos (compartido entre páginas de carga). */
 const ADMIN_PRODUCTOS_SELECT =
-  'id, nombre, descripcion, comentarios, tienda_id, categoria, marca, modelo, anio, precio_usd, moneda, activo, aprobacion_publica, imagen_url, imagenes_extra, created_at, stock_confirmado_at, pausado_por_stock_vencido, vertical, disponibilidad_aviso, es_oferta, tiendas(id, nombre, nombre_comercial)';
+  'id, nombre, descripcion, comentarios, tienda_id, categoria, marca, modelo, anio, precio_usd, moneda, activo, aprobacion_publica, imagen_url, imagenes_extra, created_at, stock_confirmado_at, pausado_por_stock_vencido, stock_actual, vertical, disponibilidad_aviso, es_oferta, tiendas(id, nombre, nombre_comercial)';
 
 const ADMIN_PRODUCTOS_PAGE = 1000;
 
@@ -1001,8 +1004,6 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   );
 
   const productosFiltrados = useMemo(() => {
-    const texto = busquedaProductosAdmin.trim().toLocaleLowerCase('es');
-    const terminos = texto.split(/\s+/).filter(Boolean);
     return productos.filter((p) => {
       const vertOk =
         adminFiltroVertical === 'todos' || (p.vertical ?? 'auto') === adminFiltroVertical;
@@ -1023,21 +1024,19 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           (semaforo.clase === 'amarillo' || semaforo.clase === 'rojo')) ||
         (filtroEstadoProductosAdmin === 'stock_vencido' && semaforo.clase === 'vencido') ||
         (filtroEstadoProductosAdmin === 'sin_fecha_stock' && semaforo.clase === 'sin-fecha');
-      const fuente = [
-        p.nombre,
-        p.descripcion,
-        p.comentarios,
-        p.categoria,
-        p.marca,
-        p.modelo,
-        p.anio != null ? String(p.anio) : '',
-        p.precio_usd != null ? String(p.precio_usd) : '',
-        etiquetaVendedorDesdeProducto(p, vendedores),
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLocaleLowerCase('es');
-      const textoOk = terminos.length === 0 || terminos.every((t) => fuente.includes(t));
+      // Mismo criterio que Visor de mostrador (+ nombre de vendedor para admin).
+      const textoOk = productoCoincideTextoFlexible(
+        [
+          p.nombre,
+          p.descripcion,
+          p.comentarios,
+          p.marca,
+          p.modelo,
+          p.categoria,
+          etiquetaVendedorDesdeProducto(p, vendedores),
+        ],
+        busquedaProductosAdmin
+      );
       return vertOk && vendedorOk && estadoOk && textoOk;
     });
   }, [
@@ -1552,10 +1551,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
         }
         const ext = lista.name.split('.').pop() || 'jpg';
         const path = `admin-fotos-masivas/${tiendaId}/${lote}/foto-${i + 1}.${ext}`;
-        const { error: upErr } = await bucket.upload(path, lista, { upsert: true });
-        if (upErr) throw upErr;
-        const { data: pub } = bucket.getPublicUrl(path);
-        urls[i] = pub.publicUrl;
+        const subida = await subirImagenProductoConMiniatura(bucket, path, lista);
+        urls[i] = subida.urlOriginal;
       }
 
       const imagenUrl = urls[0];
@@ -2505,7 +2502,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             void aplicarFiltrosProductosAdmin();
                           }
                         }}
-                        placeholder="Nombre, descripción, marca, modelo, vendedor..."
+                        placeholder="Criterio inteligente (como Visor): varias palabras, plural, typos..."
                       />
                     </div>
                     <div className="dashboard-admin-filtro-vertical">
@@ -2622,6 +2619,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         <h3>Fotos masivas por vendedor</h3>
                         <p>
                           Usa hasta 4 fotos comunes: la foto 1 será principal y las demás adicionales.
+                          Filtra productos con el buscador de arriba (mismo criterio inteligente que el Visor
+                          de mostrador) y elige vendedor/alcance aquí.
                         </p>
                       </div>
                       <span className="dashboard-admin-busqueda-hint">
@@ -2808,8 +2807,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                       className="dashboard-admin-producto-thumb-link"
                                       title={`Foto ${fotoActivaIdx + 1} de ${fotos.length} — abrir tamaño completo`}
                                     >
-                                      <img
-                                        src={urlImagenProductoVariante(fotoActiva, 'miniatura') ?? fotoActiva}
+                                      <ImagenProducto
+                                        url={fotoActiva}
+                                        variante="miniatura"
                                         alt=""
                                         className="dashboard-admin-producto-thumb"
                                         width={160}
@@ -3536,6 +3536,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     vertical: (productoEditandoAdmin.vertical === 'moto' ? 'moto' : 'auto') as VerticalVehiculo,
                     disponibilidad_aviso: productoEditandoAdmin.disponibilidad_aviso ?? null,
                     es_oferta: productoEditandoAdmin.es_oferta ?? false,
+                    stock_actual: productoEditandoAdmin.stock_actual ?? null,
+                    activo: productoEditandoAdmin.activo ?? true,
                   } satisfies ProductoEditable
                 }
                 onCancel={() => setProductoEditandoAdmin(null)}
@@ -3632,8 +3634,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                 <tr key={p.id}>
                                   <td className="dashboard-admin-td-fotos">
                                     {thumb ? (
-                                      <img
-                                        src={urlImagenProductoVariante(thumb, 'miniatura') ?? thumb}
+                                      <ImagenProducto
+                                        url={thumb}
+                                        variante="miniatura"
                                         alt=""
                                         className="dashboard-admin-producto-thumb"
                                         width={160}

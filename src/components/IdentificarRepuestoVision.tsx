@@ -809,7 +809,8 @@ export function IdentificarRepuestoVision({ vertical, onIaModalCapaDelta }: Iden
         )
         .eq('activo', true)
         .eq('aprobacion_publica', 'aprobado')
-        .eq('vertical', esMoto ? VERTICAL_MOTO : VERTICAL_AUTO);
+        .eq('vertical', esMoto ? VERTICAL_MOTO : VERTICAL_AUTO)
+        .or('stock_actual.is.null,stock_actual.gt.0');
 
       const marcaQ = marcaVehiculo.trim();
       const filtroMarca = filtroMarcaMarcaONombre(marcaQ);

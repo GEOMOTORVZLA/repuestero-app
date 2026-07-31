@@ -11,6 +11,7 @@ import * as XLSX from 'xlsx';
 import { normalizarMonedaImport } from '../utils/monedaProducto';
 import { parsePrecioProducto } from '../utils/precioProducto';
 import { permitirAccionCliente } from '../utils/rateLimitCliente';
+import { parseStockActualInput, patchDesdeStockActual } from '../utils/stockActualInventario';
 import './ImportarProductosCSV.css';
 
 const PLANTILLA_IMPORT_HEADERS = [
@@ -22,6 +23,7 @@ const PLANTILLA_IMPORT_HEADERS = [
   'comentarios',
   'precio',
   'moneda',
+  'cantidad',
 ] as const;
 
 const PLANTILLA_SHEET_PRODUCTOS = 'Productos';
@@ -45,6 +47,7 @@ function filaEjemploPlantilla(vertical: VerticalVehiculo): string[] {
       'Pastillas delanteras originales',
       '18.50',
       'USD',
+      '5',
     ];
   }
   return [
@@ -56,6 +59,7 @@ function filaEjemploPlantilla(vertical: VerticalVehiculo): string[] {
     'Filtro de aceite compatible',
     '25.50',
     'USD',
+    '10',
   ];
 }
 
@@ -96,6 +100,7 @@ function descargarPlantillaImportacion(vertical: VerticalVehiculo): void {
     { wch: 36 },
     { wch: 10 },
     { wch: 8 },
+    { wch: 10 },
   ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, wsProductos, PLANTILLA_SHEET_PRODUCTOS);
@@ -123,6 +128,8 @@ type ParsedRow = {
   comentarios: string | null;
   precio: number;
   moneda: Moneda;
+  /** null = sin control de inventario */
+  cantidad: number | null;
 };
 
 function normalizeHeader(s: string): string {
@@ -296,10 +303,10 @@ export function ImportarProductosCSV({
     const filas: ParsedRow[] = [];
     const erroresFila: string[] = [];
 
-    // hasta 500 filas por archivo (vendedor y admin)
-    if (dataRows.length > 500) {
+    // hasta 1000 filas por archivo (vendedor y admin; auto y moto)
+    if (dataRows.length > 1000) {
       setEstado('error');
-      setMensaje('El archivo no debe tener más de 500 filas de productos.');
+      setMensaje('El archivo no debe tener más de 1000 filas de productos.');
       return;
     }
 
@@ -374,6 +381,14 @@ export function ImportarProductosCSV({
         continue;
       }
 
+      const cantidadRaw =
+        get(row, 'cantidad') || get(row, 'existencia') || get(row, 'stock') || get(row, 'stock_actual');
+      const cantidadParsed = parseStockActualInput(cantidadRaw);
+      if (!cantidadParsed.ok) {
+        erroresFila.push(`Fila ${rowNumber}: ${cantidadParsed.error}`);
+        continue;
+      }
+
       filas.push({
         rowNumber,
         nombre,
@@ -384,6 +399,7 @@ export function ImportarProductosCSV({
         comentarios: comentarios.length ? comentarios : null,
         precio,
         moneda,
+        cantidad: cantidadParsed.value,
       });
     }
 
@@ -443,6 +459,7 @@ export function ImportarProductosCSV({
     // Secuencial: más estable con RLS y evita spamear requests
     for (let i = 0; i < filas.length; i++) {
       const r = filas[i];
+      const inv = patchDesdeStockActual(r.cantidad);
       const payload = {
         tienda_id: tiendaId,
         nombre: r.nombre,
@@ -454,11 +471,12 @@ export function ImportarProductosCSV({
         comentarios: r.comentarios,
         precio_usd: r.precio,
         moneda: r.moneda,
-        stock_actual: 0,
-        activo: true,
+        stock_actual: inv.stock_actual,
+        disponibilidad_aviso: inv.disponibilidad_aviso ?? null,
+        activo: inv.activo !== undefined ? inv.activo : true,
         aprobacion_publica: 'aprobado',
-        stock_confirmado_at: new Date().toISOString(),
-        pausado_por_stock_vencido: false,
+        stock_confirmado_at: inv.stock_confirmado_at ?? new Date().toISOString(),
+        pausado_por_stock_vencido: inv.pausado_por_stock_vencido ?? false,
         vertical,
       };
 

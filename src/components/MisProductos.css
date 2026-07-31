@@ -639,6 +639,14 @@
   animation: mis-productos-oferta-titilar 1.1s ease-in-out infinite;
 }
 
+.mis-productos-card-stock-cant {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
 @keyframes mis-productos-oferta-titilar {
   0%,
   100% {

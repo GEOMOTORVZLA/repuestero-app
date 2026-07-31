@@ -24,6 +24,7 @@ import {
   aplicarTerminosTextoABusquedaProductos,
   terminosBusquedaProducto,
 } from '../utils/busquedaProductosTexto';
+import { aplicarFiltroStockPublico } from '../utils/stockActualInventario';
 import './BusquedaRepuestos.css';
 
 /** Distancia en km entre dos puntos (Haversine) */
@@ -114,6 +115,7 @@ function queryProductosSugerencias(textoBusquedaTrim: string, vertical: Vertical
     .eq('aprobacion_publica', 'aprobado')
     .eq('vertical', vertical);
 
+  query = aplicarFiltroStockPublico(query);
   query = aplicarTerminosTextoABusquedaProductos(query, textoBusquedaTrim);
 
   return query.order('nombre', { ascending: true }).order('id', { ascending: true });
@@ -308,6 +310,7 @@ export function BusquedaRepuestos({
       .eq('aprobacion_publica', 'aprobado')
       .eq('vertical', vertical);
 
+    query = aplicarFiltroStockPublico(query);
     query = aplicarTerminosTextoABusquedaProductos(query, p.texto);
 
     if (p.marca) query = query.eq('marca', p.marca);
@@ -540,6 +543,7 @@ export function BusquedaRepuestos({
         .eq('activo', true)
         .eq('aprobacion_publica', 'aprobado')
         .eq('vertical', vertical)
+        .or('stock_actual.is.null,stock_actual.gt.0')
         .maybeSingle();
 
       if (cancelled) return;

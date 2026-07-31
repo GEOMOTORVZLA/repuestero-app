@@ -11,7 +11,7 @@ import {
   MAX_BYTES_FOTO_PRODUCTO,
   MAX_MB_FOTO_PRODUCTO,
   optimizarImagenProductoParaStorage,
-  urlImagenProductoVariante,
+  subirImagenProductoConMiniatura,
 } from '../utils/imagenProducto';
 import {
   MAX_FOTOS_EXTRA,
@@ -25,6 +25,12 @@ import {
   esDisponibilidadAviso,
   type DisponibilidadAviso,
 } from '../utils/avisoProductoPublicacion';
+import {
+  avisoDesdeStockActual,
+  parseStockActualInput,
+  patchDesdeStockActual,
+} from '../utils/stockActualInventario';
+import { ImagenProducto } from './ImagenProducto';
 import './RegistroRepuestos.css';
 
 export interface ProductoEditable {
@@ -44,6 +50,9 @@ export interface ProductoEditable {
   vertical?: VerticalVehiculo | null;
   disponibilidad_aviso?: string | null;
   es_oferta?: boolean | null;
+  /** Existencia opcional (null = sin control de inventario). */
+  stock_actual?: number | null;
+  activo?: boolean | null;
 }
 
 interface EditarProductoProps {
@@ -68,6 +77,11 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
   const [moneda, setMoneda] = useState<'BS' | 'USD'>(esMonedaBolivar(producto.moneda) ? 'BS' : 'USD');
   const [disponibilidadAviso, setDisponibilidadAviso] = useState<DisponibilidadAviso | ''>(
     esDisponibilidadAviso(producto.disponibilidad_aviso) ? producto.disponibilidad_aviso : ''
+  );
+  const [stockActualInput, setStockActualInput] = useState(
+    producto.stock_actual != null && Number.isFinite(Number(producto.stock_actual))
+      ? String(producto.stock_actual)
+      : ''
   );
   const [esOferta, setEsOferta] = useState(Boolean(producto.es_oferta));
   const [estado, setEstado] = useState<'idle' | 'guardando' | 'ok' | 'error'>('idle');
@@ -115,14 +129,32 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       setMensaje('Los comentarios no pueden superar los 500 caracteres.');
       return;
     }
-    if (!esDisponibilidadAviso(disponibilidadAviso)) {
+
+    const stockParsed = parseStockActualInput(stockActualInput);
+    if (!stockParsed.ok) {
       setEstado('error');
-      setMensaje('Selecciona la disponibilidad del producto (única, pocas o muchas).');
+      setMensaje(stockParsed.error);
+      return;
+    }
+    const usaInventario = stockParsed.value != null;
+    if (!usaInventario && !esDisponibilidadAviso(disponibilidadAviso)) {
+      setEstado('error');
+      setMensaje(
+        'Selecciona la disponibilidad del producto, o indica una cantidad para calcularla automáticamente.'
+      );
       return;
     }
 
     setEstado('guardando');
     setMensaje('Guardando cambios del repuesto...');
+
+    const inv = patchDesdeStockActual(stockParsed.value, {
+      avisoManualSiSinStock: usaInventario
+        ? undefined
+        : esDisponibilidadAviso(disponibilidadAviso)
+          ? disponibilidadAviso
+          : null,
+    });
 
     const payload: Record<string, unknown> = {
       nombre: nombre.trim(),
@@ -135,9 +167,19 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       comentarios: comentarios.trim() || null,
       precio_usd: precioNum,
       moneda,
-      disponibilidad_aviso: disponibilidadAviso,
       es_oferta: esOferta,
+      stock_actual: inv.stock_actual,
     };
+    if (inv.disponibilidad_aviso !== undefined) {
+      payload.disponibilidad_aviso = inv.disponibilidad_aviso;
+    } else if (!usaInventario) {
+      payload.disponibilidad_aviso = disponibilidadAviso;
+    }
+    if (inv.activo !== undefined) payload.activo = inv.activo;
+    if (inv.stock_confirmado_at !== undefined) payload.stock_confirmado_at = inv.stock_confirmado_at;
+    if (inv.pausado_por_stock_vencido !== undefined) {
+      payload.pausado_por_stock_vencido = inv.pausado_por_stock_vencido;
+    }
 
     // Subir nuevas imágenes si el usuario seleccionó
     let imagenPrincipalUrl = producto.imagen_url ?? null;
@@ -155,16 +197,14 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       }
       const ext = fotoPrincipalLista.name.split('.').pop() || 'jpg';
       const principalPath = `${producto.id}/principal.${ext}`;
-      const { error: upPrincipalError } = await bucket.upload(principalPath, fotoPrincipalLista, {
-        upsert: true,
-      });
-      if (upPrincipalError) {
+      try {
+        const subida = await subirImagenProductoConMiniatura(bucket, principalPath, fotoPrincipalLista);
+        imagenPrincipalUrl = subida.urlOriginal;
+      } catch {
         setEstado('error');
         setMensaje('Error al subir la nueva foto principal.');
         return;
       }
-      const { data: principalPublic } = bucket.getPublicUrl(principalPath);
-      imagenPrincipalUrl = principalPublic.publicUrl;
     }
 
     const hayNuevasExtras = nuevasFotosExtraSlots.some((f) => f != null);
@@ -186,10 +226,11 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
         }
         const ext = file.name.split('.').pop() || 'jpg';
         const extraPath = `${producto.id}/extra-${i + 1}.${ext}`;
-        const { error: upExtraError } = await bucket.upload(extraPath, file, { upsert: true });
-        if (!upExtraError) {
-          const { data: extraPublic } = bucket.getPublicUrl(extraPath);
-          slotsUrls[i] = extraPublic.publicUrl;
+        try {
+          const subidaExtra = await subirImagenProductoConMiniatura(bucket, extraPath, file);
+          slotsUrls[i] = subidaExtra.urlOriginal;
+        } catch {
+          /* keep previous slot */
         }
       }
       const tieneAlgunaExtra = slotsUrls.some((s) => s != null && String(s).trim() !== '');
@@ -215,6 +256,14 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       ? ((payload.imagenes_extra as (string | null)[] | null) ?? producto.imagenes_extra ?? null)
       : producto.imagenes_extra ?? null;
 
+    const avisoGuardado =
+      (payload.disponibilidad_aviso as DisponibilidadAviso | null | undefined) ??
+      (usaInventario
+        ? stockParsed.value != null && stockParsed.value > 0
+          ? avisoDesdeStockActual(stockParsed.value)
+          : null
+        : disponibilidadAviso);
+
     onSaved({
       ...producto,
       vertical: verticalProd,
@@ -229,8 +278,10 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       moneda,
       imagen_url: imagenPrincipalUrl,
       imagenes_extra: imagenesExtraGuardadas,
-      disponibilidad_aviso: disponibilidadAviso,
+      disponibilidad_aviso: avisoGuardado,
       es_oferta: esOferta,
+      stock_actual: inv.stock_actual,
+      activo: (payload.activo as boolean | undefined) ?? producto.activo,
     });
   };
 
@@ -343,8 +394,31 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
         />
       </div>
       <div className="registro-repuestos-avisos-publicacion">
+        <label className="registro-repuestos-fotos-label" htmlFor="stock-actual-editar">
+          Cantidad disponible (opcional)
+        </label>
+        <input
+          id="stock-actual-editar"
+          type="text"
+          inputMode="numeric"
+          placeholder="Vacío = sin control · 0 = agotar/pausar · ≥1 = unidades"
+          value={stockActualInput}
+          onChange={(e) => {
+            const v = e.target.value.replace(/[^\d]/g, '');
+            setStockActualInput(v);
+            const parsed = parseStockActualInput(v);
+            if (parsed.ok && parsed.value != null && parsed.value > 0) {
+              const auto = avisoDesdeStockActual(parsed.value);
+              setDisponibilidadAviso(auto ?? '');
+            }
+          }}
+          disabled={estado === 'guardando'}
+        />
+        <p className="registro-repuestos-fotos-peso-ayuda">
+          Si indicas cantidad: 1 = única, 2–3 = pocas, 6+ = muchas. Con 0 se pausa y se oculta al público.
+        </p>
         <label className="registro-repuestos-fotos-label" htmlFor="disponibilidad-aviso-editar">
-          Disponibilidad en la publicación *
+          Disponibilidad en la publicación{stockActualInput.trim() ? ' (automática por cantidad)' : ' *'}
         </label>
         <select
           id="disponibilidad-aviso-editar"
@@ -354,7 +428,7 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
               e.target.value === '' ? '' : (e.target.value as DisponibilidadAviso)
             )
           }
-          disabled={estado === 'guardando'}
+          disabled={estado === 'guardando' || Boolean(stockActualInput.trim())}
         >
           <option value="">Elige disponibilidad</option>
           {DISPONIBILIDAD_AVISO_OPCIONES.map((o) => (
@@ -406,9 +480,10 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
                   {archivoNuevo ? (
                     <span className="registro-repuestos-fotos-extra-nombre">Nueva: {archivoNuevo.name}</span>
                   ) : urlActual ? (
-                    <img
+                    <ImagenProducto
                       className="registro-repuestos-fotos-extra-thumb"
-                      src={urlImagenProductoVariante(urlActual, 'miniatura') ?? urlActual}
+                      url={urlActual}
+                      variante="miniatura"
                       alt=""
                       width={160}
                       height={160}

@@ -157,6 +157,7 @@ async function fetchProductosPublicosTienda(
       .eq('activo', true)
       .eq('aprobacion_publica', 'aprobado')
       .eq('vertical', vertical)
+      .or('stock_actual.is.null,stock_actual.gt.0')
       .order('nombre', { ascending: true })
       .order('id', { ascending: true })
       .range(from, from + PRODUCTOS_VENDEDOR_CERCA_PAGE - 1);

@@ -153,6 +153,8 @@ const iconosMap: Record<string, ComponentType<{ className?: string }>> = {
   Embrague: IconoEmbrague,
   Transmisión: IconoCorreas,
   Motor: IconoBujias,
+  'Motores y componentes': IconoBujias,
+  'Motores a diesel y componentes': IconoBujias,
   'Cauchos y tripas': IconoCaucho,
   Iluminación: IconoFaros,
 };

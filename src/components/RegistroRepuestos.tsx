@@ -12,6 +12,7 @@ import {
   MAX_BYTES_FOTO_PRODUCTO,
   MAX_MB_FOTO_PRODUCTO,
   optimizarImagenProductoParaStorage,
+  subirImagenProductoConMiniatura,
 } from '../utils/imagenProducto';
 import { MAX_FOTOS_EXTRA, slotsArchivosExtraVacios } from '../utils/productoImagenesExtra';
 import { normalizarInputPrecio, parsePrecioProducto } from '../utils/precioProducto';
@@ -21,6 +22,11 @@ import {
   esDisponibilidadAviso,
   type DisponibilidadAviso,
 } from '../utils/avisoProductoPublicacion';
+import {
+  avisoDesdeStockActual,
+  parseStockActualInput,
+  patchDesdeStockActual,
+} from '../utils/stockActualInventario';
 import './RegistroRepuestos.css';
 
 interface Tienda {
@@ -54,6 +60,7 @@ export function RegistroRepuestos({
   const [precio, setPrecio] = useState('');
   const [moneda, setMoneda] = useState<'BS' | 'USD'>('BS');
   const [disponibilidadAviso, setDisponibilidadAviso] = useState<DisponibilidadAviso | ''>('');
+  const [stockActualInput, setStockActualInput] = useState('');
   const [esOferta, setEsOferta] = useState(false);
   const [estado, setEstado] = useState<'idle' | 'registrando' | 'ok' | 'error'>('idle');
   const [mensaje, setMensaje] = useState('');
@@ -253,10 +260,20 @@ export function RegistroRepuestos({
       setMensaje('Sube al menos una foto principal del repuesto.');
       return;
     }
-    if (!esDisponibilidadAviso(disponibilidadAviso)) {
+    const stockParsed = parseStockActualInput(stockActualInput);
+    if (!stockParsed.ok) {
       registrandoRef.current = false;
       setEstado('error');
-      setMensaje('Selecciona la disponibilidad del producto (única, pocas o muchas).');
+      setMensaje(stockParsed.error);
+      return;
+    }
+    const usaInventario = stockParsed.value != null;
+    if (!usaInventario && !esDisponibilidadAviso(disponibilidadAviso)) {
+      registrandoRef.current = false;
+      setEstado('error');
+      setMensaje(
+        'Selecciona la disponibilidad del producto, o indica una cantidad para calcularla automáticamente.'
+      );
       return;
     }
     setEstado('registrando');
@@ -292,6 +309,14 @@ export function RegistroRepuestos({
         return;
       }
 
+      const inv = patchDesdeStockActual(stockParsed.value, {
+        avisoManualSiSinStock: usaInventario
+          ? undefined
+          : esDisponibilidadAviso(disponibilidadAviso)
+            ? disponibilidadAviso
+            : null,
+      });
+
       setMensaje('Guardando producto…');
       const payload: Record<string, unknown> = {
         tienda_id: tienda.id,
@@ -305,15 +330,19 @@ export function RegistroRepuestos({
         comentarios: comentarios.trim() || null,
         precio_usd: precioNum,
         moneda: moneda,
-        disponibilidad_aviso: disponibilidadAviso,
         es_oferta: esOferta,
-        stock_actual: 0,
-        activo: true,
+        stock_actual: inv.stock_actual,
+        activo: inv.activo !== undefined ? inv.activo : true,
         aprobacion_publica: 'aprobado',
-        stock_confirmado_at: new Date().toISOString(),
-        pausado_por_stock_vencido: false,
+        stock_confirmado_at: inv.stock_confirmado_at ?? new Date().toISOString(),
+        pausado_por_stock_vencido: inv.pausado_por_stock_vencido ?? false,
         vertical,
       };
+      if (inv.disponibilidad_aviso !== undefined) {
+        payload.disponibilidad_aviso = inv.disponibilidad_aviso;
+      } else {
+        payload.disponibilidad_aviso = disponibilidadAviso;
+      }
 
       const { data: insertData, error } = await supabase
         .from('productos')
@@ -335,23 +364,20 @@ export function RegistroRepuestos({
       const principalExt = fotoPrincipalLista.name.split('.').pop() || 'jpg';
       const principalPath = `${productoId}/principal.${principalExt}`;
 
-      const { error: upPrincipalError } = await bucket.upload(principalPath, fotoPrincipalLista, {
-        upsert: true,
-      });
-
-      if (upPrincipalError) {
+      let imagenPrincipalUrl: string;
+      try {
+        const subida = await subirImagenProductoConMiniatura(bucket, principalPath, fotoPrincipalLista);
+        imagenPrincipalUrl = subida.urlOriginal;
+      } catch (e) {
         await supabase.from('productos').delete().eq('id', productoId);
         setEstado('error');
         setMensaje(
-          upPrincipalError.message
-            ? `Error al subir la foto principal: ${upPrincipalError.message}`
+          e instanceof Error
+            ? `Error al subir la foto principal: ${e.message}`
             : 'Error al subir la foto principal. Intenta de nuevo.'
         );
         return;
       }
-
-      const { data: principalPublic } = bucket.getPublicUrl(principalPath);
-      const imagenPrincipalUrl = principalPublic.publicUrl;
 
       const slotsUrls: (string | null)[] = [null, null, null, null];
       for (let i = 0; i < MAX_FOTOS_EXTRA; i += 1) {
@@ -359,10 +385,11 @@ export function RegistroRepuestos({
         if (!file) continue;
         const ext = file.name.split('.').pop() || 'jpg';
         const extraPath = `${productoId}/extra-${i + 1}.${ext}`;
-        const { error: upExtraError } = await bucket.upload(extraPath, file, { upsert: true });
-        if (!upExtraError) {
-          const { data: extraPublic } = bucket.getPublicUrl(extraPath);
-          slotsUrls[i] = extraPublic.publicUrl;
+        try {
+          const subidaExtra = await subirImagenProductoConMiniatura(bucket, extraPath, file);
+          slotsUrls[i] = subidaExtra.urlOriginal;
+        } catch {
+          /* ranura opcional: si falla una extra, seguimos */
         }
       }
 
@@ -396,6 +423,7 @@ export function RegistroRepuestos({
       setPrecio('');
       setMoneda('BS');
       setDisponibilidadAviso('');
+      setStockActualInput('');
       setEsOferta(false);
       setFotoPrincipal(null);
       setFotosExtraSlots(slotsArchivosExtraVacios());
@@ -532,8 +560,31 @@ export function RegistroRepuestos({
         />
       </div>
       <div className="registro-repuestos-avisos-publicacion">
+        <label className="registro-repuestos-fotos-label" htmlFor="stock-actual-registro">
+          Cantidad disponible (opcional)
+        </label>
+        <input
+          id="stock-actual-registro"
+          type="text"
+          inputMode="numeric"
+          placeholder="Vacío = sin control · 0 = no publicar · ≥1 = unidades"
+          value={stockActualInput}
+          onChange={(e) => {
+            const v = e.target.value.replace(/[^\d]/g, '');
+            setStockActualInput(v);
+            const parsed = parseStockActualInput(v);
+            if (parsed.ok && parsed.value != null && parsed.value > 0) {
+              const auto = avisoDesdeStockActual(parsed.value);
+              setDisponibilidadAviso(auto ?? '');
+            }
+          }}
+          disabled={estado === 'registrando'}
+        />
+        <p className="registro-repuestos-fotos-peso-ayuda">
+          Opcional. Si la usas: 1 = única, 2–3 = pocas, 6+ = muchas. Con 0 el producto queda pausado y no sale al público.
+        </p>
         <label className="registro-repuestos-fotos-label" htmlFor="disponibilidad-aviso-registro">
-          Disponibilidad en la publicación *
+          Disponibilidad en la publicación{stockActualInput.trim() ? ' (automática por cantidad)' : ' *'}
         </label>
         <select
           id="disponibilidad-aviso-registro"
@@ -543,7 +594,7 @@ export function RegistroRepuestos({
               e.target.value === '' ? '' : (e.target.value as DisponibilidadAviso)
             )
           }
-          disabled={estado === 'registrando'}
+          disabled={estado === 'registrando' || Boolean(stockActualInput.trim())}
         >
           <option value="">Elige disponibilidad</option>
           {DISPONIBILIDAD_AVISO_OPCIONES.map((o) => (

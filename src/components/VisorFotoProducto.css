@@ -1,13 +1,14 @@
 .visor-foto-producto {
   position: fixed;
   inset: 0;
+  /* Por encima de paneles de vendedor/búsqueda (≈1700) y sticky del buscador */
   z-index: 99990;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
     max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
-  background: rgba(15, 23, 42, 0.88);
+  background: rgba(15, 23, 42, 0.92);
   box-sizing: border-box;
 }
 

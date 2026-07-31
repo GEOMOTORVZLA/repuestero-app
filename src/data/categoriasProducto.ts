@@ -18,6 +18,7 @@ export const CATEGORIAS_PRODUCTO: string[] = [
   'Carrocería',
   'Vidrios',
   'Motores y componentes',
+  'Motores a diesel y componentes',
   'Cajas y componentes',
   'Componentes de tapicería',
   'Componentes de puertas',

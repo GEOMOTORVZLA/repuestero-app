@@ -17,6 +17,7 @@ import {
   aplicarTerminosTextoABusquedaProductos,
   terminosBusquedaProducto,
 } from '../utils/busquedaProductosTexto';
+import { aplicarFiltroStockPublico } from '../utils/stockActualInventario';
 import { permitirAccionCliente } from '../utils/rateLimitCliente';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
@@ -104,6 +105,7 @@ export function ListaRepuestosPorCategoria({
         .eq('vertical', vertical)
         .eq('categoria', categoria);
 
+      query = aplicarFiltroStockPublico(query);
       query = aplicarTerminosTextoABusquedaProductos(query, texto);
       return query.order('nombre').order('id');
     },

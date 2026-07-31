@@ -275,7 +275,8 @@ export function MecanicoVirtualMoto({
         )
         .eq('activo', true)
         .eq('aprobacion_publica', 'aprobado')
-        .eq('vertical', VERTICAL_MOTO);
+        .eq('vertical', VERTICAL_MOTO)
+        .or('stock_actual.is.null,stock_actual.gt.0');
 
       if (marcaMoto) query = query.eq('marca', marcaMoto);
 

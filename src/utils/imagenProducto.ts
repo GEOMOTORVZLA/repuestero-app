@@ -1,18 +1,19 @@
 /**
- * Imágenes de producto: límites de subida y variantes (thumbnails via Supabase Storage).
+ * Imágenes de producto: límites de subida y miniaturas propias (sin /render/image/).
  *
- * Por defecto NO usamos /render/image/ (Image Transformations): el cupo Pro es bajo (~100/mes)
- * y los listados lo agotan rápido. Las fotos se sirven en tamaño original.
+ * Al subir se guarda el original optimizado + un *-thumb.* liviano para listados.
+ * Por defecto NO usamos Image Transformations de Supabase (cupo Pro bajo).
  *
- * Para reactivar transformaciones (aceptando coste extra en Supabase):
- *   VITE_SUPABASE_USAR_TRANSFORMACION_IMAGEN=1
- * Para forzar apagado explícito (redundante con el default):
- *   VITE_SUPABASE_SIN_TRANSFORMACION_IMAGEN=1
+ * Opt-in transforms (coste extra): VITE_SUPABASE_USAR_TRANSFORMACION_IMAGEN=1
  */
 
 export const MAX_MB_FOTO_PRODUCTO = 2;
 export const MAX_BYTES_FOTO_PRODUCTO = MAX_MB_FOTO_PRODUCTO * 1024 * 1024;
 export const TARGET_BYTES_FOTO_PRODUCTO = 1200 * 1024;
+
+/** Miniatura guardada en Storage (listados): lado máx. y peso objetivo. */
+export const THUMB_MAX_LADO_PRODUCTO = 400;
+export const THUMB_TARGET_BYTES_PRODUCTO = 90 * 1024;
 
 const MARKER_OBJECT_PUBLIC = '/storage/v1/object/public/';
 const MARKER_RENDER = '/storage/v1/render/image/public/';
@@ -21,16 +22,41 @@ const TIMEOUT_CARGAR_IMAGEN_MS = 20000;
 const TIMEOUT_TO_BLOB_MS = 12000;
 
 function transformacionDesactivada(): boolean {
-  // Opt-in: solo si el proyecto paga / acepta el cupo de transformaciones.
   if (import.meta.env.VITE_SUPABASE_USAR_TRANSFORMACION_IMAGEN === '1') return false;
   if (import.meta.env.VITE_SUPABASE_SIN_TRANSFORMACION_IMAGEN === '1') return true;
   return true;
 }
 
-/** True si la URL apunta a un objeto público de Storage (admite thumbnail por render). */
+/** True si la URL apunta a un objeto público de Storage. */
 export function esUrlObjectPublicSupabase(url: string | null | undefined): boolean {
   if (typeof url !== 'string' || !url.trim()) return false;
   return url.includes(MARKER_OBJECT_PUBLIC);
+}
+
+/**
+ * Path Storage: `.../principal.jpg` → `.../principal-thumb.jpg`
+ * (también foto-1.jpg → foto-1-thumb.jpg).
+ */
+export function pathStorageMiniaturaDesdePath(path: string): string | null {
+  const p = path.trim();
+  if (!p || /-thumb\./i.test(p)) return null;
+  const next = p.replace(/(\.[a-z0-9]+)$/i, '-thumb$1');
+  return next === p ? null : next;
+}
+
+/** URL pública hermana *-thumb.* a partir de la URL del original en Storage. */
+export function urlMiniaturaGuardadaDesdeOriginal(url: string): string | null {
+  const u = url.trim();
+  const i = u.indexOf(MARKER_OBJECT_PUBLIC);
+  if (i === -1) return null;
+  const baseOrigin = u.slice(0, i);
+  const pathAndQuery = u.slice(i + MARKER_OBJECT_PUBLIC.length);
+  const qIdx = pathAndQuery.indexOf('?');
+  const pathOnly = qIdx === -1 ? pathAndQuery : pathAndQuery.slice(0, qIdx);
+  const query = qIdx === -1 ? '' : pathAndQuery.slice(qIdx);
+  const thumbPath = pathStorageMiniaturaDesdePath(pathOnly);
+  if (!thumbPath) return null;
+  return `${baseOrigin}${MARKER_OBJECT_PUBLIC}${thumbPath}${query}`;
 }
 
 function variantDimensiones(variante: 'tarjeta' | 'miniatura' | 'vista'): {
@@ -45,7 +71,10 @@ function variantDimensiones(variante: 'tarjeta' | 'miniatura' | 'vista'): {
 }
 
 /**
- * URL para mostrar: thumbnails para Storage público; URL original si es externa o está desactivada la API.
+ * URL para mostrar.
+ * - Listados (tarjeta/miniatura): miniatura guardada *-thumb.* si transforms están off;
+ *   si no hay thumb (fotos viejas), el UI debe hacer fallback al original con onError.
+ * - Vista / completa: siempre original (o render si transforms opt-in).
  */
 export function urlImagenProductoVariante(
   url: string | null | undefined,
@@ -54,7 +83,15 @@ export function urlImagenProductoVariante(
   if (typeof url !== 'string') return null;
   const u = url.trim();
   if (!u) return null;
-  if (variante === 'completa' || transformacionDesactivada()) return u;
+  if (variante === 'completa') return u;
+
+  if (transformacionDesactivada()) {
+    if (variante === 'tarjeta' || variante === 'miniatura') {
+      return urlMiniaturaGuardadaDesdeOriginal(u) ?? u;
+    }
+    return u;
+  }
+
   if (u.includes(MARKER_RENDER)) return u;
   const i = u.indexOf(MARKER_OBJECT_PUBLIC);
   if (i === -1) return u;
@@ -65,7 +102,9 @@ export function urlImagenProductoVariante(
   const pathOnly = qIdx === -1 ? pathAndQuery : pathAndQuery.slice(0, qIdx);
   if (!pathOnly) return u;
 
-  const { width, height, resize, quality } = variantDimensiones(variante);
+  const { width, height, resize, quality } = variantDimensiones(
+    variante === 'vista' ? 'vista' : variante
+  );
   const renderBase = `${baseOrigin}${MARKER_RENDER}${pathOnly}`;
   const qs = new URLSearchParams({
     width: String(width),
@@ -251,3 +290,47 @@ export async function optimizarImagenProductoParaStorage(
     URL.revokeObjectURL(objectUrl);
   }
 }
+
+type BucketProductoUpload = {
+  upload: (
+    path: string,
+    file: File,
+    opts?: { upsert?: boolean }
+  ) => PromiseLike<{ error: { message?: string } | null }>;
+  getPublicUrl: (path: string) => { data: { publicUrl: string } };
+};
+
+/**
+ * Sube el original optimizado y, en paralelo, una miniatura *-thumb.* para listados rápidos.
+ * Si el thumb falla, igual deja el original (listados harán fallback).
+ */
+export async function subirImagenProductoConMiniatura(
+  bucket: BucketProductoUpload,
+  pathOriginal: string,
+  fileOptimizado: File
+): Promise<{ urlOriginal: string; urlThumb: string | null }> {
+  const { error: upErr } = await bucket.upload(pathOriginal, fileOptimizado, { upsert: true });
+  if (upErr) {
+    throw new Error(upErr.message || 'Error al subir la imagen.');
+  }
+  const { data: pub } = bucket.getPublicUrl(pathOriginal);
+  const urlOriginal = pub.publicUrl;
+
+  const thumbPath = pathStorageMiniaturaDesdePath(pathOriginal);
+  if (!thumbPath) return { urlOriginal, urlThumb: null };
+
+  try {
+    const thumbFile = await optimizarImagenProductoParaStorage(fileOptimizado, {
+      maxBytes: MAX_BYTES_FOTO_PRODUCTO,
+      targetBytes: THUMB_TARGET_BYTES_PRODUCTO,
+      maxLado: THUMB_MAX_LADO_PRODUCTO,
+    });
+    const { error: thumbErr } = await bucket.upload(thumbPath, thumbFile, { upsert: true });
+    if (thumbErr) return { urlOriginal, urlThumb: null };
+    const { data: thumbPub } = bucket.getPublicUrl(thumbPath);
+    return { urlOriginal, urlThumb: thumbPub.publicUrl };
+  } catch {
+    return { urlOriginal, urlThumb: null };
+  }
+}
+

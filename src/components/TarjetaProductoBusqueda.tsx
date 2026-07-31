@@ -11,6 +11,7 @@ import {
   mensajeWhatsappCompartirRepuesto,
 } from '../utils/enlaceCompartirProducto';
 import { etiquetaDisponibilidadAviso } from '../utils/avisoProductoPublicacion';
+import { ImagenProducto } from './ImagenProducto';
 import { VisorFotoProducto } from './VisorFotoProducto';
 import './BusquedaRepuestos.css';
 
@@ -143,8 +144,9 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
         >
           <div className="busqueda-repuestos-card-foto">
             {thumb ? (
-              <img
-                src={urlImagenProductoVariante(thumb, 'tarjeta') ?? thumb}
+              <ImagenProducto
+                url={thumb}
+                variante="tarjeta"
                 alt=""
                 width={400}
                 height={400}
@@ -166,8 +168,9 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
           <div className="busqueda-repuestos-card-cabecera-expandida">
             <div className="busqueda-repuestos-card-foto busqueda-repuestos-card-foto--mini">
               {thumb ? (
-                <img
-                  src={urlImagenProductoVariante(thumb, 'miniatura') ?? thumb}
+                <ImagenProducto
+                  url={thumb}
+                  variante="miniatura"
                   alt=""
                   width={160}
                   height={160}
@@ -254,8 +257,9 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
                         onClick={() => setPreviewUrl(url)}
                         aria-label={`Foto ${i + 1} de ${fotos.length}`}
                       >
-                        <img
-                          src={urlImagenProductoVariante(url, 'miniatura') ?? url}
+                        <ImagenProducto
+                          url={url}
+                          variante="miniatura"
                           alt=""
                           width={160}
                           height={160}

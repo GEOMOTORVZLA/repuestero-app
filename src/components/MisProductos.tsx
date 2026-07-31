@@ -3,10 +3,12 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import './MisProductos.css';
 import { EditarProducto, type ProductoEditable } from './EditarProducto';
+import { ImagenProducto } from './ImagenProducto';
 import {
   MAX_BYTES_FOTO_PRODUCTO,
   MAX_MB_FOTO_PRODUCTO,
   optimizarImagenProductoParaStorage,
+  subirImagenProductoConMiniatura,
   urlImagenProductoVariante,
 } from '../utils/imagenProducto';
 import { etiquetaMoneda } from '../utils/monedaProducto';
@@ -17,6 +19,8 @@ import {
   etiquetaDisponibilidadAviso,
   type DisponibilidadAviso,
 } from '../utils/avisoProductoPublicacion';
+import { etiquetaStockActual } from '../utils/stockActualInventario';
+import { productoCoincideTextoFlexible } from '../utils/busquedaProductosTexto';
 
 const NETWORK_TIMEOUT_MS = 30000;
 const NETWORK_RETRIES = 1;
@@ -75,6 +79,7 @@ interface ProductoPanel {
   vertical?: VerticalVehiculo | null;
   disponibilidad_aviso?: string | null;
   es_oferta?: boolean | null;
+  stock_actual?: number | null;
 }
 
 interface MisProductosProps {
@@ -99,7 +104,7 @@ type AlcanceAccionMasiva = 'filtrados' | 'seleccionados';
 const ACCION_MASIVA_PAGE = 80;
 
 const PRODUCTOS_VENDEDOR_SELECT =
-  'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, aprobacion_publica, created_at, stock_confirmado_at, pausado_por_stock_vencido, vertical, disponibilidad_aviso, es_oferta';
+  'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, aprobacion_publica, created_at, stock_confirmado_at, pausado_por_stock_vencido, stock_actual, vertical, disponibilidad_aviso, es_oferta';
 
 const PRODUCTOS_VENDEDOR_PAGE = 1000;
 
@@ -297,25 +302,12 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     }
   }, [productoDetalle, user]);
 
-  const productoCoincideBusqueda = (p: ProductoPanel, texto: string) => {
-    const q = texto.trim().toLocaleLowerCase('es');
-    if (!q) return true;
-    const terminos = q.split(/\s+/).filter(Boolean);
-    const fuente = [
-      p.nombre,
-      p.descripcion,
-      p.comentarios,
-      p.categoria,
-      p.marca,
-      p.modelo,
-      p.anio != null ? String(p.anio) : '',
-      p.precio_usd != null ? String(p.precio_usd) : '',
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLocaleLowerCase('es');
-    return terminos.every((t) => fuente.includes(t));
-  };
+  /** Mismo criterio que Visor de mostrador: multi-palabra AND, plural/singular y typo leve. */
+  const productoCoincideBusqueda = (p: ProductoPanel, texto: string) =>
+    productoCoincideTextoFlexible(
+      [p.nombre, p.descripcion, p.comentarios, p.marca, p.modelo, p.categoria],
+      texto
+    );
 
   const productoCoincideEstado = (p: ProductoPanel, filtro: FiltroEstadoProductoGestion) => {
     const semaforo = semaforoStockProducto(p);
@@ -722,10 +714,8 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         }
         const ext = lista.name.split('.').pop() || 'jpg';
         const path = `fotos-masivas-vendedor/${user.id}/${lote}/foto-${i + 1}.${ext}`;
-        const { error: upErr } = await bucket.upload(path, lista, { upsert: true });
-        if (upErr) throw upErr;
-        const { data: pub } = bucket.getPublicUrl(path);
-        urls[i] = pub.publicUrl;
+        const subida = await subirImagenProductoConMiniatura(bucket, path, lista);
+        urls[i] = subida.urlOriginal;
       }
 
       const imagenUrl = urls[0];
@@ -816,7 +806,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
               type="search"
               value={busquedaProductosInput}
               onChange={(e) => setBusquedaProductosInput(e.target.value)}
-              placeholder="Ej: amortiguador x1, batería, Cherokee..."
+              placeholder="Ej: amortiguador espiral, bateria, Cheroke (typos leves OK)..."
             />
           </label>
           {!verticalFijo && (
@@ -987,8 +977,9 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
             <p className="mis-productos-ajuste-masivo-titulo">Carga masiva de fotos</p>
             <p className="mis-productos-ajuste-masivo-descripcion">
               Sube hasta 4 fotos comunes para aplicarlas a varios productos. La foto 1 será la principal.
-              El botón <strong>Buscar en alcance</strong> solo limita la lista de abajo para preparar las fotos;
-              no reemplaza el buscador de productos de arriba.
+              Usa el buscador de productos de arriba (mismo criterio inteligente que el Visor de mostrador:
+              varias palabras, singular/plural y errores leves) para ubicar el producto o el grupo.
+              El botón <strong>Buscar en alcance</strong> solo limita la lista de abajo por alcance de fotos.
             </p>
           </div>
           <span className="mis-productos-fotos-masivas-contador">
@@ -1148,8 +1139,9 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
                           }`}
                           onMouseEnter={() => setFotoDetalleActiva(url)}
                         >
-                          <img
-                            src={urlImagenProductoVariante(url, 'miniatura') ?? url}
+                          <ImagenProducto
+                            url={url}
+                            variante="miniatura"
                             alt="Foto del producto"
                             width={160}
                             height={160}
@@ -1360,8 +1352,9 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
               )}
               <div className="mis-productos-card-foto">
                 {p.imagen_url ? (
-                  <img
-                    src={urlImagenProductoVariante(p.imagen_url, 'tarjeta') ?? p.imagen_url}
+                  <ImagenProducto
+                    url={p.imagen_url}
+                    variante="tarjeta"
                     alt={p.nombre}
                     width={400}
                     height={400}
@@ -1423,6 +1416,13 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
                           {etiquetaDisponibilidadAviso(p.disponibilidad_aviso)}
                         </span>
                       ) : null}
+                      <span className="mis-productos-card-stock-cant">
+                        {etiquetaStockActual(
+                          p.stock_actual != null && Number.isFinite(Number(p.stock_actual))
+                            ? Number(p.stock_actual)
+                            : null
+                        )}
+                      </span>
                       {p.es_oferta ? (
                         <span className="mis-productos-card-aviso mis-productos-card-aviso--oferta">OFERTA</span>
                       ) : null}
