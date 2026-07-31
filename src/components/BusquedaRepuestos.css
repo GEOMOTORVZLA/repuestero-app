@@ -1249,7 +1249,7 @@
   }
 }
 
-/* Texto completo en panel expandido (hasta ~500 caracteres); anula el clamp del resumen */
+/* Texto completo en panel expandido; anula el clamp del resumen */
 .busqueda-repuestos-card-desc.busqueda-repuestos-card-desc--panel {
   display: block;
   -webkit-line-clamp: unset;

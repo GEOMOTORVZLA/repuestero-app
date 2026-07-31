@@ -10,6 +10,7 @@ import { normalizarMonedaImport } from '../utils/monedaProducto';
 import { parsePrecioProducto } from '../utils/precioProducto';
 import { permitirAccionCliente } from '../utils/rateLimitCliente';
 import { parseStockActualInput, patchDesdeStockActual } from '../utils/stockActualInventario';
+import { LIMITE_DESCRIPCION_PRODUCTO } from '../utils/limiteDescripcionProducto';
 import './ImportarProductosCSV.css';
 
 type ModoImportacion = 'alta' | 'sincronizar';
@@ -422,8 +423,10 @@ export function ImportarProductosCSV({
       }
 
       const comentarios = comentariosRaw.trim();
-      if (comentarios.length > 500) {
-        erroresFila.push(`Fila ${rowNumber}: "comentarios" supera 500 caracteres.`);
+      if (comentarios.length > LIMITE_DESCRIPCION_PRODUCTO) {
+        erroresFila.push(
+          `Fila ${rowNumber}: "comentarios" supera ${LIMITE_DESCRIPCION_PRODUCTO} caracteres.`
+        );
         continue;
       }
 

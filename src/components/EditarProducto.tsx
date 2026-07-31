@@ -20,6 +20,7 @@ import {
 } from '../utils/productoImagenesExtra';
 import { esMonedaBolivar } from '../utils/monedaProducto';
 import { normalizarInputPrecio, parsePrecioProducto } from '../utils/precioProducto';
+import { LIMITE_DESCRIPCION_PRODUCTO } from '../utils/limiteDescripcionProducto';
 import {
   DISPONIBILIDAD_AVISO_OPCIONES,
   esDisponibilidadAviso,
@@ -124,9 +125,9 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       setMensaje('Ingresa un precio válido con máximo 2 decimales.');
       return;
     }
-    if (comentarios.length > 500) {
+    if (comentarios.length > LIMITE_DESCRIPCION_PRODUCTO) {
       setEstado('error');
-      setMensaje('Los comentarios no pueden superar los 500 caracteres.');
+      setMensaje(`La descripción no puede superar los ${LIMITE_DESCRIPCION_PRODUCTO} caracteres.`);
       return;
     }
 
@@ -352,11 +353,11 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
         ))}
       </select>
       <textarea
-        placeholder="Breve descripción del producto (máx. 500 caracteres)"
+        placeholder={`Descripción del producto (máx. ${LIMITE_DESCRIPCION_PRODUCTO} caracteres)`}
         value={comentarios}
-        onChange={(e) => setComentarios(e.target.value.slice(0, 500))}
+        onChange={(e) => setComentarios(e.target.value.slice(0, LIMITE_DESCRIPCION_PRODUCTO))}
         disabled={estado === 'guardando'}
-        rows={3}
+        rows={6}
         className="registro-repuestos-comentarios"
         spellCheck={false}
       />
