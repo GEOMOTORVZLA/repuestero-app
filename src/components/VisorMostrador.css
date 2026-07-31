@@ -154,6 +154,15 @@
   word-break: break-word;
 }
 
+.visor-mostrador-codigo {
+  margin: 0 0 0.15rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1e3a5f;
+  letter-spacing: 0.02em;
+  word-break: break-all;
+}
+
 .visor-mostrador-vehiculo,
 .visor-mostrador-categoria {
   margin: 0;

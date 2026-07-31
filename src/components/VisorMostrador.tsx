@@ -15,6 +15,7 @@ import './VisorMostrador.css';
 type ProductoMostrador = {
   id: string;
   nombre: string;
+  codigo?: string | null;
   descripcion: string | null;
   comentarios?: string | null;
   categoria?: string | null;
@@ -33,7 +34,7 @@ type ProductoMostrador = {
 };
 
 const SELECT =
-  'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, vertical, disponibilidad_aviso, es_oferta, stock_actual';
+  'id, nombre, codigo, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, vertical, disponibilidad_aviso, es_oferta, stock_actual';
 const PAGE = 1000;
 
 async function cargarProductosVendedor(
@@ -69,7 +70,7 @@ async function cargarProductosVendedor(
 /** Busqueda flexible solo del Visor: multi-palabra AND, plural/singular y typo leve. */
 function coincideBusquedaVisor(p: ProductoMostrador, texto: string): boolean {
   return productoCoincideTextoFlexible(
-    [p.nombre, p.descripcion, p.comentarios, p.marca, p.modelo, p.categoria],
+    [p.nombre, p.codigo, p.descripcion, p.comentarios, p.marca, p.modelo, p.categoria],
     texto
   );
 }
@@ -157,7 +158,7 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
           className="visor-mostrador-buscar"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Ej: amortiguador Cherokee, batería, filtro..."
+          placeholder="Ej: código, amortiguador, Cherokee..."
           autoComplete="off"
           spellCheck={false}
         />
@@ -223,6 +224,9 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
               </button>
               <div className="visor-mostrador-info">
                 <p className="visor-mostrador-nombre">{p.nombre}</p>
+                {p.codigo?.trim() ? (
+                  <p className="visor-mostrador-codigo">Código: {p.codigo.trim()}</p>
+                ) : null}
                 {vehiculo && <p className="visor-mostrador-vehiculo">{vehiculo}</p>}
                 {p.categoria && <p className="visor-mostrador-categoria">{p.categoria}</p>}
                 {p.descripcion?.trim() && (

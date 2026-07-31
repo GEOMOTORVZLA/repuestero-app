@@ -14,7 +14,22 @@ import { permitirAccionCliente } from '../utils/rateLimitCliente';
 import { parseStockActualInput, patchDesdeStockActual } from '../utils/stockActualInventario';
 import './ImportarProductosCSV.css';
 
-const PLANTILLA_IMPORT_HEADERS = [
+type ModoImportacion = 'alta' | 'sincronizar';
+
+const PLANTILLA_ALTA_HEADERS = [
+  'nombre',
+  'categoria',
+  'marca',
+  'modelo',
+  'anio',
+  'comentarios',
+  'precio',
+  'moneda',
+  'cantidad',
+] as const;
+
+const PLANTILLA_SYNC_HEADERS = [
+  'codigo',
   'nombre',
   'categoria',
   'marca',
@@ -28,6 +43,7 @@ const PLANTILLA_IMPORT_HEADERS = [
 
 const PLANTILLA_SHEET_PRODUCTOS = 'Productos';
 const EJEMPLO_NOMBRE_PLANTILLA = '(EJEMPLO - borrar esta fila)';
+const EJEMPLO_CODIGO_PLANTILLA = 'EJEMPLO-001';
 
 function listasPlantillaImport(vertical: VerticalVehiculo) {
   return {
@@ -36,7 +52,7 @@ function listasPlantillaImport(vertical: VerticalVehiculo) {
   };
 }
 
-function filaEjemploPlantilla(vertical: VerticalVehiculo): string[] {
+function filaEjemploAlta(vertical: VerticalVehiculo): string[] {
   if (vertical === 'moto') {
     return [
       EJEMPLO_NOMBRE_PLANTILLA,
@@ -63,6 +79,11 @@ function filaEjemploPlantilla(vertical: VerticalVehiculo): string[] {
   ];
 }
 
+function filaEjemploSync(vertical: VerticalVehiculo): string[] {
+  const alta = filaEjemploAlta(vertical);
+  return [EJEMPLO_CODIGO_PLANTILLA, ...alta];
+}
+
 function sheetListaReferenciaPlantilla(titulo: string, valores: readonly string[]): XLSX.WorkSheet {
   const rows = [[titulo], ...valores.map((v) => [v])];
   const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -70,8 +91,10 @@ function sheetListaReferenciaPlantilla(titulo: string, valores: readonly string[
   return ws;
 }
 
-function esFilaEjemploPlantilla(nombre: string): boolean {
+function esFilaEjemploPlantilla(nombre: string, codigo?: string): boolean {
   const n = nombre.trim();
+  const c = (codigo ?? '').trim().toUpperCase();
+  if (c === EJEMPLO_CODIGO_PLANTILLA || c.startsWith('EJEMPLO-')) return true;
   if (!n) return false;
   return (
     n === EJEMPLO_NOMBRE_PLANTILLA ||
@@ -81,32 +104,54 @@ function esFilaEjemploPlantilla(nombre: string): boolean {
   );
 }
 
-function nombreArchivoPlantillaImport(vertical: VerticalVehiculo): string {
+function normalizarCodigoProducto(raw: string): string {
+  return raw.trim().toUpperCase().replace(/\s+/g, '-');
+}
+
+function nombreArchivoPlantilla(vertical: VerticalVehiculo, modo: ModoImportacion): string {
+  if (modo === 'sincronizar') {
+    return vertical === 'moto'
+      ? 'template_sincronizar_inventario_moto.xlsx'
+      : 'template_sincronizar_inventario_auto.xlsx';
+  }
   return vertical === 'moto' ? 'template_productos_moto.xlsx' : 'template_productos_auto.xlsx';
 }
 
-function descargarPlantillaImportacion(vertical: VerticalVehiculo): void {
+function descargarPlantillaImportacion(vertical: VerticalVehiculo, modo: ModoImportacion): void {
   const { categorias, marcas } = listasPlantillaImport(vertical);
-  const wsProductos = XLSX.utils.aoa_to_sheet([
-    [...PLANTILLA_IMPORT_HEADERS],
-    filaEjemploPlantilla(vertical),
-  ]);
-  wsProductos['!cols'] = [
-    { wch: 34 },
-    { wch: 30 },
-    { wch: 22 },
-    { wch: 18 },
-    { wch: 8 },
-    { wch: 36 },
-    { wch: 10 },
-    { wch: 8 },
-    { wch: 10 },
-  ];
+  const headers = modo === 'sincronizar' ? [...PLANTILLA_SYNC_HEADERS] : [...PLANTILLA_ALTA_HEADERS];
+  const ejemplo = modo === 'sincronizar' ? filaEjemploSync(vertical) : filaEjemploAlta(vertical);
+  const wsProductos = XLSX.utils.aoa_to_sheet([headers, ejemplo]);
+  wsProductos['!cols'] =
+    modo === 'sincronizar'
+      ? [
+          { wch: 18 },
+          { wch: 34 },
+          { wch: 30 },
+          { wch: 22 },
+          { wch: 18 },
+          { wch: 8 },
+          { wch: 36 },
+          { wch: 10 },
+          { wch: 8 },
+          { wch: 10 },
+        ]
+      : [
+          { wch: 34 },
+          { wch: 30 },
+          { wch: 22 },
+          { wch: 18 },
+          { wch: 8 },
+          { wch: 36 },
+          { wch: 10 },
+          { wch: 8 },
+          { wch: 10 },
+        ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, wsProductos, PLANTILLA_SHEET_PRODUCTOS);
   XLSX.utils.book_append_sheet(wb, sheetListaReferenciaPlantilla('categoria', categorias), 'Categorias');
   XLSX.utils.book_append_sheet(wb, sheetListaReferenciaPlantilla('marca', marcas), 'Marcas');
-  XLSX.writeFile(wb, nombreArchivoPlantillaImport(vertical), { compression: true });
+  XLSX.writeFile(wb, nombreArchivoPlantilla(vertical, modo), { compression: true });
 }
 
 function sheetNameProductosImport(workbook: XLSX.WorkBook): string {
@@ -119,7 +164,8 @@ function sheetNameProductosImport(workbook: XLSX.WorkBook): string {
 type Moneda = 'BS' | 'USD';
 
 type ParsedRow = {
-  rowNumber: number; // 1-based including header
+  rowNumber: number;
+  codigo: string | null;
   nombre: string;
   categoria: string;
   marca: string | null;
@@ -128,7 +174,6 @@ type ParsedRow = {
   comentarios: string | null;
   precio: number;
   moneda: Moneda;
-  /** null = sin control de inventario */
   cantidad: number | null;
 };
 
@@ -143,7 +188,7 @@ function parseXLSXToRows(arrayBuffer: ArrayBuffer): string[][] {
   if (!worksheet) return [];
 
   const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as unknown[][];
-  const rows = (rawRows ?? [])
+  return (rawRows ?? [])
     .map((r) =>
       (r ?? []).map((cell) => {
         if (cell == null) return '';
@@ -151,13 +196,44 @@ function parseXLSXToRows(arrayBuffer: ArrayBuffer): string[][] {
       })
     )
     .filter((r) => r.some((c) => c !== ''));
-
-  return rows;
 }
 
 function normalizeOptionalText(value: string): string | null {
   const v = value.trim();
   return v ? v : null;
+}
+
+async function mapaCodigosExistentesTienda(
+  tiendaId: string
+): Promise<{ ok: true; map: Map<string, string> } | { ok: false; error: string }> {
+  const map = new Map<string, string>();
+  const PAGE = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('productos')
+      .select('id, codigo')
+      .eq('tienda_id', tiendaId)
+      .not('codigo', 'is', null)
+      .range(from, from + PAGE - 1);
+    if (error) {
+      return {
+        ok: false,
+        error:
+          error.message?.includes('codigo') || error.code === '42703'
+            ? 'Falta la columna productos.codigo en Supabase. Ejecuta supabase-productos-codigo-sync.sql.'
+            : error.message || 'No se pudieron cargar los códigos existentes.',
+      };
+    }
+    const batch = (data ?? []) as { id: string; codigo: string | null }[];
+    for (const row of batch) {
+      const c = normalizarCodigoProducto(String(row.codigo ?? ''));
+      if (c) map.set(c, row.id);
+    }
+    if (batch.length < PAGE) break;
+    from += PAGE;
+  }
+  return { ok: true, map };
 }
 
 export function ImportarProductosCSV({
@@ -169,19 +245,18 @@ export function ImportarProductosCSV({
 }: {
   onImportado?: () => void;
   vertical?: VerticalVehiculo;
-  /** Si true, importa a la tienda elegida (panel admin). */
   modoAdmin?: boolean;
-  /** UUID de tiendas.id destino (obligatorio en modoAdmin). */
   tiendaIdDestino?: string | null;
-  /** Nombre comercial / tienda para mensajes. */
   etiquetaDestino?: string | null;
 }) {
   const { user } = useAuth();
+  const [modoImportacion, setModoImportacion] = useState<ModoImportacion>('alta');
   const [archivo, setArchivo] = useState<File | null>(null);
   const [estado, setEstado] = useState<'idle' | 'importando' | 'ok' | 'error'>('idle');
   const [mensaje, setMensaje] = useState('');
   const [errores, setErrores] = useState<string[]>([]);
   const [insertados, setInsertados] = useState(0);
+  const [actualizados, setActualizados] = useState(0);
 
   const categoriasLookup = useMemo(() => {
     const m = new Map<string, string>();
@@ -199,8 +274,10 @@ export function ImportarProductosCSV({
     return m;
   }, [vertical]);
 
+  const esSync = modoImportacion === 'sincronizar';
+
   const descargarTemplate = () => {
-    descargarPlantillaImportacion(vertical);
+    descargarPlantillaImportacion(vertical, modoImportacion);
   };
 
   const importar = async () => {
@@ -208,6 +285,7 @@ export function ImportarProductosCSV({
     setMensaje('');
     setErrores([]);
     setInsertados(0);
+    setActualizados(0);
 
     if (!user) {
       setEstado('error');
@@ -225,11 +303,20 @@ export function ImportarProductosCSV({
       return;
     }
 
-    const rl = permitirAccionCliente(modoAdmin ? 'importar-productos-admin' : 'importar-productos', {
-      maxIntentos: modoAdmin ? 12 : 4,
-      ventanaMs: 10 * 60 * 1000,
-      bloqueoMs: 3 * 60 * 1000,
-    });
+    const rl = permitirAccionCliente(
+      modoAdmin
+        ? esSync
+          ? 'sync-inventario-admin'
+          : 'importar-productos-admin'
+        : esSync
+          ? 'sync-inventario'
+          : 'importar-productos',
+      {
+        maxIntentos: modoAdmin ? 12 : esSync ? 8 : 4,
+        ventanaMs: 10 * 60 * 1000,
+        bloqueoMs: 3 * 60 * 1000,
+      }
+    );
     if (!rl.ok) {
       setEstado('error');
       setMensaje(rl.mensaje);
@@ -249,8 +336,7 @@ export function ImportarProductosCSV({
       setMensaje('La importación CSV está suspendida por ahora. Usa la plantilla Excel (.xlsx).');
       return;
     }
-    const esExcelBinario = ext === 'xlsx' || ext === 'xls';
-    if (!esExcelBinario) {
+    if (ext !== 'xlsx' && ext !== 'xls') {
       setEstado('error');
       setMensaje('Solo se admite Excel (.xlsx o .xls). Descarga la plantilla e inténtalo de nuevo.');
       return;
@@ -285,39 +371,58 @@ export function ImportarProductosCSV({
       return row[idx] ?? '';
     };
 
-    const REQUIRED = ['nombre', 'categoria', 'marca', 'precio', 'moneda'] as const;
-    const missingHeaders = REQUIRED.filter((k) => {
-      const idx = headerMap.get(normalizeHeader(k));
-      return idx === undefined;
-    });
+    const REQUIRED = esSync
+      ? (['codigo', 'nombre', 'categoria', 'marca', 'precio', 'moneda'] as const)
+      : (['nombre', 'categoria', 'marca', 'precio', 'moneda'] as const);
+    const missingHeaders = REQUIRED.filter((k) => headerMap.get(normalizeHeader(k)) === undefined);
     if (missingHeaders.length) {
       setEstado('error');
       setMensaje(
-        `Faltan columnas en el archivo: ${missingHeaders.join(', ')}. Descarga el template desde el botón.`
+        `Faltan columnas en el archivo: ${missingHeaders.join(', ')}. Descarga la plantilla del modo actual.`
       );
       return;
     }
 
     setMensaje('Validando filas...');
 
-    const filas: ParsedRow[] = [];
-    const erroresFila: string[] = [];
-
-    // hasta 1000 filas por archivo (vendedor y admin; auto y moto)
     if (dataRows.length > 1000) {
       setEstado('error');
       setMensaje('El archivo no debe tener más de 1000 filas de productos.');
       return;
     }
 
+    const filas: ParsedRow[] = [];
+    const erroresFila: string[] = [];
+    const codigosEnArchivo = new Set<string>();
+
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
-      const rowNumber = i + 2; // +1 por header +1 por index
+      const rowNumber = i + 2;
 
+      const codigoRaw = get(row, 'codigo') || get(row, 'sku') || get(row, 'codigo_vendedor');
+      const codigoNorm = codigoRaw ? normalizarCodigoProducto(codigoRaw) : '';
       const nombreRaw = get(row, 'nombre').trim();
-      if (esFilaEjemploPlantilla(nombreRaw)) {
-        continue;
+
+      if (esFilaEjemploPlantilla(nombreRaw, codigoNorm)) continue;
+
+      if (esSync) {
+        if (!codigoNorm) {
+          erroresFila.push(`Fila ${rowNumber}: falta "codigo" (obligatorio en sincronizar).`);
+          continue;
+        }
+        if (codigosEnArchivo.has(codigoNorm)) {
+          erroresFila.push(`Fila ${rowNumber}: codigo duplicado en el archivo (${codigoNorm}).`);
+          continue;
+        }
+        codigosEnArchivo.add(codigoNorm);
+      } else if (codigoNorm) {
+        if (codigosEnArchivo.has(codigoNorm)) {
+          erroresFila.push(`Fila ${rowNumber}: codigo duplicado en el archivo (${codigoNorm}).`);
+          continue;
+        }
+        codigosEnArchivo.add(codigoNorm);
       }
+
       const nombre = nombreRaw.toUpperCase();
       const categoria = get(row, 'categoria').trim();
       const marcaRaw = get(row, 'marca').trim();
@@ -326,8 +431,8 @@ export function ImportarProductosCSV({
       const comentariosRaw = get(row, 'comentarios') || get(row, 'descripcion') || '';
       const precioRaw = get(row, 'precio');
       const monedaRaw = get(row, 'moneda');
-
       const moneda = normalizarMonedaImport(monedaRaw);
+
       if (!nombre) {
         erroresFila.push(`Fila ${rowNumber}: falta "nombre".`);
         continue;
@@ -344,10 +449,8 @@ export function ImportarProductosCSV({
         erroresFila.push(`Fila ${rowNumber}: falta "marca".`);
         continue;
       }
-
       const marcaRawUpper = marcaRaw.toUpperCase();
-      const marca =
-        marcaRawUpper === 'OTRA' ? null : marcasLookup.get(marcaRawUpper) ?? null;
+      const marca = marcaRawUpper === 'OTRA' ? null : marcasLookup.get(marcaRawUpper) ?? null;
       if (marcaRawUpper !== 'OTRA' && !marca) {
         erroresFila.push(`Fila ${rowNumber}: "marca" no es válida (${marcaRaw}).`);
         continue;
@@ -355,12 +458,14 @@ export function ImportarProductosCSV({
 
       const precio = parsePrecioProducto(precioRaw);
       if (precio == null) {
-        erroresFila.push(`Fila ${rowNumber}: "precio" inválido (${precioRaw || 'vacío'}). Usa máximo 2 decimales.`);
+        erroresFila.push(
+          `Fila ${rowNumber}: "precio" inválido (${precioRaw || 'vacío'}). Usa máximo 2 decimales.`
+        );
         continue;
       }
       if (!moneda) {
         erroresFila.push(
-          `Fila ${rowNumber}: "moneda" no reconocida (${monedaRaw || 'vacío'}). Usa BS o USD (Excel: "Dólares estadounidenses" también se acepta).`
+          `Fila ${rowNumber}: "moneda" no reconocida (${monedaRaw || 'vacío'}). Usa BS o USD.`
         );
         continue;
       }
@@ -391,6 +496,7 @@ export function ImportarProductosCSV({
 
       filas.push({
         rowNumber,
+        codigo: codigoNorm || null,
         nombre,
         categoria: categoriaFinal,
         marca,
@@ -421,7 +527,6 @@ export function ImportarProductosCSV({
     }
 
     let tiendaId: string | null = null;
-
     if (modoAdmin && tiendaIdDestino) {
       tiendaId = tiendaIdDestino;
     } else {
@@ -431,13 +536,11 @@ export function ImportarProductosCSV({
         .eq('user_id', user.id)
         .order('nombre')
         .limit(1);
-
       if (errTiendas) {
         setEstado('error');
         setMensaje(errTiendas.message || 'Error al cargar tu tienda.');
         return;
       }
-
       const tienda = (tiendasData && tiendasData[0]) || null;
       if (!tienda) {
         setEstado('error');
@@ -447,20 +550,57 @@ export function ImportarProductosCSV({
       tiendaId = tienda.id;
     }
 
+    let codigosExistentes = new Map<string, string>();
+    if (esSync || filas.some((f) => f.codigo)) {
+      setMensaje('Cargando códigos existentes de la tienda...');
+      const mapa = await mapaCodigosExistentesTienda(tiendaId!);
+      if (!mapa.ok) {
+        setEstado('error');
+        setMensaje(mapa.error);
+        return;
+      }
+      codigosExistentes = mapa.map;
+    }
+
     setMensaje(
-      modoAdmin
-        ? `Insertando productos en ${etiquetaDestino?.trim() || 'la tienda seleccionada'}...`
-        : 'Insertando productos...'
+      esSync
+        ? modoAdmin
+          ? `Sincronizando inventario en ${etiquetaDestino?.trim() || 'la tienda'}...`
+          : 'Sincronizando inventario (actualiza cantidades/precios; conserva fotos)...'
+        : modoAdmin
+          ? `Insertando productos en ${etiquetaDestino?.trim() || 'la tienda seleccionada'}...`
+          : 'Insertando productos...'
     );
 
-    let ok = 0;
-    const erroresInsert: string[] = [];
+    let okInsert = 0;
+    let okUpdate = 0;
+    const erroresOp: string[] = [];
 
-    // Secuencial: más estable con RLS y evita spamear requests
-    for (let i = 0; i < filas.length; i++) {
-      const r = filas[i];
+    for (const r of filas) {
       const inv = patchDesdeStockActual(r.cantidad);
-      const payload = {
+      const existenteId = r.codigo ? codigosExistentes.get(r.codigo) : undefined;
+
+      if (esSync && existenteId) {
+        const patch: Record<string, unknown> = {
+          precio_usd: r.precio,
+          moneda: r.moneda,
+          stock_actual: inv.stock_actual,
+          disponibilidad_aviso: inv.disponibilidad_aviso ?? null,
+          pausado_por_stock_vencido: inv.pausado_por_stock_vencido ?? false,
+        };
+        if (inv.activo !== undefined) patch.activo = inv.activo;
+        if (inv.stock_confirmado_at) patch.stock_confirmado_at = inv.stock_confirmado_at;
+
+        const { error: updError } = await supabase.from('productos').update(patch).eq('id', existenteId);
+        if (updError) {
+          erroresOp.push(`Fila ${r.rowNumber}: ${updError.message || 'Error actualizando.'}`);
+          continue;
+        }
+        okUpdate += 1;
+        continue;
+      }
+
+      const payload: Record<string, unknown> = {
         tienda_id: tiendaId,
         nombre: r.nombre,
         categoria: r.categoria,
@@ -479,33 +619,54 @@ export function ImportarProductosCSV({
         pausado_por_stock_vencido: inv.pausado_por_stock_vencido ?? false,
         vertical,
       };
+      if (r.codigo) payload.codigo = r.codigo;
 
-      // Nota: omitimos imagen_url e imagenes_extra por opción A (sin fotos)
-      const { error: insertError } = await supabase.from('productos').insert(payload);
+      const { data: inserted, error: insertError } = await supabase
+        .from('productos')
+        .insert(payload)
+        .select('id, codigo')
+        .maybeSingle();
 
       if (insertError) {
-        erroresInsert.push(`Fila ${r.rowNumber}: ${insertError.message || 'Error insertando.'}`);
+        const msg = insertError.message || 'Error insertando.';
+        erroresOp.push(
+          `Fila ${r.rowNumber}: ${
+            msg.includes('codigo') && msg.toLowerCase().includes('does not exist')
+              ? 'Falta la columna productos.codigo. Ejecuta supabase-productos-codigo-sync.sql en Supabase.'
+              : msg
+          }`
+        );
         continue;
       }
 
-      ok += 1;
+      if (inserted?.id && r.codigo) {
+        codigosExistentes.set(r.codigo, inserted.id);
+      }
+      okInsert += 1;
     }
 
-    setInsertados(ok);
-    if (erroresInsert.length) {
-      setErrores(erroresInsert.slice(0, 20));
+    setInsertados(okInsert);
+    setActualizados(okUpdate);
+
+    if (erroresOp.length) {
+      setErrores(erroresOp.slice(0, 20));
       setEstado('error');
       setMensaje(
-        `Se insertaron ${ok} producto(s), pero hubo ${erroresInsert.length} error(es). (Mostrando hasta 20)`
+        esSync
+          ? `Parcial: ${okUpdate} actualizado(s), ${okInsert} nuevo(s); ${erroresOp.length} error(es). (Mostrando hasta 20)`
+          : `Se insertaron ${okInsert} producto(s), pero hubo ${erroresOp.length} error(es). (Mostrando hasta 20)`
       );
+      if (okInsert + okUpdate > 0) onImportado?.();
       return;
     }
 
     setEstado('ok');
     setMensaje(
-      modoAdmin
-        ? `Importación completada: ${ok} producto(s) insertados en ${etiquetaDestino?.trim() || 'la tienda'} (sin fotos). Ya están publicados.`
-        : `Importación completada: ${ok} producto(s) insertados (sin fotos). Ya están publicados y visibles en la búsqueda pública.`
+      esSync
+        ? `Sincronización completada: ${okUpdate} actualizado(s) (fotos intactas), ${okInsert} nuevo(s) sin foto.`
+        : modoAdmin
+          ? `Importación completada: ${okInsert} producto(s) insertados en ${etiquetaDestino?.trim() || 'la tienda'} (sin fotos).`
+          : `Importación completada: ${okInsert} producto(s) insertados (sin fotos). Ya están publicados.`
     );
     onImportado?.();
   };
@@ -519,22 +680,58 @@ export function ImportarProductosCSV({
             : 'Importar productos desde Excel (.xlsx, sin fotos)'}
         </h3>
         <p className="importar-productos-ayuda">
-          {modoAdmin ? (
-            <>
-              Usa la <strong>misma plantilla</strong> que descarga el vendedor. Elige la vertical y el
-              vendedor activo, descarga el Excel, llénalo y súbelo aquí. Los productos se publican en
-              su tienda.
-            </>
-          ) : (
-            <>
-              Descarga la plantilla Excel: incluye hojas <strong>Productos</strong>,{' '}
-              <strong>Categorias</strong> y <strong>Marcas</strong> con los valores válidos para{' '}
-              {vertical === 'moto' ? 'motocicleta' : 'automóvil'}. Llena la hoja Productos (borra la fila
-              de ejemplo) y súbela aquí. Moneda: BS o USD.
-            </>
-          )}
+          Elige el modo según tu flujo. <strong>Alta nueva</strong> crea productos.{' '}
+          <strong>Sincronizar inventario</strong> actualiza cantidad/precio por{' '}
+          <code>codigo</code> y <strong>conserva las fotos</strong> ya cargadas.
         </p>
       </div>
+
+      <div className="importar-productos-modo" role="group" aria-label="Modo de importación">
+        <button
+          type="button"
+          className={`importar-productos-modo-btn${modoImportacion === 'alta' ? ' activo' : ''}`}
+          disabled={estado === 'importando'}
+          onClick={() => {
+            setModoImportacion('alta');
+            setArchivo(null);
+            setMensaje('');
+            setErrores([]);
+            setEstado('idle');
+          }}
+        >
+          Alta nueva
+        </button>
+        <button
+          type="button"
+          className={`importar-productos-modo-btn${modoImportacion === 'sincronizar' ? ' activo' : ''}`}
+          disabled={estado === 'importando'}
+          onClick={() => {
+            setModoImportacion('sincronizar');
+            setArchivo(null);
+            setMensaje('');
+            setErrores([]);
+            setEstado('idle');
+          }}
+        >
+          Sincronizar inventario
+        </button>
+      </div>
+
+      <p className="importar-productos-ayuda">
+        {esSync ? (
+          <>
+            Descarga la <strong>plantilla de sincronizar</strong> (incluye columna{' '}
+            <strong>codigo</strong> obligatoria). Máx. 1000 filas por archivo. Los productos con
+            cantidad 0 se pausan sin borrar fotos. Los que no vienen en el archivo no se tocan.
+          </>
+        ) : (
+          <>
+            Descarga la plantilla de alta: hojas <strong>Productos</strong>, <strong>Categorias</strong> y{' '}
+            <strong>Marcas</strong>. Si quieres sincronizar después, puedes incluir{' '}
+            <code>codigo</code> también en el alta (opcional).
+          </>
+        )}
+      </p>
 
       <input
         type="file"
@@ -550,21 +747,27 @@ export function ImportarProductosCSV({
           className="importar-productos-link"
           disabled={estado === 'importando'}
         >
-          Descargar plantilla Excel (.xlsx) con categorías y marcas
+          {esSync
+            ? 'Descargar plantilla sincronizar (.xlsx)'
+            : 'Descargar plantilla alta nueva (.xlsx)'}
         </button>
 
         <button
           type="button"
           className="importar-productos-boton"
-          onClick={importar}
+          onClick={() => void importar()}
           disabled={estado === 'importando' || !archivo || (modoAdmin && !tiendaIdDestino)}
           title={
-            modoAdmin && !tiendaIdDestino
-              ? 'Selecciona primero el vendedor destino'
-              : undefined
+            modoAdmin && !tiendaIdDestino ? 'Selecciona primero el vendedor destino' : undefined
           }
         >
-          {estado === 'importando' ? 'Importando...' : 'Importar'}
+          {estado === 'importando'
+            ? esSync
+              ? 'Sincronizando...'
+              : 'Importando...'
+            : esSync
+              ? 'Sincronizar inventario'
+              : 'Importar'}
         </button>
       </div>
 
@@ -589,10 +792,12 @@ export function ImportarProductosCSV({
         </div>
       )}
 
-      {insertados > 0 && estado !== 'importando' && (
-        <p className="importar-productos-mensaje ok">Insertados: {insertados}</p>
+      {(insertados > 0 || actualizados > 0) && estado !== 'importando' && (
+        <p className="importar-productos-mensaje ok">
+          {actualizados > 0 ? `Actualizados: ${actualizados}. ` : null}
+          {insertados > 0 ? `Nuevos: ${insertados}.` : null}
+        </p>
       )}
     </div>
   );
 }
-
