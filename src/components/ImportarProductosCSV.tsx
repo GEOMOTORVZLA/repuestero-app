@@ -504,7 +504,7 @@ export function ImportarProductosCSV({
       esSync
         ? modoAdmin
           ? `Sincronizando inventario en ${etiquetaDestino?.trim() || 'la tienda'}...`
-          : 'Sincronizando inventario (actualiza cantidades/precios; conserva fotos)...'
+          : 'Sincronizando inventario (precio, stock, nombre y descripción; conserva categoría y fotos)...'
         : modoAdmin
           ? `Insertando productos en ${etiquetaDestino?.trim() || 'la tienda seleccionada'}...`
           : 'Insertando productos...'
@@ -519,7 +519,12 @@ export function ImportarProductosCSV({
       const existenteId = r.codigo ? codigosExistentes.get(r.codigo) : undefined;
 
       if (esSync && existenteId) {
+        // Sync por codigo: precio, stock, nombre y descripcion.
+        // Categoria e imagenes no se tocan (la foto queda ligada al mismo producto).
         const patch: Record<string, unknown> = {
+          nombre: r.nombre,
+          descripcion: r.comentarios,
+          comentarios: r.comentarios,
           precio_usd: r.precio,
           moneda: r.moneda,
           stock_actual: inv.stock_actual,
@@ -601,7 +606,7 @@ export function ImportarProductosCSV({
     setEstado('ok');
     setMensaje(
       esSync
-        ? `Sincronización completada: ${okUpdate} actualizado(s) (fotos intactas), ${okInsert} nuevo(s) sin foto.`
+        ? `Sincronización completada: ${okUpdate} actualizado(s) (categoría y fotos intactas), ${okInsert} nuevo(s) sin foto.`
         : modoAdmin
           ? `Importación completada: ${okInsert} producto(s) insertados en ${etiquetaDestino?.trim() || 'la tienda'} (sin fotos).`
           : `Importación completada: ${okInsert} producto(s) insertados (sin fotos). Ya están publicados.`
@@ -619,8 +624,8 @@ export function ImportarProductosCSV({
         </h3>
       <p className="importar-productos-ayuda">
         Elige el modo según tu flujo. <strong>Alta nueva</strong> crea productos.{' '}
-        <strong>Sincronizar inventario</strong> actualiza cantidad/precio por <code>codigo</code> y{' '}
-        <strong>conserva las fotos</strong>. Misma plantilla simple para{' '}
+        <strong>Sincronizar inventario</strong> actualiza por <code>codigo</code>: cantidad, precio,
+        nombre y descripción; <strong>conserva categoría y fotos</strong>. Misma plantilla simple para{' '}
         {vertical === 'moto' ? 'motocicleta' : 'automóvil'}: sin columnas de marca, modelo ni año
         (escríbelos en comentarios).
       </p>
@@ -661,8 +666,10 @@ export function ImportarProductosCSV({
         {esSync ? (
           <>
             Descarga la <strong>plantilla de sincronizar ({vertical === 'moto' ? 'moto' : 'auto'})</strong>{' '}
-            con columna <strong>codigo</strong>. Máx. 1000 filas. Marca, modelo y año van en{' '}
-            <strong>comentarios</strong>. Cantidad 0 pausa sin borrar fotos.
+            con columna <strong>codigo</strong>. Si el código ya existe: actualiza nombre, descripción
+            (comentarios), precio y cantidad; <strong>no cambia categoría ni fotos</strong>. Si es
+            código nuevo: crea el producto (usa la categoría del Excel). Cantidad 0 pausa sin borrar
+            fotos. Máx. 1000 filas.
           </>
         ) : (
           <>
