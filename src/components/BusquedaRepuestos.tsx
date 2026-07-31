@@ -183,6 +183,7 @@ export function BusquedaRepuestos({
 }: BusquedaRepuestosProps) {
   const { user } = useAuth();
   const esCompacto = variant === 'compact';
+  const esMoto = vertical === 'moto';
   const wrapTextoRef = useRef<HTMLDivElement>(null);
   const [textoBusqueda, setTextoBusqueda] = useState('');
   const [sugerencias, setSugerencias] = useState<SugerenciaRepuesto[]>([]);
