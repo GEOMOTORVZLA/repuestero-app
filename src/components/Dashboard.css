@@ -819,6 +819,20 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   font-weight: 600;
 }
 
+/* Listados anchos (vendedores/talleres): la barra horizontal queda siempre a la vista */
+.dashboard-admin-table-wrap--perfiles {
+  max-height: calc(100dvh - 14rem);
+  overflow: auto;
+}
+
+.dashboard-admin-table-wrap--perfiles thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #f1f5f9;
+  box-shadow: 0 1px 0 #e2e8f0;
+}
+
 .dashboard-admin-table {
   width: 100%;
   border-collapse: collapse;
