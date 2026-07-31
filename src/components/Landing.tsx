@@ -72,6 +72,8 @@ const CATEGORIAS_REPUESTOS = [
   { nombre: 'Embrague' },
   { nombre: 'Autosonido' },
   { nombre: 'Accesorios' },
+  { nombre: 'Carrocería' },
+  { nombre: 'Motores y componentes' },
 ];
 
 export function Landing({
@@ -421,6 +423,18 @@ export function Landing({
                   <img
                     src="/categoria-accesorios.png"
                     alt="Accesorios"
+                    className="landing-categoria-icono landing-categoria-icono-img"
+                  />
+                ) : cat.nombre === 'Carrocería' ? (
+                  <img
+                    src="/categoria-carroceria.png"
+                    alt="Carrocería"
+                    className="landing-categoria-icono landing-categoria-icono-img"
+                  />
+                ) : cat.nombre === 'Motores y componentes' ? (
+                  <img
+                    src="/categoria-motores-componentes.png"
+                    alt="Motores y componentes"
                     className="landing-categoria-icono landing-categoria-icono-img"
                   />
                 ) : (
