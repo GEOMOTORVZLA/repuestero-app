@@ -942,11 +942,18 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   word-break: break-word;
 }
 
-/* Vendedores / talleres: tabla ancha con scroll horizontal en el wrap */
+/* Vendedores / talleres: tabla compacta, sin huecos forzados entre columnas */
 .dashboard-admin-table--perfiles {
   table-layout: auto;
   width: max-content;
-  min-width: max(100%, 1200px);
+  min-width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+.dashboard-admin-table--perfiles th,
+.dashboard-admin-table--perfiles td {
+  padding: 0.32rem 0.28rem;
 }
 
 .dashboard-admin-table--perfiles .dashboard-admin-nombre-td,
@@ -954,7 +961,7 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
 .dashboard-admin-table--perfiles .dashboard-admin-email-td {
   max-width: none;
   width: auto;
-  min-width: 11rem;
+  min-width: 0;
   white-space: normal;
   overflow: visible;
   text-overflow: unset;
@@ -974,17 +981,36 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
 }
 
 .dashboard-admin-table--perfiles .dashboard-admin-rif-td {
-  width: 6.75rem;
-  max-width: 6.75rem;
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  padding-inline: 0.28rem;
+}
+
+.dashboard-admin-table--perfiles .dashboard-admin-texto-td,
+.dashboard-admin-table--perfiles .dashboard-admin-status-td,
+.dashboard-admin-table--perfiles .dashboard-admin-membresia-td,
+.dashboard-admin-table--perfiles .dashboard-admin-ubicacion-td,
+.dashboard-admin-table--perfiles .dashboard-admin-autorizacion-td,
+.dashboard-admin-table--perfiles .dashboard-admin-userid-td,
+.dashboard-admin-table--perfiles .dashboard-admin-especialidad-td {
+  max-width: none;
+  min-width: 0;
+  width: auto;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
 }
 
 .dashboard-admin-table--perfiles .dashboard-admin-acciones-td {
-  width: 11rem;
-  min-width: 10.5rem;
+  width: auto;
+  min-width: 0;
+  padding-inline: 0.25rem;
 }
 
 .dashboard-admin-table--perfiles .dashboard-admin-acciones-fila {
   flex-wrap: wrap;
+  gap: 0.25rem;
 }
 
 .dashboard-admin-membresia-td {
