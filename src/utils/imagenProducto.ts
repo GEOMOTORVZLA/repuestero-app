@@ -1,9 +1,13 @@
 /**
  * Imágenes de producto: límites de subida y variantes (thumbnails via Supabase Storage).
  *
- * La transformación `/render/image/` requiere que el proyecto tenga habilitadas
- * las transformaciones de imagen en Storage. Si no, define en `.env`:
- * VITE_SUPABASE_SIN_TRANSFORMACION_IMAGEN=1
+ * Por defecto NO usamos /render/image/ (Image Transformations): el cupo Pro es bajo (~100/mes)
+ * y los listados lo agotan rápido. Las fotos se sirven en tamaño original.
+ *
+ * Para reactivar transformaciones (aceptando coste extra en Supabase):
+ *   VITE_SUPABASE_USAR_TRANSFORMACION_IMAGEN=1
+ * Para forzar apagado explícito (redundante con el default):
+ *   VITE_SUPABASE_SIN_TRANSFORMACION_IMAGEN=1
  */
 
 export const MAX_MB_FOTO_PRODUCTO = 2;
@@ -17,7 +21,10 @@ const TIMEOUT_CARGAR_IMAGEN_MS = 20000;
 const TIMEOUT_TO_BLOB_MS = 12000;
 
 function transformacionDesactivada(): boolean {
-  return import.meta.env.VITE_SUPABASE_SIN_TRANSFORMACION_IMAGEN === '1';
+  // Opt-in: solo si el proyecto paga / acepta el cupo de transformaciones.
+  if (import.meta.env.VITE_SUPABASE_USAR_TRANSFORMACION_IMAGEN === '1') return false;
+  if (import.meta.env.VITE_SUPABASE_SIN_TRANSFORMACION_IMAGEN === '1') return true;
+  return true;
 }
 
 /** True si la URL apunta a un objeto público de Storage (admite thumbnail por render). */
