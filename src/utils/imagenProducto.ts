@@ -301,8 +301,27 @@ type BucketProductoUpload = {
 };
 
 /**
+ * Misma ruta de Storage tras un upsert = misma URL pública.
+ * Sin ?v= el navegador/CDN suele seguir mostrando la foto vieja.
+ */
+export function urlPublicaConCacheBust(url: string, version = Date.now()): string {
+  const u = url.trim();
+  if (!u) return u;
+  try {
+    const parsed = new URL(u);
+    parsed.searchParams.set('v', String(version));
+    return parsed.toString();
+  } catch {
+    const sinV = u.replace(/([?&])v=\d+/g, '').replace(/[?&]$/, '');
+    const sep = sinV.includes('?') ? '&' : '?';
+    return `${sinV}${sep}v=${version}`;
+  }
+}
+
+/**
  * Sube el original optimizado y, en paralelo, una miniatura *-thumb.* para listados rápidos.
  * Si el thumb falla, igual deja el original (listados harán fallback).
+ * Las URLs incluyen ?v=timestamp para forzar recarga tras reemplazar la misma ruta.
  */
 export async function subirImagenProductoConMiniatura(
   bucket: BucketProductoUpload,
@@ -313,8 +332,9 @@ export async function subirImagenProductoConMiniatura(
   if (upErr) {
     throw new Error(upErr.message || 'Error al subir la imagen.');
   }
+  const cacheVersion = Date.now();
   const { data: pub } = bucket.getPublicUrl(pathOriginal);
-  const urlOriginal = pub.publicUrl;
+  const urlOriginal = urlPublicaConCacheBust(pub.publicUrl, cacheVersion);
 
   const thumbPath = pathStorageMiniaturaDesdePath(pathOriginal);
   if (!thumbPath) return { urlOriginal, urlThumb: null };
@@ -328,7 +348,10 @@ export async function subirImagenProductoConMiniatura(
     const { error: thumbErr } = await bucket.upload(thumbPath, thumbFile, { upsert: true });
     if (thumbErr) return { urlOriginal, urlThumb: null };
     const { data: thumbPub } = bucket.getPublicUrl(thumbPath);
-    return { urlOriginal, urlThumb: thumbPub.publicUrl };
+    return {
+      urlOriginal,
+      urlThumb: urlPublicaConCacheBust(thumbPub.publicUrl, cacheVersion),
+    };
   } catch {
     return { urlOriginal, urlThumb: null };
   }
