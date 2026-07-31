@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.geomotor.app",
+      "sha256_cert_fingerprints": [
+        "6A:7E:DD:9F:46:FD:73:EA:DB:A8:87:C5:76:3B:FC:7B:73:B5:0F:1A:22:ED:57:8F:73:97:47:FB:07:3C:15:E5"
+      ]
+    }
+  }
+]

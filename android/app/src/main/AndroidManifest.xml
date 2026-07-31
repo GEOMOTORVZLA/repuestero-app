@@ -19,6 +19,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- OAuth nativo (Google / confirmación correo) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 
@@ -26,6 +27,17 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data android:scheme="com.geomotor.app" android:host="auth" android:path="/callback" />
+            </intent-filter>
+
+            <!-- App Links: https://geomotorvzla.com (catálogo ?tienda=, repuesto, /motos). Fallback = navegador si no hay app. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="https" android:host="geomotorvzla.com" />
+                <data android:scheme="https" android:host="www.geomotorvzla.com" />
             </intent-filter>
         </activity>
 
