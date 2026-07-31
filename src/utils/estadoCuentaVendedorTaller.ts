@@ -97,10 +97,11 @@ export function bannerEstadoCuentaNegocio(input: EstadoCuentaNegocioInput): Bann
 
   if (apr === 'pendiente') {
     return {
-      titulo: 'CUENTA EN REVISION DE APROBACION',
-      variante: 'revision',
+      titulo: 'CUENTA ACTIVA — REVISIÓN INTERNA PENDIENTE',
+      variante: 'activa',
       alertaMembresia: null,
-      resumenMembresia: null,
+      resumenMembresia:
+        'Ya puedes operar. Si tu perfil aún no aparece en búsqueda, completa datos o contacta soporte.',
     };
   }
 

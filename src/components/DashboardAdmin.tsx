@@ -64,8 +64,8 @@ const KPI_DETALLE_TITULO: Record<AdminKpiDetalle, string> = {
   productos_total: 'Total productos',
   catalogo_auto: 'Catálogo automóvil',
   catalogo_moto: 'Catálogo motocicleta',
-  vendedores_pendientes: 'Vendedores por autorizar — tiendas',
-  talleres_pendientes: 'Talleres por autorizar',
+  vendedores_pendientes: 'Vendedores nuevos (últimos 5 días)',
+  talleres_pendientes: 'Talleres nuevos (últimos 5 días)',
   productos_pendientes_web: 'Productos por autorizar (web)',
 };
 
@@ -132,12 +132,22 @@ type FiltroEstadoProductoGestion =
   | 'sin_fecha_stock';
 
 const DIAS_PRODUCTO_AGREGADO_RECIENTE = 5;
+/** Mismo criterio (5 días) para revisar registros nuevos de vendedores/talleres. */
+const DIAS_REGISTRO_NUEVO_NEGOCIO = 5;
 
 function esProductoAgregadoReciente(createdAt: string | null | undefined): boolean {
   if (createdAt == null || String(createdAt).trim() === '') return false;
   const creado = new Date(createdAt).getTime();
   if (Number.isNaN(creado)) return false;
   const limiteMs = DIAS_PRODUCTO_AGREGADO_RECIENTE * 24 * 60 * 60 * 1000;
+  return Date.now() - creado <= limiteMs;
+}
+
+function esRegistroNegocioNuevo(createdAt: string | null | undefined): boolean {
+  if (createdAt == null || String(createdAt).trim() === '') return false;
+  const creado = new Date(createdAt).getTime();
+  if (Number.isNaN(creado)) return false;
+  const limiteMs = DIAS_REGISTRO_NUEVO_NEGOCIO * 24 * 60 * 60 * 1000;
   return Date.now() - creado <= limiteMs;
 }
 
@@ -589,6 +599,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [busquedaVendedores, setBusquedaVendedores] = useState('');
   const [filtroSoloSuspendidosImpago, setFiltroSoloSuspendidosImpago] = useState(false);
   const [filtroSoloSuspendidosImpagoTalleres, setFiltroSoloSuspendidosImpagoTalleres] = useState(false);
+  const [filtroRegistrosNuevos5Dias, setFiltroRegistrosNuevos5Dias] = useState(false);
+  const [filtroRegistrosNuevos5DiasTalleres, setFiltroRegistrosNuevos5DiasTalleres] = useState(false);
   const [busquedaTalleres, setBusquedaTalleres] = useState('');
   const [fotosMasivasTiendaId, setFotosMasivasTiendaId] = useState('');
   const [fotosMasivasAlcance, setFotosMasivasAlcance] = useState<'todos' | 'sin_foto' | 'seleccionados'>('sin_foto');
@@ -970,24 +982,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     if (filtroSoloSuspendidosImpago) {
       list = list.filter(perfilSuspendidoPorImpago);
     }
-    list.sort((a, b) => {
-      const sa = perfilSuspendidoPorImpago(a) ? 0 : 1;
-      const sb = perfilSuspendidoPorImpago(b) ? 0 : 1;
-      if (sa !== sb) return sa - sb;
-      return cmpIsoDesc(a.created_at, b.created_at);
-    });
-    return list;
-  }, [vendedores, filtroSoloSuspendidosImpago]);
-
-  const vendedoresSuspendidosEnLista = useMemo(
-    () => vendedores.filter(perfilSuspendidoPorImpago).length,
-    [vendedores]
-  );
-
-  const talleresVisibles = useMemo(() => {
-    let list = [...talleres];
-    if (filtroSoloSuspendidosImpagoTalleres) {
-      list = list.filter(perfilSuspendidoPorImpago);
+    if (filtroRegistrosNuevos5Dias) {
+      list = list.filter((v) => esRegistroNegocioNuevo(v.created_at));
     }
     list.sort((a, b) => {
       const sa = perfilSuspendidoPorImpago(a) ? 0 : 1;
@@ -996,10 +992,42 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       return cmpIsoDesc(a.created_at, b.created_at);
     });
     return list;
-  }, [talleres, filtroSoloSuspendidosImpagoTalleres]);
+  }, [vendedores, filtroSoloSuspendidosImpago, filtroRegistrosNuevos5Dias]);
+
+  const vendedoresSuspendidosEnLista = useMemo(
+    () => vendedores.filter(perfilSuspendidoPorImpago).length,
+    [vendedores]
+  );
+
+  const vendedoresNuevos5DiasEnLista = useMemo(
+    () => vendedores.filter((v) => esRegistroNegocioNuevo(v.created_at)).length,
+    [vendedores]
+  );
+
+  const talleresVisibles = useMemo(() => {
+    let list = [...talleres];
+    if (filtroSoloSuspendidosImpagoTalleres) {
+      list = list.filter(perfilSuspendidoPorImpago);
+    }
+    if (filtroRegistrosNuevos5DiasTalleres) {
+      list = list.filter((t) => esRegistroNegocioNuevo(t.created_at));
+    }
+    list.sort((a, b) => {
+      const sa = perfilSuspendidoPorImpago(a) ? 0 : 1;
+      const sb = perfilSuspendidoPorImpago(b) ? 0 : 1;
+      if (sa !== sb) return sa - sb;
+      return cmpIsoDesc(a.created_at, b.created_at);
+    });
+    return list;
+  }, [talleres, filtroSoloSuspendidosImpagoTalleres, filtroRegistrosNuevos5DiasTalleres]);
 
   const talleresSuspendidosEnLista = useMemo(
     () => talleres.filter(perfilSuspendidoPorImpago).length,
+    [talleres]
+  );
+
+  const talleresNuevos5DiasEnLista = useMemo(
+    () => talleres.filter((t) => esRegistroNegocioNuevo(t.created_at)).length,
     [talleres]
   );
 
@@ -1084,15 +1112,12 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     () => talleres.filter((t) => (t.aprobacion_estado ?? 'aprobado') === 'pendiente'),
     [talleres]
   );
-  const tiendasPendientes = kpis?.tiendas_pendientes_aprobacion ?? vendedores.filter(
-    (v) => (v.aprobacion_estado ?? 'aprobado') === 'pendiente'
-  ).length;
-  const talleresPendientes = kpis?.talleres_pendientes_aprobacion ?? talleres.filter(
-    (t) => (t.aprobacion_estado ?? 'aprobado') === 'pendiente'
-  ).length;
   const productosPendientesWeb = kpis?.productos_pendientes_web ?? productos.filter(
     (p) => (p.aprobacion_publica ?? 'aprobado') === 'pendiente'
   ).length;
+  /** Conteo operativo post auto-aprobación: registros recientes a revisar. */
+  const vendedoresNuevos5Dias = vendedoresNuevos5DiasEnLista;
+  const talleresNuevos5Dias = talleresNuevos5DiasEnLista;
   const vendedoresSuspendidosImpago =
     kpis?.vendedores_suspendidos_impago ?? vendedores.filter(perfilSuspendidoPorImpago).length;
 
@@ -1109,7 +1134,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     const pPendWeb = pReciente.filter((p) => (p.aprobacion_publica ?? 'aprobado') === 'pendiente');
     const vPend = v.filter((x) => (x.aprobacion_estado ?? 'aprobado') === 'pendiente');
     const vSuspendImpago = v.filter((x) => perfilSuspendidoPorImpago(x));
+    const vNuevos5d = v.filter((x) => esRegistroNegocioNuevo(x.created_at));
     const tPend = t.filter((x) => (x.aprobacion_estado ?? 'aprobado') === 'pendiente');
+    const tNuevos5d = t.filter((x) => esRegistroNegocioNuevo(x.created_at));
     return {
       u,
       v,
@@ -1123,7 +1150,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       pPendWeb,
       vPend,
       vSuspendImpago,
+      vNuevos5d,
       tPend,
+      tNuevos5d,
     };
   }, [usuarios, vendedores, talleres, compradores, productos]);
 
@@ -1757,7 +1786,18 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const irATabDesdeKpi = (t: AdminTab, desdeKpi?: AdminKpiDetalle | null) => {
     if (desdeKpi === 'vendedores_suspendidos_impago') {
       setFiltroSoloSuspendidosImpago(true);
+      setFiltroRegistrosNuevos5Dias(false);
       setBusquedaVendedores('');
+    }
+    if (desdeKpi === 'vendedores_pendientes') {
+      setFiltroRegistrosNuevos5Dias(true);
+      setFiltroSoloSuspendidosImpago(false);
+      setBusquedaVendedores('');
+    }
+    if (desdeKpi === 'talleres_pendientes') {
+      setFiltroRegistrosNuevos5DiasTalleres(true);
+      setFiltroSoloSuspendidosImpagoTalleres(false);
+      setBusquedaTalleres('');
     }
     setTab(t);
     setKpiDetalle(null);
@@ -2134,9 +2174,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       case 'catalogo_moto':
         return tablaProductos(L.pMoto, 'No hay productos de moto en el catálogo cargado.');
       case 'vendedores_pendientes':
-        return tablaTiendas(L.vPend, 'No hay tiendas pendientes de autorización.');
+        return tablaTiendas(L.vNuevos5d, 'No hay vendedores registrados en los últimos 5 días.');
       case 'talleres_pendientes':
-        return tablaTalleres(L.tPend, 'No hay talleres pendientes de autorización.');
+        return tablaTalleres(L.tNuevos5d, 'No hay talleres registrados en los últimos 5 días.');
       case 'productos_pendientes_web':
         return tablaProductos(L.pPendWeb, 'No hay productos pendientes de aprobación para la web.');
       default:
@@ -2274,16 +2314,16 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
                       onClick={() => setKpiDetalle('vendedores_pendientes')}
                     >
-                      <p className="dashboard-kpi-label">Vendedores por autorizar</p>
-                      <p className="dashboard-kpi-valor">{tiendasPendientes}</p>
+                      <p className="dashboard-kpi-label">Vendedores nuevos (5 días)</p>
+                      <p className="dashboard-kpi-valor">{vendedoresNuevos5Dias}</p>
                     </button>
                     <button
                       type="button"
                       className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
                       onClick={() => setKpiDetalle('talleres_pendientes')}
                     >
-                      <p className="dashboard-kpi-label">Talleres por autorizar</p>
-                      <p className="dashboard-kpi-valor">{talleresPendientes}</p>
+                      <p className="dashboard-kpi-label">Talleres nuevos (5 días)</p>
+                      <p className="dashboard-kpi-valor">{talleresNuevos5Dias}</p>
                     </button>
                     <button
                       type="button"
@@ -2295,9 +2335,12 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     </button>
                   </div>
                   <p className="dashboard-texto-placeholder" style={{ marginTop: '0.5rem' }}>
-                    Revisa las pestañas <strong>Vendedores</strong>, <strong>Talleres</strong> y <strong>Productos</strong>{' '}
-                    y usa <strong>Autorizar</strong> / <strong>Rechazar</strong> según corresponda. Ejecuta en Supabase el
-                    script <code>supabase-aprobacion-contenido.sql</code> si aún no está aplicado.
+                    Los vendedores y talleres quedan activos al registrarse. Revisa los{' '}
+                    <strong>nuevos (últimos 5 días)</strong> en sus pestañas; si algo está mal, usa{' '}
+                    <strong>Ocultar</strong> (no se ven en web/app) o extiende membresía con{' '}
+                    <strong>+30d</strong> / <strong>+1a</strong>. Los productos aún pueden requerir autorización
+                    web. Ejecuta en Supabase <code>supabase-auto-aprobar-negocios-registro.sql</code> si aún no
+                    está aplicado.
                   </p>
                   {!kpis && (
                     <p className="dashboard-admin-productos-hint" style={{ marginTop: '0.35rem' }}>
@@ -2982,32 +3025,47 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       spellCheck={false}
                     />
                     <span className="dashboard-admin-busqueda-hint">
-                      Hasta {ADMIN_LIST_LIMIT} filas recientes + suspendidos por impago. Los suspendidos aparecen
-                      primero (fila naranja). Para reactivar: <strong>+30 días</strong> / <strong>+1 año</strong>{' '}
-                      tras el pago, o <strong>Quitar bloqueo admin</strong> si lo suspendiste manualmente.
+                      Hasta {ADMIN_LIST_LIMIT} filas recientes + suspendidos. Usa el filtro de{' '}
+                      <strong>nuevos (5 días)</strong> para revisar altas recientes. Si un registro está mal:{' '}
+                      <strong>Ocultar</strong> (no se ve en web/app). Para renovar o alargar membresía:{' '}
+                      <strong>+30d</strong> / <strong>+1a</strong>.
                     </span>
                   </div>
                   <div className="dashboard-admin-acciones-masivas">
                     <button
                       type="button"
-                      className={`dashboard-admin-btn ${filtroSoloSuspendidosImpago ? 'warn' : ''}`}
-                      onClick={() => setFiltroSoloSuspendidosImpago((x) => !x)}
+                      className={`dashboard-admin-btn ${filtroRegistrosNuevos5Dias ? 'warn' : ''}`}
+                      onClick={() => {
+                        setFiltroRegistrosNuevos5Dias((x) => !x);
+                        if (!filtroRegistrosNuevos5Dias) setFiltroSoloSuspendidosImpago(false);
+                      }}
                     >
-                      {filtroSoloSuspendidosImpago
+                      {filtroRegistrosNuevos5Dias
                         ? 'Ver todos los vendedores'
-                        : `Solo suspendidos por impago (${vendedoresSuspendidosEnLista})`}
+                        : `Nuevos últimos 5 días (${vendedoresNuevos5DiasEnLista})`}
                     </button>
                     <button
                       type="button"
-                      className="dashboard-admin-btn ok"
-                      disabled={
-                        vendedoresPendientesVisibles.length === 0 ||
-                        accionando === 'bulk-vendedores-aprobar'
-                      }
-                      onClick={() => void aprobarVendedoresPendientesVisibles()}
+                      className={`dashboard-admin-btn ${filtroSoloSuspendidosImpago ? 'warn' : ''}`}
+                      onClick={() => {
+                        setFiltroSoloSuspendidosImpago((x) => !x);
+                        if (!filtroSoloSuspendidosImpago) setFiltroRegistrosNuevos5Dias(false);
+                      }}
                     >
-                      Autorizar vendedores pendientes visibles ({vendedoresPendientesVisibles.length})
+                      {filtroSoloSuspendidosImpago
+                        ? 'Quitar filtro suspendidos'
+                        : `Solo suspendidos por impago (${vendedoresSuspendidosEnLista})`}
                     </button>
+                    {vendedoresPendientesVisibles.length > 0 && (
+                      <button
+                        type="button"
+                        className="dashboard-admin-btn ok"
+                        disabled={accionando === 'bulk-vendedores-aprobar'}
+                        onClick={() => void aprobarVendedoresPendientesVisibles()}
+                      >
+                        Autorizar pendientes residuales ({vendedoresPendientesVisibles.length})
+                      </button>
+                    )}
                   </div>
                   <div className="dashboard-admin-table-wrap">
                     <table className="dashboard-admin-table dashboard-admin-table--perfiles">
@@ -3035,6 +3093,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             <td colSpan={14} className="dashboard-texto-placeholder">
                               {filtroSoloSuspendidosImpago
                                 ? 'Ningún vendedor suspendido en el listado cargado. Quita el filtro o recarga la pestaña.'
+                                : filtroRegistrosNuevos5Dias
+                                  ? 'Ningún vendedor nuevo en los últimos 5 días en el listado cargado.'
                                 : 'No hay vendedores en el listado.'}
                             </td>
                           </tr>
@@ -3141,7 +3201,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                     className="dashboard-admin-btn ok dashboard-admin-btn--compacto"
                                     disabled={accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`}
                                     onClick={() => void setTiendaBloqueada(v.id, false)}
-                                    title="Quitar bloqueo admin"
+                                    title="Quitar bloqueo: vuelve a poder verse si la membresía está vigente"
                                   >
                                     Quitar
                                   </button>
@@ -3151,12 +3211,12 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                     className="dashboard-admin-btn danger dashboard-admin-btn--compacto"
                                     disabled={accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`}
                                     onClick={() => void setTiendaBloqueada(v.id, true)}
-                                    title="Suspender por impago"
+                                    title="Anula la suscripción/visibilidad: no se muestra en web ni app"
                                   >
-                                    Suspender
+                                    Ocultar
                                   </button>
                                 )}
-                                {(v.aprobacion_estado ?? 'aprobado') === 'aprobado' && suspendida && (
+                                {(v.aprobacion_estado ?? 'aprobado') === 'aprobado' && (
                                   <>
                                     <button
                                       type="button"
@@ -3164,7 +3224,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                       disabled={
                                         accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`
                                       }
-                                      title="Renovar membresía 30 días"
+                                      title="Extender membresía 30 días desde hoy"
                                       onClick={() => void setTiendaMembresiaHasta(v.id, fechaMembresiaDesdeHoyUtc(30))}
                                     >
                                       +30d
@@ -3175,7 +3235,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                       disabled={
                                         accionando === `tienda-${v.id}` || accionando === `membresia-${v.id}`
                                       }
-                                      title="Renovar membresía 1 año"
+                                      title="Extender membresía 1 año desde hoy"
                                       onClick={() => void setTiendaMembresiaHasta(v.id, fechaMembresiaDesdeHoyUtc(365))}
                                     >
                                       +1a
@@ -3212,32 +3272,47 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       spellCheck={false}
                     />
                     <span className="dashboard-admin-busqueda-hint">
-                      Hasta {ADMIN_LIST_LIMIT} filas recientes + suspendidos por impago. Los suspendidos aparecen
-                      primero (fila naranja). Para reactivar: <strong>+30 días</strong> / <strong>+1 año</strong>{' '}
-                      tras el pago, o <strong>Quitar bloqueo admin</strong> si lo suspendiste manualmente.
+                      Hasta {ADMIN_LIST_LIMIT} filas recientes + suspendidos. Usa el filtro de{' '}
+                      <strong>nuevos (5 días)</strong> para revisar altas recientes. Si un registro está mal:{' '}
+                      <strong>Ocultar</strong> (no se ve en web/app). Para renovar o alargar membresía:{' '}
+                      <strong>+30d</strong> / <strong>+1a</strong>.
                     </span>
                   </div>
                   <div className="dashboard-admin-acciones-masivas">
                     <button
                       type="button"
-                      className={`dashboard-admin-btn ${filtroSoloSuspendidosImpagoTalleres ? 'warn' : ''}`}
-                      onClick={() => setFiltroSoloSuspendidosImpagoTalleres((x) => !x)}
+                      className={`dashboard-admin-btn ${filtroRegistrosNuevos5DiasTalleres ? 'warn' : ''}`}
+                      onClick={() => {
+                        setFiltroRegistrosNuevos5DiasTalleres((x) => !x);
+                        if (!filtroRegistrosNuevos5DiasTalleres) setFiltroSoloSuspendidosImpagoTalleres(false);
+                      }}
                     >
-                      {filtroSoloSuspendidosImpagoTalleres
+                      {filtroRegistrosNuevos5DiasTalleres
                         ? 'Ver todos los talleres'
-                        : `Solo suspendidos por impago (${talleresSuspendidosEnLista})`}
+                        : `Nuevos últimos 5 días (${talleresNuevos5DiasEnLista})`}
                     </button>
                     <button
                       type="button"
-                      className="dashboard-admin-btn ok"
-                      disabled={
-                        talleresPendientesVisibles.length === 0 ||
-                        accionando === 'bulk-talleres-aprobar'
-                      }
-                      onClick={() => void aprobarTalleresPendientesVisibles()}
+                      className={`dashboard-admin-btn ${filtroSoloSuspendidosImpagoTalleres ? 'warn' : ''}`}
+                      onClick={() => {
+                        setFiltroSoloSuspendidosImpagoTalleres((x) => !x);
+                        if (!filtroSoloSuspendidosImpagoTalleres) setFiltroRegistrosNuevos5DiasTalleres(false);
+                      }}
                     >
-                      Autorizar talleres pendientes visibles ({talleresPendientesVisibles.length})
+                      {filtroSoloSuspendidosImpagoTalleres
+                        ? 'Quitar filtro suspendidos'
+                        : `Solo suspendidos por impago (${talleresSuspendidosEnLista})`}
                     </button>
+                    {talleresPendientesVisibles.length > 0 && (
+                      <button
+                        type="button"
+                        className="dashboard-admin-btn ok"
+                        disabled={accionando === 'bulk-talleres-aprobar'}
+                        onClick={() => void aprobarTalleresPendientesVisibles()}
+                      >
+                        Autorizar pendientes residuales ({talleresPendientesVisibles.length})
+                      </button>
+                    )}
                   </div>
                   <div className="dashboard-admin-table-wrap">
                     <table className="dashboard-admin-table dashboard-admin-table--perfiles">
@@ -3265,6 +3340,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             <td colSpan={14} className="dashboard-texto-placeholder">
                               {filtroSoloSuspendidosImpagoTalleres
                                 ? 'Ningún taller suspendido en el listado cargado. Quita el filtro o recarga la pestaña.'
+                                : filtroRegistrosNuevos5DiasTalleres
+                                  ? 'Ningún taller nuevo en los últimos 5 días en el listado cargado.'
                                 : 'No hay talleres en el listado.'}
                             </td>
                           </tr>
@@ -3365,7 +3442,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                       accionando === `membresia-taller-${t.id}`
                                     }
                                     onClick={() => void setTallerBloqueado(t.id, false)}
-                                    title="Quitar bloqueo admin"
+                                    title="Quitar bloqueo: vuelve a poder verse si la membresía está vigente"
                                   >
                                     Quitar
                                   </button>
@@ -3378,12 +3455,12 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                       accionando === `membresia-taller-${t.id}`
                                     }
                                     onClick={() => void setTallerBloqueado(t.id, true)}
-                                    title="Suspender por impago"
+                                    title="Anula la suscripción/visibilidad: no se muestra en web ni app"
                                   >
-                                    Suspender
+                                    Ocultar
                                   </button>
                                 )}
-                                {(t.aprobacion_estado ?? 'aprobado') === 'aprobado' && suspendido && (
+                                {(t.aprobacion_estado ?? 'aprobado') === 'aprobado' && (
                                   <>
                                     <button
                                       type="button"
@@ -3392,7 +3469,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                         accionando === `taller-${t.id}` ||
                                         accionando === `membresia-taller-${t.id}`
                                       }
-                                      title="Renovar membresía 30 días"
+                                      title="Extender membresía 30 días desde hoy"
                                       onClick={() =>
                                         void setTallerMembresiaHasta(t.id, fechaMembresiaDesdeHoyUtc(30))
                                       }
@@ -3406,7 +3483,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                         accionando === `taller-${t.id}` ||
                                         accionando === `membresia-taller-${t.id}`
                                       }
-                                      title="Renovar membresía 1 año"
+                                      title="Extender membresía 1 año desde hoy"
                                       onClick={() =>
                                         void setTallerMembresiaHasta(t.id, fechaMembresiaDesdeHoyUtc(365))
                                       }
