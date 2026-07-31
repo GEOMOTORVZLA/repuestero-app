@@ -470,6 +470,24 @@ function celdaTextoUnaLineaAdmin(texto: string | null | undefined) {
   );
 }
 
+/** Nombre completo sin truncar: comercial + jurídico si difieren. */
+function etiquetaNombreNegocioCompleto(n: {
+  nombre?: string | null;
+  nombre_comercial?: string | null;
+}): string {
+  const comercial = n.nombre_comercial?.trim() || '';
+  const juridico = n.nombre?.trim() || '';
+  if (comercial && juridico && comercial.toLowerCase() !== juridico.toLowerCase()) {
+    return `${comercial} · ${juridico}`;
+  }
+  return comercial || juridico || '—';
+}
+
+function celdaTextoCompletoAdmin(texto: string | null | undefined) {
+  const valor = texto?.trim() || '—';
+  return <span className="dashboard-admin-texto-completo">{valor}</span>;
+}
+
 function celdaEmailAdmin(texto: string | null | undefined) {
   const valor = texto?.trim() || '—';
   return <span className="dashboard-admin-email-texto">{valor}</span>;
@@ -597,10 +615,12 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [busquedaUsuarios, setBusquedaUsuarios] = useState('');
   const [busquedaCompradores, setBusquedaCompradores] = useState('');
   const [busquedaVendedores, setBusquedaVendedores] = useState('');
-  const [filtroSoloSuspendidosImpago, setFiltroSoloSuspendidosImpago] = useState(false);
-  const [filtroSoloSuspendidosImpagoTalleres, setFiltroSoloSuspendidosImpagoTalleres] = useState(false);
-  const [filtroRegistrosNuevos5Dias, setFiltroRegistrosNuevos5Dias] = useState(false);
-  const [filtroRegistrosNuevos5DiasTalleres, setFiltroRegistrosNuevos5DiasTalleres] = useState(false);
+  const [filtroListaVendedores, setFiltroListaVendedores] = useState<
+    'todos' | 'nuevos_5d' | 'suspendidos'
+  >('todos');
+  const [filtroListaTalleres, setFiltroListaTalleres] = useState<'todos' | 'nuevos_5d' | 'suspendidos'>(
+    'todos'
+  );
   const [busquedaTalleres, setBusquedaTalleres] = useState('');
   const [fotosMasivasTiendaId, setFotosMasivasTiendaId] = useState('');
   const [fotosMasivasAlcance, setFotosMasivasAlcance] = useState<'todos' | 'sin_foto' | 'seleccionados'>('sin_foto');
@@ -979,10 +999,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
 
   const vendedoresVisibles = useMemo(() => {
     let list = [...vendedores];
-    if (filtroSoloSuspendidosImpago) {
+    if (filtroListaVendedores === 'suspendidos') {
       list = list.filter(perfilSuspendidoPorImpago);
-    }
-    if (filtroRegistrosNuevos5Dias) {
+    } else if (filtroListaVendedores === 'nuevos_5d') {
       list = list.filter((v) => esRegistroNegocioNuevo(v.created_at));
     }
     list.sort((a, b) => {
@@ -992,7 +1011,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       return cmpIsoDesc(a.created_at, b.created_at);
     });
     return list;
-  }, [vendedores, filtroSoloSuspendidosImpago, filtroRegistrosNuevos5Dias]);
+  }, [vendedores, filtroListaVendedores]);
 
   const vendedoresSuspendidosEnLista = useMemo(
     () => vendedores.filter(perfilSuspendidoPorImpago).length,
@@ -1006,10 +1025,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
 
   const talleresVisibles = useMemo(() => {
     let list = [...talleres];
-    if (filtroSoloSuspendidosImpagoTalleres) {
+    if (filtroListaTalleres === 'suspendidos') {
       list = list.filter(perfilSuspendidoPorImpago);
-    }
-    if (filtroRegistrosNuevos5DiasTalleres) {
+    } else if (filtroListaTalleres === 'nuevos_5d') {
       list = list.filter((t) => esRegistroNegocioNuevo(t.created_at));
     }
     list.sort((a, b) => {
@@ -1019,7 +1037,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       return cmpIsoDesc(a.created_at, b.created_at);
     });
     return list;
-  }, [talleres, filtroSoloSuspendidosImpagoTalleres, filtroRegistrosNuevos5DiasTalleres]);
+  }, [talleres, filtroListaTalleres]);
 
   const talleresSuspendidosEnLista = useMemo(
     () => talleres.filter(perfilSuspendidoPorImpago).length,
@@ -1785,18 +1803,15 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
 
   const irATabDesdeKpi = (t: AdminTab, desdeKpi?: AdminKpiDetalle | null) => {
     if (desdeKpi === 'vendedores_suspendidos_impago') {
-      setFiltroSoloSuspendidosImpago(true);
-      setFiltroRegistrosNuevos5Dias(false);
+      setFiltroListaVendedores('suspendidos');
       setBusquedaVendedores('');
     }
     if (desdeKpi === 'vendedores_pendientes') {
-      setFiltroRegistrosNuevos5Dias(true);
-      setFiltroSoloSuspendidosImpago(false);
+      setFiltroListaVendedores('nuevos_5d');
       setBusquedaVendedores('');
     }
     if (desdeKpi === 'talleres_pendientes') {
-      setFiltroRegistrosNuevos5DiasTalleres(true);
-      setFiltroSoloSuspendidosImpagoTalleres(false);
+      setFiltroListaTalleres('nuevos_5d');
       setBusquedaTalleres('');
     }
     setTab(t);
@@ -3025,37 +3040,30 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       spellCheck={false}
                     />
                     <span className="dashboard-admin-busqueda-hint">
-                      Hasta {ADMIN_LIST_LIMIT} filas recientes + suspendidos. Usa el filtro de{' '}
-                      <strong>nuevos (5 días)</strong> para revisar altas recientes. Si un registro está mal:{' '}
-                      <strong>Ocultar</strong> (no se ve en web/app). Para renovar o alargar membresía:{' '}
-                      <strong>+30d</strong> / <strong>+1a</strong>.
+                      Hasta {ADMIN_LIST_LIMIT} filas recientes + suspendidos. Usa el filtro desplegable para ver
+                      altas de los <strong>últimos 5 días</strong>. Si un registro está mal:{' '}
+                      <strong>Ocultar</strong>. Membresía: <strong>+30d</strong> / <strong>+1a</strong>.
                     </span>
                   </div>
                   <div className="dashboard-admin-acciones-masivas">
-                    <button
-                      type="button"
-                      className={`dashboard-admin-btn ${filtroRegistrosNuevos5Dias ? 'warn' : ''}`}
-                      onClick={() => {
-                        setFiltroRegistrosNuevos5Dias((x) => !x);
-                        if (!filtroRegistrosNuevos5Dias) setFiltroSoloSuspendidosImpago(false);
-                      }}
-                    >
-                      {filtroRegistrosNuevos5Dias
-                        ? 'Ver todos los vendedores'
-                        : `Nuevos últimos 5 días (${vendedoresNuevos5DiasEnLista})`}
-                    </button>
-                    <button
-                      type="button"
-                      className={`dashboard-admin-btn ${filtroSoloSuspendidosImpago ? 'warn' : ''}`}
-                      onClick={() => {
-                        setFiltroSoloSuspendidosImpago((x) => !x);
-                        if (!filtroSoloSuspendidosImpago) setFiltroRegistrosNuevos5Dias(false);
-                      }}
-                    >
-                      {filtroSoloSuspendidosImpago
-                        ? 'Quitar filtro suspendidos'
-                        : `Solo suspendidos por impago (${vendedoresSuspendidosEnLista})`}
-                    </button>
+                    <div className="dashboard-admin-filtro-vertical">
+                      <label htmlFor="admin-filtro-lista-vendedores">Filtrar listado</label>
+                      <select
+                        id="admin-filtro-lista-vendedores"
+                        value={filtroListaVendedores}
+                        onChange={(e) =>
+                          setFiltroListaVendedores(e.target.value as 'todos' | 'nuevos_5d' | 'suspendidos')
+                        }
+                      >
+                        <option value="todos">Todos los vendedores</option>
+                        <option value="nuevos_5d">
+                          Nuevos últimos 5 días ({vendedoresNuevos5DiasEnLista})
+                        </option>
+                        <option value="suspendidos">
+                          Solo suspendidos por impago ({vendedoresSuspendidosEnLista})
+                        </option>
+                      </select>
+                    </div>
                     {vendedoresPendientesVisibles.length > 0 && (
                       <button
                         type="button"
@@ -3071,7 +3079,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     <table className="dashboard-admin-table dashboard-admin-table--perfiles">
                       <thead>
                         <tr>
-                          <th>Nombre comercial</th>
+                          <th>Nombre completo</th>
                           <th>Vertical</th>
                           <th>RIF</th>
                           <th>Teléfono</th>
@@ -3091,11 +3099,11 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         {vendedoresVisibles.length === 0 ? (
                           <tr>
                             <td colSpan={14} className="dashboard-texto-placeholder">
-                              {filtroSoloSuspendidosImpago
-                                ? 'Ningún vendedor suspendido en el listado cargado. Quita el filtro o recarga la pestaña.'
-                                : filtroRegistrosNuevos5Dias
+                              {filtroListaVendedores === 'suspendidos'
+                                ? 'Ningún vendedor suspendido en el listado cargado. Cambia el filtro o recarga.'
+                                : filtroListaVendedores === 'nuevos_5d'
                                   ? 'Ningún vendedor nuevo en los últimos 5 días en el listado cargado.'
-                                : 'No hay vendedores en el listado.'}
+                                  : 'No hay vendedores en el listado.'}
                             </td>
                           </tr>
                         ) : (
@@ -3109,13 +3117,15 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             className={suspendida ? 'dashboard-admin-row-impago' : undefined}
                           >
                             <td className="dashboard-admin-texto-td dashboard-admin-nombre-td">
-                              {celdaTextoUnaLineaAdmin(v.nombre_comercial || v.nombre)}
+                              {celdaTextoCompletoAdmin(etiquetaNombreNegocioCompleto(v))}
                             </td>
                             <td className="dashboard-admin-texto-td">
                               {(v.vertical ?? 'auto') === 'moto' ? 'Moto' : 'Auto'}
                             </td>
                             <td className="dashboard-admin-rif-td">{celdaRifAdmin(v.rif)}</td>
-                            <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(v.telefono)}</td>
+                            <td className="dashboard-admin-texto-td dashboard-admin-telefono-td">
+                              {celdaTextoCompletoAdmin(v.telefono)}
+                            </td>
                             <td className="dashboard-admin-email-td">
                               {celdaEmailAdmin(emailNegocioAdmin(v, emailsPorUserId))}
                             </td>
@@ -3272,37 +3282,30 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       spellCheck={false}
                     />
                     <span className="dashboard-admin-busqueda-hint">
-                      Hasta {ADMIN_LIST_LIMIT} filas recientes + suspendidos. Usa el filtro de{' '}
-                      <strong>nuevos (5 días)</strong> para revisar altas recientes. Si un registro está mal:{' '}
-                      <strong>Ocultar</strong> (no se ve en web/app). Para renovar o alargar membresía:{' '}
-                      <strong>+30d</strong> / <strong>+1a</strong>.
+                      Hasta {ADMIN_LIST_LIMIT} filas recientes + suspendidos. Usa el filtro desplegable para ver
+                      altas de los <strong>últimos 5 días</strong>. Si un registro está mal:{' '}
+                      <strong>Ocultar</strong>. Membresía: <strong>+30d</strong> / <strong>+1a</strong>.
                     </span>
                   </div>
                   <div className="dashboard-admin-acciones-masivas">
-                    <button
-                      type="button"
-                      className={`dashboard-admin-btn ${filtroRegistrosNuevos5DiasTalleres ? 'warn' : ''}`}
-                      onClick={() => {
-                        setFiltroRegistrosNuevos5DiasTalleres((x) => !x);
-                        if (!filtroRegistrosNuevos5DiasTalleres) setFiltroSoloSuspendidosImpagoTalleres(false);
-                      }}
-                    >
-                      {filtroRegistrosNuevos5DiasTalleres
-                        ? 'Ver todos los talleres'
-                        : `Nuevos últimos 5 días (${talleresNuevos5DiasEnLista})`}
-                    </button>
-                    <button
-                      type="button"
-                      className={`dashboard-admin-btn ${filtroSoloSuspendidosImpagoTalleres ? 'warn' : ''}`}
-                      onClick={() => {
-                        setFiltroSoloSuspendidosImpagoTalleres((x) => !x);
-                        if (!filtroSoloSuspendidosImpagoTalleres) setFiltroRegistrosNuevos5DiasTalleres(false);
-                      }}
-                    >
-                      {filtroSoloSuspendidosImpagoTalleres
-                        ? 'Quitar filtro suspendidos'
-                        : `Solo suspendidos por impago (${talleresSuspendidosEnLista})`}
-                    </button>
+                    <div className="dashboard-admin-filtro-vertical">
+                      <label htmlFor="admin-filtro-lista-talleres">Filtrar listado</label>
+                      <select
+                        id="admin-filtro-lista-talleres"
+                        value={filtroListaTalleres}
+                        onChange={(e) =>
+                          setFiltroListaTalleres(e.target.value as 'todos' | 'nuevos_5d' | 'suspendidos')
+                        }
+                      >
+                        <option value="todos">Todos los talleres</option>
+                        <option value="nuevos_5d">
+                          Nuevos últimos 5 días ({talleresNuevos5DiasEnLista})
+                        </option>
+                        <option value="suspendidos">
+                          Solo suspendidos por impago ({talleresSuspendidosEnLista})
+                        </option>
+                      </select>
+                    </div>
                     {talleresPendientesVisibles.length > 0 && (
                       <button
                         type="button"
@@ -3318,7 +3321,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     <table className="dashboard-admin-table dashboard-admin-table--perfiles">
                       <thead>
                         <tr>
-                          <th>Nombre</th>
+                          <th>Nombre completo</th>
                           <th>RIF</th>
                           <th>Especialidad</th>
                           <th>Teléfono</th>
@@ -3338,11 +3341,11 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         {talleresVisibles.length === 0 ? (
                           <tr>
                             <td colSpan={14} className="dashboard-texto-placeholder">
-                              {filtroSoloSuspendidosImpagoTalleres
-                                ? 'Ningún taller suspendido en el listado cargado. Quita el filtro o recarga la pestaña.'
-                                : filtroRegistrosNuevos5DiasTalleres
+                              {filtroListaTalleres === 'suspendidos'
+                                ? 'Ningún taller suspendido en el listado cargado. Cambia el filtro o recarga.'
+                                : filtroListaTalleres === 'nuevos_5d'
                                   ? 'Ningún taller nuevo en los últimos 5 días en el listado cargado.'
-                                : 'No hay talleres en el listado.'}
+                                  : 'No hay talleres en el listado.'}
                             </td>
                           </tr>
                         ) : (
@@ -3356,7 +3359,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             className={suspendido ? 'dashboard-admin-row-impago' : undefined}
                           >
                             <td className="dashboard-admin-texto-td dashboard-admin-nombre-td">
-                              {celdaTextoUnaLineaAdmin(t.nombre_comercial || t.nombre)}
+                              {celdaTextoCompletoAdmin(etiquetaNombreNegocioCompleto(t))}
                             </td>
                             <td className="dashboard-admin-rif-td">{celdaRifAdmin(t.rif)}</td>
                             <td className="dashboard-admin-especialidad-td">
@@ -3370,7 +3373,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                 }
                               />
                             </td>
-                            <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(t.telefono)}</td>
+                            <td className="dashboard-admin-texto-td dashboard-admin-telefono-td">
+                              {celdaTextoCompletoAdmin(t.telefono)}
+                            </td>
                             <td className="dashboard-admin-email-td">
                               {celdaEmailAdmin(emailNegocioAdmin(t, emailsPorUserId))}
                             </td>

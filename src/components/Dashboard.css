@@ -872,26 +872,49 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   line-height: 1.35;
 }
 
-/* Vendedores / talleres: columnas más compactas para ver Acciones completas */
-.dashboard-admin-table--perfiles {
-  table-layout: fixed;
-  width: 100%;
-  min-width: 1080px;
+.dashboard-admin-texto-completo {
+  display: block;
+  line-height: 1.35;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  word-break: break-word;
 }
 
-.dashboard-admin-table--perfiles .dashboard-admin-nombre-td {
-  width: 8.5rem;
-  max-width: 8.5rem;
+/* Vendedores / talleres: columnas más compactas para ver Acciones completas */
+.dashboard-admin-table--perfiles {
+  table-layout: auto;
+  width: max-content;
+  min-width: 100%;
+}
+
+.dashboard-admin-table--perfiles .dashboard-admin-nombre-td,
+.dashboard-admin-table--perfiles .dashboard-admin-telefono-td,
+.dashboard-admin-table--perfiles .dashboard-admin-email-td {
+  max-width: none;
+  width: auto;
+  min-width: 11rem;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  word-break: break-word;
+}
+
+.dashboard-admin-table--perfiles .dashboard-admin-email-td {
+  word-break: break-all;
+}
+
+.dashboard-admin-table--perfiles .dashboard-admin-nombre-td .dashboard-admin-texto-completo,
+.dashboard-admin-table--perfiles .dashboard-admin-telefono-td .dashboard-admin-texto-completo,
+.dashboard-admin-table--perfiles .dashboard-admin-email-texto {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
 }
 
 .dashboard-admin-table--perfiles .dashboard-admin-rif-td {
   width: 6.75rem;
   max-width: 6.75rem;
-}
-
-.dashboard-admin-table--perfiles .dashboard-admin-email-td {
-  width: 10rem;
-  max-width: 10rem;
 }
 
 .dashboard-admin-table--perfiles .dashboard-admin-acciones-td {
