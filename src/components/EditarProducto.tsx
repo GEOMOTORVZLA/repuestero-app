@@ -1,8 +1,5 @@
 import { useMemo, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { MARCAS_VEHICULOS } from '../data/marcasVehiculos';
-import { MARCAS_MODELOS, ANOS } from '../data/marcasModelos';
-import { MARCAS_MOTOS, getModelosPorMarcaMoto } from '../data/marcasMotos';
 import { CATEGORIAS_PRODUCTO } from '../data/categoriasProducto';
 import { CATEGORIAS_PRODUCTO_MOTO } from '../data/categoriasProductoMoto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
@@ -66,12 +63,8 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
   const verticalProd = producto.vertical ?? 'auto';
   const esMoto = verticalProd === VERTICAL_MOTO;
   const categoriasOpciones = esMoto ? CATEGORIAS_PRODUCTO_MOTO : CATEGORIAS_PRODUCTO;
-  const marcasLista = esMoto ? [...MARCAS_MOTOS] : [...MARCAS_VEHICULOS];
   const [nombre, setNombre] = useState(producto.nombre);
   const [categoria, setCategoria] = useState(producto.categoria ?? '');
-  const [marca, setMarca] = useState(producto.marca ?? '');
-  const [modelo, setModelo] = useState(producto.modelo ?? '');
-  const [anio, setAnio] = useState(producto.anio ? String(producto.anio) : '');
   // usamos un solo campo de texto; si no hay comentarios aún, usamos la descripción previa
   const [comentarios, setComentarios] = useState(producto.comentarios ?? producto.descripcion ?? '');
   const [precio, setPrecio] = useState(String(producto.precio_usd));
@@ -92,12 +85,6 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
     slotsArchivosExtraVacios()
   );
 
-  const modelosOpciones = marca
-    ? esMoto
-      ? getModelosPorMarcaMoto(marca)
-      : MARCAS_MODELOS[marca] ?? []
-    : [];
-
   const urlsExtrasActuales = useMemo(
     () => normalizarUrlsACuatroSlots(producto.imagenes_extra as string[] | null | undefined),
     [producto.id, producto.imagenes_extra]
@@ -112,11 +99,6 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
     if (!categoria) {
       setEstado('error');
       setMensaje('Selecciona la categoría del producto.');
-      return;
-    }
-    if (!marca) {
-      setEstado('error');
-      setMensaje(esMoto ? 'Selecciona la marca de la moto.' : 'Selecciona la marca del vehículo.');
       return;
     }
     const precioNum = parsePrecioProducto(precio);
@@ -160,10 +142,7 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
     const payload: Record<string, unknown> = {
       nombre: nombre.trim(),
       categoria,
-      marca: marca === 'Otra' ? null : marca,
-      modelo: modelo.trim() || null,
-      anio: anio ? parseInt(anio, 10) : null,
-      // guardamos el mismo texto en descripción y comentarios
+      // Marca/modelo/año ya no se editan aquí (van en la descripción si aplica).
       descripcion: comentarios.trim() || null,
       comentarios: comentarios.trim() || null,
       precio_usd: precioNum,
@@ -270,9 +249,6 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       vertical: verticalProd,
       nombre: payload.nombre as string,
       categoria: (payload.categoria as string | null) ?? null,
-      marca: (payload.marca as string | null) ?? null,
-      modelo: (payload.modelo as string | null) ?? null,
-      anio: (payload.anio as number | null) ?? null,
       descripcion: (payload.descripcion as string | null) ?? null,
       comentarios: (payload.comentarios as string | null) ?? null,
       precio_usd: precioNum,
@@ -309,49 +285,6 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
         disabled={estado === 'guardando'}
         spellCheck={false}
       />
-      <select
-        value={marca}
-        onChange={(e) => {
-          setMarca(e.target.value);
-          setModelo('');
-        }}
-        disabled={estado === 'guardando'}
-        translate="no"
-        className="notranslate"
-      >
-        <option value="">{esMoto ? 'Marca de la moto' : 'Marca del vehículo'}</option>
-        {marcasLista.map((m) => (
-          <option key={m} value={m}>
-            {m}
-          </option>
-        ))}
-      </select>
-      {marca && modelosOpciones.length > 0 && (
-        <select
-          value={modelo}
-          onChange={(e) => setModelo(e.target.value)}
-          disabled={estado === 'guardando'}
-        >
-          <option value="">Modelo (opcional)</option>
-          {modelosOpciones.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-      )}
-      <select
-        value={anio}
-        onChange={(e) => setAnio(e.target.value)}
-        disabled={estado === 'guardando'}
-      >
-        <option value="">Año (opcional)</option>
-        {ANOS.map((a) => (
-          <option key={a} value={a}>
-            {a}
-          </option>
-        ))}
-      </select>
       <textarea
         placeholder={`Descripción del producto (máx. ${LIMITE_DESCRIPCION_PRODUCTO} caracteres)`}
         value={comentarios}
