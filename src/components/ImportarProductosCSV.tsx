@@ -94,12 +94,15 @@ function normalizarCodigoProducto(raw: string): string {
 }
 
 function nombreArchivoPlantilla(vertical: VerticalVehiculo, modo: ModoImportacion): string {
+  // -v2: plantilla sin marca/modelo/año (van en comentarios)
   if (modo === 'sincronizar') {
     return vertical === 'moto'
-      ? 'template_sincronizar_inventario_moto.xlsx'
-      : 'template_sincronizar_inventario_auto.xlsx';
+      ? 'template_sincronizar_inventario_moto-v2.xlsx'
+      : 'template_sincronizar_inventario_auto-v2.xlsx';
   }
-  return vertical === 'moto' ? 'template_productos_moto.xlsx' : 'template_productos_auto.xlsx';
+  return vertical === 'moto'
+    ? 'template_productos_moto-v2.xlsx'
+    : 'template_productos_auto-v2.xlsx';
 }
 
 function descargarPlantillaImportacion(vertical: VerticalVehiculo, modo: ModoImportacion): void {
@@ -614,11 +617,13 @@ export function ImportarProductosCSV({
             ? 'Carga masiva de productos para un vendedor'
             : 'Importar productos desde Excel (.xlsx, sin fotos)'}
         </h3>
-        <p className="importar-productos-ayuda">
-          Elige el modo según tu flujo. <strong>Alta nueva</strong> crea productos.{' '}
-          <strong>Sincronizar inventario</strong> actualiza cantidad/precio por{' '}
-          <code>codigo</code> y <strong>conserva las fotos</strong> ya cargadas.
-        </p>
+      <p className="importar-productos-ayuda">
+        Elige el modo según tu flujo. <strong>Alta nueva</strong> crea productos.{' '}
+        <strong>Sincronizar inventario</strong> actualiza cantidad/precio por <code>codigo</code> y{' '}
+        <strong>conserva las fotos</strong>. Misma plantilla simple para{' '}
+        {vertical === 'moto' ? 'motocicleta' : 'automóvil'}: sin columnas de marca, modelo ni año
+        (escríbelos en comentarios).
+      </p>
       </div>
 
       <div className="importar-productos-modo" role="group" aria-label="Modo de importación">
@@ -655,15 +660,15 @@ export function ImportarProductosCSV({
       <p className="importar-productos-ayuda">
         {esSync ? (
           <>
-            Descarga la <strong>plantilla de sincronizar</strong> (columna <strong>codigo</strong> obligatoria).
-            Máx. 1000 filas. Pon marca, modelo y año en <strong>comentarios</strong>. Cantidad 0 pausa sin
-            borrar fotos. Lo que no viene en el archivo no se toca.
+            Descarga la <strong>plantilla de sincronizar ({vertical === 'moto' ? 'moto' : 'auto'})</strong>{' '}
+            con columna <strong>codigo</strong>. Máx. 1000 filas. Marca, modelo y año van en{' '}
+            <strong>comentarios</strong>. Cantidad 0 pausa sin borrar fotos.
           </>
         ) : (
           <>
-            Plantilla simple: <strong>nombre</strong>, <strong>categoria</strong>,{' '}
-            <strong>comentarios</strong> (ahí va marca/modelo/año), <strong>precio</strong>,{' '}
-            <strong>moneda</strong> y <strong>cantidad</strong>. Hoja Categorias de referencia incluida.
+            Plantilla <strong>{vertical === 'moto' ? 'moto' : 'auto'}</strong>: nombre, categoria,
+            comentarios (marca/modelo/año), precio, moneda y cantidad. Solo hoja Categorias de
+            referencia (categorías de {vertical === 'moto' ? 'motocicleta' : 'automóvil'}).
           </>
         )}
       </p>
