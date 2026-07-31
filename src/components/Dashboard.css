@@ -4,6 +4,16 @@
   background: #f5f6f8;
 }
 
+.dashboard.dashboard-admin {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.dashboard.dashboard-admin .dashboard-main {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .dashboard-sidebar {
   width: 240px;
   background: #1e3a5f;
@@ -144,6 +154,8 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .dashboard-moderacion-aviso {
@@ -218,6 +230,8 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .dashboard-seccion-header {
@@ -766,10 +780,43 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
 }
 
 .dashboard-admin-table-wrap {
-  overflow: auto;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
   background: #fff;
   border-radius: 10px;
   border: 1px solid #e2e8f0;
+  /* Barra visible en Windows (evita overlay invisible) */
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.dashboard-admin-table-wrap::-webkit-scrollbar {
+  height: 12px;
+  width: 12px;
+}
+
+.dashboard-admin-table-wrap::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 8px;
+  border: 2px solid #fff;
+}
+
+.dashboard-admin-table-wrap::-webkit-scrollbar-track {
+  background: #e2e8f0;
+  border-radius: 8px;
+}
+
+.dashboard-admin-table-scroll-hint {
+  margin: 0 0 0.45rem;
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 600;
 }
 
 .dashboard-admin-table {
@@ -881,11 +928,11 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   word-break: break-word;
 }
 
-/* Vendedores / talleres: columnas más compactas para ver Acciones completas */
+/* Vendedores / talleres: tabla ancha con scroll horizontal en el wrap */
 .dashboard-admin-table--perfiles {
   table-layout: auto;
   width: max-content;
-  min-width: 100%;
+  min-width: max(100%, 1200px);
 }
 
 .dashboard-admin-table--perfiles .dashboard-admin-nombre-td,
@@ -1613,7 +1660,13 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   .dashboard-panel-movil .dashboard-main,
   .dashboard-panel-movil .dashboard-contenido {
     max-width: 100%;
-    overflow-x: hidden;
+    min-width: 0;
+    /* No cortar el scroll interno de las tablas admin */
+    overflow-x: clip;
+  }
+
+  .dashboard-panel-movil .dashboard-admin-table-wrap {
+    overflow-x: auto;
   }
 
   .dashboard-panel-movil .dashboard-nav-movil {

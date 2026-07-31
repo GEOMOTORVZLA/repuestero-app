@@ -3075,6 +3075,10 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </button>
                     )}
                   </div>
+                  <p className="dashboard-admin-table-scroll-hint">
+                    Desplaza la tabla hacia la derecha con la barra inferior o con Shift + rueda del mouse
+                    para ver Acciones y el resto de columnas.
+                  </p>
                   <div className="dashboard-admin-table-wrap">
                     <table className="dashboard-admin-table dashboard-admin-table--perfiles">
                       <thead>
@@ -3317,6 +3321,10 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </button>
                     )}
                   </div>
+                  <p className="dashboard-admin-table-scroll-hint">
+                    Desplaza la tabla hacia la derecha con la barra inferior o con Shift + rueda del mouse
+                    para ver Acciones y el resto de columnas.
+                  </p>
                   <div className="dashboard-admin-table-wrap">
                     <table className="dashboard-admin-table dashboard-admin-table--perfiles">
                       <thead>
