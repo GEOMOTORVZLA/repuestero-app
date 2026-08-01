@@ -6,6 +6,7 @@ import {
   comprobarActualizacionPlay,
   iniciarActualizacionPlay,
   omitirActualizacionHasta,
+  abrirTiendaPlay,
   suscribirDescargaFlexible,
   type ResultadoComprobacionActualizacion,
 } from '../utils/comprobarActualizacionApp';
@@ -16,16 +17,26 @@ type InfoDisponible = Extract<ResultadoComprobacionActualizacion, { disponible: 
 /**
  * Solo Android: avisa si Play Store tiene una version nueva.
  * Fallos silenciosos; el usuario puede omitir hasta la siguiente version.
+ * Si la flexible ya descargo, nunca deja al usuario atrapado sin salida.
  */
 export function AvisoActualizacionApp() {
   const [info, setInfo] = useState<InfoDisponible | null>(null);
   const [actualizando, setActualizando] = useState(false);
   const [listaParaReiniciar, setListaParaReiniciar] = useState(false);
+  const [reiniciando, setReiniciando] = useState(false);
+  const [errorReinicio, setErrorReinicio] = useState('');
 
   const revisar = useCallback(async () => {
     if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
     const r = await comprobarActualizacionPlay();
-    if (r.disponible) setInfo(r);
+    if (r.disponible) {
+      if (r.flexibleYaDescargada) {
+        setListaParaReiniciar(true);
+        setInfo(null);
+        return;
+      }
+      setInfo(r);
+    }
   }, []);
 
   useEffect(() => {
@@ -41,7 +52,11 @@ export function AvisoActualizacionApp() {
         removeApp = () => h.remove();
       });
 
-      void suscribirDescargaFlexible(() => setListaParaReiniciar(true)).then((off) => {
+      void suscribirDescargaFlexible(() => {
+        setListaParaReiniciar(true);
+        setInfo(null);
+        setErrorReinicio('');
+      }).then((off) => {
         removeFlex = off;
       });
     }
@@ -69,17 +84,58 @@ export function AvisoActualizacionApp() {
           <p className="aviso-actualizacion-texto">
             La nueva versión de Geomotor ya se descargó. Reinicia la app para instalarla.
           </p>
+          {errorReinicio ? (
+            <p className="aviso-actualizacion-error" role="alert">
+              {errorReinicio}
+            </p>
+          ) : null}
           <div className="aviso-actualizacion-acciones">
             <button
               type="button"
-              className="aviso-actualizacion-btn aviso-actualizacion-btn--primario"
+              className="aviso-actualizacion-btn aviso-actualizacion-btn--secundario"
+              disabled={reiniciando}
               onClick={() => {
-                void completarActualizacionFlexible().catch(() => undefined);
+                setListaParaReiniciar(false);
+                setErrorReinicio('');
               }}
             >
-              Reiniciar ahora
+              Más tarde
+            </button>
+            <button
+              type="button"
+              className="aviso-actualizacion-btn aviso-actualizacion-btn--primario"
+              disabled={reiniciando}
+              onClick={() => {
+                void (async () => {
+                  setReiniciando(true);
+                  setErrorReinicio('');
+                  const r = await completarActualizacionFlexible();
+                  setReiniciando(false);
+                  if (r === 'ok') return;
+                  setErrorReinicio(
+                    'No se pudo reiniciar aquí. Ábrela en Play Store o inténtalo de nuevo.'
+                  );
+                  if (r === 'abrir_tienda') {
+                    await abrirTiendaPlay();
+                  }
+                })();
+              }}
+            >
+              {reiniciando ? 'Reiniciando…' : errorReinicio ? 'Reintentar' : 'Reiniciar ahora'}
             </button>
           </div>
+          {errorReinicio ? (
+            <button
+              type="button"
+              className="aviso-actualizacion-btn aviso-actualizacion-btn--enlace"
+              disabled={reiniciando}
+              onClick={() => {
+                void abrirTiendaPlay();
+              }}
+            >
+              Abrir Play Store
+            </button>
+          ) : null}
         </div>
       </div>
     );

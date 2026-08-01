@@ -67,6 +67,26 @@
   color: #fff;
 }
 
-.aviso-actualizacion-btn--primario:hover:not(:disabled) {
-  background: #0d9488;
+.aviso-actualizacion-error {
+  margin: -0.5rem 0 0.9rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: #b91c1c;
+}
+
+.aviso-actualizacion-btn--enlace {
+  margin-top: 0.65rem;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #0f766e;
+  text-decoration: underline;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.aviso-actualizacion-btn--enlace:disabled {
+  opacity: 0.7;
+  cursor: wait;
 }

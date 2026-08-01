@@ -16,6 +16,8 @@ export type ResultadoComprobacionActualizacion =
       availableVersionName?: string;
       flexibleUpdateAllowed: boolean;
       immediateUpdateAllowed: boolean;
+      /** Flexible ya descargada: hay que reiniciar / completar instalacion. */
+      flexibleYaDescargada: boolean;
     };
 
 function leerOmitida(): string | null {
@@ -42,24 +44,36 @@ export async function comprobarActualizacionPlay(): Promise<ResultadoComprobacio
 
   try {
     const info = await AppUpdate.getAppUpdateInfo();
-    if (info.updateAvailability !== AppUpdateAvailability.UPDATE_AVAILABLE) {
+    const installStatus = (info as { installStatus?: number }).installStatus;
+    const flexibleYaDescargada = installStatus === FlexibleUpdateInstallStatus.DOWNLOADED;
+
+    if (
+      info.updateAvailability !== AppUpdateAvailability.UPDATE_AVAILABLE &&
+      !flexibleYaDescargada
+    ) {
       return { disponible: false };
     }
 
     const availableVersionCode = String(info.availableVersionCode ?? '');
-    if (!availableVersionCode) return { disponible: false };
+    if (!availableVersionCode && !flexibleYaDescargada) return { disponible: false };
 
     const omitida = leerOmitida();
-    if (omitida && omitida === availableVersionCode) {
+    if (
+      !flexibleYaDescargada &&
+      omitida &&
+      availableVersionCode &&
+      omitida === availableVersionCode
+    ) {
       return { disponible: false };
     }
 
     return {
       disponible: true,
-      availableVersionCode,
+      availableVersionCode: availableVersionCode || 'descargada',
       availableVersionName: info.availableVersionName,
       flexibleUpdateAllowed: Boolean(info.flexibleUpdateAllowed),
       immediateUpdateAllowed: Boolean(info.immediateUpdateAllowed),
+      flexibleYaDescargada,
     };
   } catch {
     return { disponible: false };
@@ -95,8 +109,26 @@ export async function iniciarActualizacionPlay(opciones: {
   }
 }
 
-export async function completarActualizacionFlexible(): Promise<void> {
-  await AppUpdate.completeFlexibleUpdate();
+export async function abrirTiendaPlay(): Promise<void> {
+  try {
+    await AppUpdate.openAppStore();
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Completa la flexible update (reinicio). Si el proceso sigue vivo, el caller ofrece Play Store.
+ */
+export async function completarActualizacionFlexible(): Promise<'ok' | 'fallo' | 'abrir_tienda'> {
+  try {
+    await AppUpdate.completeFlexibleUpdate();
+    // En un reinicio correcto el JS no llega aqui. Si llega, el OEM no reinicio.
+    await new Promise((r) => setTimeout(r, 2500));
+    return 'abrir_tienda';
+  } catch {
+    return 'fallo';
+  }
 }
 
 export async function suscribirDescargaFlexible(onDescargada: () => void): Promise<() => void> {
@@ -106,6 +138,12 @@ export async function suscribirDescargaFlexible(onDescargada: () => void): Promi
   const handle = await AppUpdate.addListener('onFlexibleUpdateStateChange', (state) => {
     if (state.installStatus === FlexibleUpdateInstallStatus.DOWNLOADED) {
       onDescargada();
+    }
+    if (
+      state.installStatus === FlexibleUpdateInstallStatus.FAILED ||
+      state.installStatus === FlexibleUpdateInstallStatus.CANCELED
+    ) {
+      /* el UI de reinicio no debe quedar atrapado sin feedback en el siguiente intento */
     }
   });
   return () => {
