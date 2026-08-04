@@ -18,6 +18,7 @@ import {
   terminosBusquedaProducto,
 } from '../utils/busquedaProductosTexto';
 import { aplicarFiltroStockPublico } from '../utils/stockActualInventario';
+import { categoriasEquivalentesConsulta } from '../data/categoriasProducto';
 import { permitirAccionCliente } from '../utils/rateLimitCliente';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
@@ -103,7 +104,7 @@ export function ListaRepuestosPorCategoria({
         .eq('activo', true)
         .eq('aprobacion_publica', 'aprobado')
         .eq('vertical', vertical)
-        .eq('categoria', categoria);
+        .in('categoria', categoriasEquivalentesConsulta(categoria));
 
       query = aplicarFiltroStockPublico(query);
       query = aplicarTerminosTextoABusquedaProductos(query, texto);

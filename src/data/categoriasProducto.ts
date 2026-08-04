@@ -3,13 +3,16 @@ export const CATEGORIAS_PRODUCTO: string[] = [
   'Filtros',
   'Frenos',
   'Baterías',
-  'Cauchos',
+  'Cauchos y rines',
   'Amortiguadores y suspensiones',
   'Correas y bandas',
   'Bujías y encendido',
   'Aceites y lubricantes',
   'Luces y faros',
   'Embrague',
+  'Aire acondicionado Automotriz',
+  'Tren Delantero',
+  'Transmisiones',
   'Autosonido',
   'Accesorios',
   'Carrocería',
@@ -25,3 +28,14 @@ export const CATEGORIAS_PRODUCTO: string[] = [
   'Otros',
 ];
 
+/** Nombre anterior → actual (productos ya publicados siguen con el label viejo en BD). */
+export const ALIAS_CATEGORIA_PRODUCTO: Record<string, string[]> = {
+  'Cauchos y rines': ['Cauchos y rines', 'Cauchos'],
+};
+
+/** Valores de `categoria` a consultar en BD para un pin/filtro de categoría. */
+export function categoriasEquivalentesConsulta(categoria: string): string[] {
+  const aliases = ALIAS_CATEGORIA_PRODUCTO[categoria];
+  if (aliases?.length) return aliases;
+  return [categoria];
+}

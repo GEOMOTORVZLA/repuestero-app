@@ -63,13 +63,16 @@ const CATEGORIAS_REPUESTOS = [
   { nombre: 'Filtros' },
   { nombre: 'Frenos' },
   { nombre: 'Baterías' },
-  { nombre: 'Cauchos' },
+  { nombre: 'Cauchos y rines' },
   { nombre: 'Amortiguadores y suspensiones' },
   { nombre: 'Correas y bandas' },
   { nombre: 'Bujías y encendido' },
   { nombre: 'Aceites y lubricantes' },
   { nombre: 'Luces y faros' },
   { nombre: 'Embrague' },
+  { nombre: 'Aire acondicionado Automotriz' },
+  { nombre: 'Tren Delantero' },
+  { nombre: 'Transmisiones' },
   { nombre: 'Autosonido' },
   { nombre: 'Accesorios' },
   { nombre: 'Carrocería' },
@@ -371,10 +374,10 @@ export function Landing({
                     alt="Baterías"
                     className="landing-categoria-icono landing-categoria-icono-img"
                   />
-                ) : cat.nombre === 'Cauchos' ? (
+                ) : cat.nombre === 'Cauchos y rines' ? (
                   <img
                     src={imgCauchos}
-                    alt="Cauchos"
+                    alt="Cauchos y rines"
                     className="landing-categoria-icono landing-categoria-icono-img"
                   />
                 ) : cat.nombre === 'Amortiguadores y suspensiones' ? (

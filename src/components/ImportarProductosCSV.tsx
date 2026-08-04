@@ -236,6 +236,8 @@ export function ImportarProductosCSV({
     const m = new Map<string, string>();
     const lista = vertical === 'moto' ? CATEGORIAS_PRODUCTO_MOTO : CATEGORIAS_PRODUCTO;
     for (const c of lista) m.set(c.toUpperCase(), c);
+    // Plantillas / productos viejos con el nombre anterior.
+    if (vertical !== 'moto') m.set('CAUCHOS', 'Cauchos y rines');
     return m;
   }, [vertical]);
 
