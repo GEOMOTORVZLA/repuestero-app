@@ -148,3 +148,25 @@ export function productoCoincideTextoFlexible(
   if (!fuente.trim()) return false;
   return terminos.every((t) => terminoCoincideEnTextoFlexible(t, fuente));
 }
+
+/**
+ * Coincidencia para paneles de gestión (Mis productos): multi-palabra AND,
+ * sin acentos, con plural simple. Sin typos ni prefijos (evita falsos positivos).
+ */
+export function productoCoincideTextoGestion(
+  campos: Array<string | number | null | undefined>,
+  texto: string
+): boolean {
+  const terminos = terminosBusquedaProducto(texto);
+  if (terminos.length === 0) return true;
+  const fuente = campos
+    .filter((c) => c != null && String(c).trim() !== '')
+    .map((c) => normalizarTextoBusqueda(String(c)))
+    .join(' ');
+  if (!fuente.trim()) return false;
+  return terminos.every((t) => {
+    const variantes = variantesFormaPalabra(t);
+    if (variantes.length === 0) return true;
+    return variantes.some((v) => fuente.includes(v));
+  });
+}

@@ -20,7 +20,7 @@ import {
   type DisponibilidadAviso,
 } from '../utils/avisoProductoPublicacion';
 import { etiquetaStockActual } from '../utils/stockActualInventario';
-import { productoCoincideTextoFlexible } from '../utils/busquedaProductosTexto';
+import { productoCoincideTextoGestion } from '../utils/busquedaProductosTexto';
 
 const NETWORK_TIMEOUT_MS = 30000;
 const NETWORK_RETRIES = 1;
@@ -301,9 +301,9 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     }
   }, [productoDetalle, user]);
 
-  /** Mismo criterio que Visor de mostrador: multi-palabra AND, plural/singular y typo leve. */
+  /** Búsqueda de gestión: contiene la palabra (sin acentos / plural), sin typos agresivos. */
   const productoCoincideBusqueda = (p: ProductoPanel, texto: string) =>
-    productoCoincideTextoFlexible(
+    productoCoincideTextoGestion(
       [p.nombre, p.codigo, p.descripcion, p.comentarios, p.marca, p.modelo, p.categoria],
       texto
     );
@@ -786,9 +786,9 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         <div>
           <p className="mis-productos-ajuste-masivo-titulo">Buscar y filtrar mis productos</p>
             <p className="mis-productos-ajuste-masivo-descripcion">
-              Elige criterios y escribe en la búsqueda: la lista se filtra al instante. Pulsa{' '}
-              <strong>Aplicar filtros</strong> (o Intro) para volver a cargar el catálogo desde el servidor
-              y evitar el límite por defecto de mil filas.
+              Escribe en la búsqueda: la lista de abajo se filtra al instante (nombre, código, descripción,
+              etc.). Pulsa <strong>Aplicar filtros</strong> (o Intro) para recargar el catálogo desde el
+              servidor. El alcance de fotos masivas no oculta esta lista.
             </p>
         </div>
         <form
@@ -803,8 +803,12 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
             <input
               type="search"
               value={busquedaProductosInput}
-              onChange={(e) => setBusquedaProductosInput(e.target.value)}
-              placeholder="Ej: amortiguador espiral, bateria, Cheroke (typos leves OK)..."
+              onChange={(e) => {
+                setBusquedaProductosInput(e.target.value);
+                // La búsqueda de esta sección no debe quedar tapada por el alcance de fotos.
+                if (filtroAlcanceListaAplicado) setFiltroAlcanceListaAplicado(null);
+              }}
+              placeholder="Ej: camara, amortiguador, codigo SKU..."
             />
           </label>
           {!verticalFijo && (
@@ -859,9 +863,10 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
             Restablecer filtros
           </button>
         </div>
-        <p className="mis-productos-filtros-resumen">
-          Mostrando {productosVisibles.length} de {productos.length} producto(s) cargados que coinciden con los
-          filtros aplicados.
+        <p className="mis-productos-filtros-resumen" role="status">
+          {busquedaProductosInput.trim()
+            ? `Búsqueda «${busquedaProductosInput.trim()}»: ${productosVisibles.length} de ${productos.length} producto(s).`
+            : `Mostrando ${productosVisibles.length} de ${productos.length} producto(s) cargados.`}
         </p>
       </section>
       <section className="mis-productos-acciones-masivas" aria-label="Acciones masivas sobre productos">
@@ -1332,28 +1337,16 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         </div>
       )}
       <div className="mis-productos-grid">
-        {productosParaLista.length === 0 ? (
+        {productosVisibles.length === 0 ? (
           <div className="mis-productos-mensaje mis-productos-mensaje--bloque">
-            {productosVisibles.length === 0 ? (
-              <p>No hay productos que coincidan con la búsqueda o el filtro seleccionado.</p>
-            ) : (
-              <>
-                <p>
-                  Tu búsqueda encontró <strong>{productosVisibles.length}</strong> producto(s), pero el{' '}
-                  <strong>alcance de fotos masivas</strong> ({etiquetaAlcanceLista ?? 'activo'}) está ocultando
-                  la lista ({productosParaLista.length} visibles).
-                </p>
-                <button
-                  type="button"
-                  className="mis-productos-btn-primario"
-                  onClick={quitarFiltroAlcanceLista}
-                >
-                  Mostrar los {productosVisibles.length} del buscador
-                </button>
-              </>
-            )}
+            <p>
+              {busquedaProductosInput.trim()
+                ? `No hay productos que coincidan con «${busquedaProductosInput.trim()}». Prueba otra palabra o revisa el nombre en el catálogo.`
+                : 'No hay productos que coincidan con el filtro seleccionado.'}
+            </p>
           </div>
-        ) : productosParaLista.map((p) => {
+        ) : (
+          productosVisibles.map((p) => {
           const vehiculo = [p.marca, p.modelo, p.anio].filter(Boolean).join(' · ');
           const estaActivo = p.activo !== false;
           const semaforoStock = semaforoStockProducto(p);
@@ -1601,7 +1594,8 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
               </div>
             </article>
           );
-        })}
+        })
+        )}
       </div>
     </div>
   );
