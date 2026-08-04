@@ -4,13 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import './MisProductos.css';
 import { EditarProducto, type ProductoEditable } from './EditarProducto';
 import { ImagenProducto } from './ImagenProducto';
-import {
-  MAX_BYTES_FOTO_PRODUCTO,
-  MAX_MB_FOTO_PRODUCTO,
-  optimizarImagenProductoParaStorage,
-  subirImagenProductoConMiniatura,
-  urlImagenProductoVariante,
-} from '../utils/imagenProducto';
+import { urlImagenProductoVariante } from '../utils/imagenProducto';
 import { etiquetaMoneda } from '../utils/monedaProducto';
 import { formatearPrecioProducto } from '../utils/precioProducto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
@@ -211,16 +205,8 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
   const [fotoDetalleActiva, setFotoDetalleActiva] = useState<string | null>(null);
   const [contactosDetalle, setContactosDetalle] = useState<number | null>(null);
   const [cargandoContactos, setCargandoContactos] = useState(false);
-  const [fotosMasivasAlcance, setFotosMasivasAlcance] = useState<'sin_foto' | 'todos' | 'seleccionados'>('sin_foto');
-  /** Alcance aplicado a la lista de tarjetas (tras pulsar «Buscar»). null = sin filtrar por alcance. */
-  const [filtroAlcanceListaAplicado, setFiltroAlcanceListaAplicado] = useState<
-    'sin_foto' | 'todos' | 'seleccionados' | null
-  >(null);
-  const [fotosMasivasArchivos, setFotosMasivasArchivos] = useState<(File | null)[]>([null, null, null, null]);
-  const [fotosMasivasInputKey, setFotosMasivasInputKey] = useState(0);
-  const [fotosMasivasSeleccionados, setFotosMasivasSeleccionados] = useState<string[]>([]);
-  const [aplicandoFotosMasivas, setAplicandoFotosMasivas] = useState(false);
-  const [mensajeFotosMasivas, setMensajeFotosMasivas] = useState<string | null>(null);
+  /** Selección manual para acciones masivas (pausar/activar/eliminar/precios). */
+  const [productosSeleccionados, setProductosSeleccionados] = useState<string[]>([]);
   const [etiquetandoId, setEtiquetandoId] = useState<string | null>(null);
   /** Texto de búsqueda: filtra la lista en vivo al escribir. */
   const [busquedaProductosInput, setBusquedaProductosInput] = useState('');
@@ -360,9 +346,6 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     if (!user) return;
     setFiltroEstadoProductos(filtroEstadoProductosDraft);
     setFiltroVerticalProductos(verticalFijo ?? filtroVerticalProductosDraft);
-    // Al buscar productos, quitamos el filtro de alcance de fotos para no “esconder” el resultado.
-    setFiltroAlcanceListaAplicado(null);
-    setMensajeFotosMasivas(null);
     setCargandoFiltrosProductos(true);
     setError(null);
     try {
@@ -393,8 +376,6 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     setFiltroVerticalProductosDraft(verticalReset);
     setFiltroEstadoProductos('todos');
     setFiltroVerticalProductos(verticalReset);
-    setFiltroAlcanceListaAplicado(null);
-    setMensajeFotosMasivas(null);
     setCargandoFiltrosProductos(true);
     setError(null);
     try {
@@ -416,52 +397,6 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
       setCargandoFiltrosProductos(false);
     }
   };
-
-  const productosObjetivoFotosMasivas =
-    fotosMasivasAlcance === 'seleccionados'
-      ? productosVisibles.filter((p) => fotosMasivasSeleccionados.includes(p.id))
-      : productosVisibles.filter((p) => {
-          if (fotosMasivasAlcance === 'sin_foto') {
-            return !p.imagen_url || !String(p.imagen_url).trim();
-          }
-          return true;
-        });
-
-  /** Lista de tarjetas: mismos filtros generales + alcance solo tras «Buscar» (no altera la carga masiva). */
-  const productosParaLista = useMemo(() => {
-    if (!filtroAlcanceListaAplicado) return productosVisibles;
-    if (filtroAlcanceListaAplicado === 'seleccionados') {
-      return productosVisibles.filter((p) => fotosMasivasSeleccionados.includes(p.id));
-    }
-    if (filtroAlcanceListaAplicado === 'sin_foto') {
-      return productosVisibles.filter((p) => !p.imagen_url || !String(p.imagen_url).trim());
-    }
-    return productosVisibles;
-  }, [productosVisibles, filtroAlcanceListaAplicado, fotosMasivasSeleccionados]);
-
-  const buscarProductosPorAlcance = () => {
-    setFiltroAlcanceListaAplicado(fotosMasivasAlcance);
-    setMensajeFotosMasivas(null);
-    if (fotosMasivasAlcance === 'seleccionados' && fotosMasivasSeleccionados.length === 0) {
-      setMensajeFotosMasivas(
-        'No hay productos seleccionados. Márcalos en la lista o elige otro alcance y pulsa Buscar en alcance.'
-      );
-    }
-  };
-
-  const quitarFiltroAlcanceLista = () => {
-    setFiltroAlcanceListaAplicado(null);
-    setMensajeFotosMasivas(null);
-  };
-
-  const etiquetaAlcanceLista =
-    filtroAlcanceListaAplicado === 'sin_foto'
-      ? 'solo sin foto principal'
-      : filtroAlcanceListaAplicado === 'seleccionados'
-        ? 'solo seleccionados manualmente'
-        : filtroAlcanceListaAplicado === 'todos'
-          ? 'todos los visibles'
-          : null;
 
   const actualizarEtiquetasPublicacion = async (
     productoId: string,
@@ -485,41 +420,27 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     }
   };
 
-  const cambiarFotoMasiva = (idx: number, file: File | null) => {
-    setMensajeFotosMasivas(null);
-    setFotosMasivasArchivos((prev) => prev.map((f, i) => (i === idx ? file : f)));
-  };
-
-  const resetearFotosMasivas = () => {
-    setFotosMasivasArchivos([null, null, null, null]);
-    setFotosMasivasInputKey((prev) => prev + 1);
-    setMensajeFotosMasivas('Fotos reseteadas. Ya puedes cargar nuevas imágenes.');
-  };
-
-  const toggleProductoFotoMasiva = (productoId: string, checked: boolean) => {
-    setMensajeFotosMasivas(null);
-    setFotosMasivasSeleccionados((prev) => {
+  const toggleProductoSeleccionado = (productoId: string, checked: boolean) => {
+    setProductosSeleccionados((prev) => {
       if (checked) return prev.includes(productoId) ? prev : [...prev, productoId];
       return prev.filter((id) => id !== productoId);
     });
   };
 
-  const seleccionarTodosProductosFotosMasivas = () => {
-    setMensajeFotosMasivas(null);
-    setFotosMasivasSeleccionados(productosVisibles.map((p) => p.id));
+  const seleccionarTodosProductosVisibles = () => {
+    setProductosSeleccionados(productosVisibles.map((p) => p.id));
   };
 
-  const limpiarSeleccionFotosMasivas = () => {
-    setMensajeFotosMasivas(null);
-    setFotosMasivasSeleccionados([]);
+  const limpiarSeleccionProductos = () => {
+    setProductosSeleccionados([]);
   };
 
   const productosObjetivoAccionMasiva = useMemo(() => {
     if (accionMasivaAlcance === 'seleccionados') {
-      return productosVisibles.filter((p) => fotosMasivasSeleccionados.includes(p.id));
+      return productosVisibles.filter((p) => productosSeleccionados.includes(p.id));
     }
     return productosVisibles;
-  }, [accionMasivaAlcance, productosVisibles, fotosMasivasSeleccionados]);
+  }, [accionMasivaAlcance, productosVisibles, productosSeleccionados]);
 
   const etiquetarAccionMasiva = (accion: AccionMasivaProducto) => {
     if (accion === 'pausar') return 'Pausar';
@@ -587,7 +508,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         }
         const idSet = new Set(ids);
         setProductos((prev) => prev.filter((p) => !idSet.has(p.id)));
-        setFotosMasivasSeleccionados((prev) => prev.filter((id) => !idSet.has(id)));
+        setProductosSeleccionados((prev) => prev.filter((id) => !idSet.has(id)));
         setConfirmarEliminarMasivo(false);
         setMensajeAccionMasiva(
           'Eliminados ' + ids.length + ' producto(s).' + (omitidos > 0 ? ' Omitidos: ' + omitidos + '.' : '')
@@ -657,7 +578,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
   const solicitarEjecutarAccionMasiva = () => {
     setMensajeAccionMasiva(null);
     setError(null);
-    if (accionMasivaAlcance === 'seleccionados' && fotosMasivasSeleccionados.length === 0) {
+    if (accionMasivaAlcance === 'seleccionados' && productosSeleccionados.length === 0) {
       setMensajeAccionMasiva('Marca al menos un producto en la lista o cambia el alcance a filtrados.');
       return;
     }
@@ -687,87 +608,6 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
       return;
     }
     void ejecutarAccionMasivaConfirmada();
-  };
-
-  const aplicarFotosMasivas = async () => {
-    setMensajeFotosMasivas(null);
-    setError(null);
-    const fotoPrincipal = fotosMasivasArchivos[0];
-    const objetivos = productosObjetivoFotosMasivas;
-
-    if (!fotoPrincipal) {
-      setMensajeFotosMasivas('Sube al menos la foto 1 (principal).');
-      return;
-    }
-    if (!objetivos.length) {
-      setMensajeFotosMasivas('No hay productos para actualizar con el alcance elegido.');
-      return;
-    }
-    if (
-      !window.confirm(
-        `¿Aplicar estas fotos a ${objetivos.length} producto(s)?\n\n` +
-          'La foto 1 será principal y las demás quedarán como fotos adicionales. Esta acción reemplaza las fotos actuales de esos productos.'
-      )
-    ) {
-      return;
-    }
-
-    setAplicandoFotosMasivas(true);
-    try {
-      const bucket = supabase.storage.from('productos');
-      const urls: string[] = [];
-      const lote = `${Date.now()}`;
-
-      for (let i = 0; i < fotosMasivasArchivos.length; i += 1) {
-        const raw = fotosMasivasArchivos[i];
-        if (!raw) continue;
-        const lista = await optimizarImagenProductoParaStorage(raw, {
-          maxBytes: MAX_BYTES_FOTO_PRODUCTO,
-        });
-        if (lista.size > MAX_BYTES_FOTO_PRODUCTO) {
-          throw new Error(`La foto ${i + 1} no debe superar ${MAX_MB_FOTO_PRODUCTO} MB.`);
-        }
-        const ext = lista.name.split('.').pop() || 'jpg';
-        const path = `fotos-masivas-vendedor/${user.id}/${lote}/foto-${i + 1}.${ext}`;
-        const subida = await subirImagenProductoConMiniatura(bucket, path, lista);
-        urls[i] = subida.urlOriginal;
-      }
-
-      const imagenUrl = urls[0];
-      const extras = urls.slice(1).filter((u): u is string => typeof u === 'string' && Boolean(u));
-      const ids = objetivos.map((p) => p.id);
-
-      for (const id of ids) {
-        const { error: updErr } = await supabase
-          .from('productos')
-          .update({
-            imagen_url: imagenUrl,
-            imagenes_extra: extras.length ? extras : null,
-          })
-          .eq('id', id);
-        if (updErr) throw updErr;
-      }
-
-      setProductos((prev) =>
-        prev.map((p) =>
-          ids.includes(p.id)
-            ? { ...p, imagen_url: imagenUrl, imagenes_extra: extras.length ? extras : null }
-            : p
-        )
-      );
-      setProductoDetalle((prev) =>
-        prev && ids.includes(prev.id)
-          ? { ...prev, imagen_url: imagenUrl, imagenes_extra: extras.length ? extras : null }
-          : prev
-      );
-      setMensajeFotosMasivas(`Fotos aplicadas a ${ids.length} producto(s).`);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'No se pudieron aplicar las fotos masivas.';
-      setMensajeFotosMasivas(msg);
-      setError(msg);
-    } finally {
-      setAplicandoFotosMasivas(false);
-    }
   };
 
   if (cargando) {
@@ -805,7 +645,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
             <p className="mis-productos-ajuste-masivo-descripcion">
               Escribe el nombre o código: la lista se filtra al instante. Acepta plural/singular y errores
               leves (ej. camaras → camara). Pulsa <strong>Aplicar filtros</strong> (o Intro) para recargar
-              el catálogo desde el servidor. El alcance de fotos no oculta esta lista.
+              el catálogo desde el servidor. Para fotos masivas usa el menú <strong>Gestión de fotos</strong>.
             </p>
         </div>
         <form
@@ -822,8 +662,6 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
               value={busquedaProductosInput}
               onChange={(e) => {
                 setBusquedaProductosInput(e.target.value);
-                // La búsqueda de esta sección no debe quedar tapada por el alcance de fotos.
-                if (filtroAlcanceListaAplicado) setFiltroAlcanceListaAplicado(null);
               }}
               placeholder="Ej: camara, amortiguadores, batería (plural/typos OK)..."
             />
@@ -902,7 +740,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
             >
               <option value="filtrados">Todos los filtrados ({productosVisibles.length})</option>
               <option value="seleccionados">
-                Solo seleccionados ({fotosMasivasSeleccionados.length})
+                Solo seleccionados ({productosSeleccionados.length})
               </option>
             </select>
           </label>
@@ -960,13 +798,13 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         {accionMasivaAlcance === 'seleccionados' && (
           <div className="mis-productos-fotos-masivas-seleccion">
             <p>
-              Seleccionados: {fotosMasivasSeleccionados.length}. Marca los productos en la lista inferior.
+              Seleccionados: {productosSeleccionados.length}. Marca los productos en la lista inferior.
             </p>
             <div className="mis-productos-fotos-masivas-acciones">
               <button
                 type="button"
                 className="mis-productos-btn-secundario"
-                onClick={seleccionarTodosProductosFotosMasivas}
+                onClick={seleccionarTodosProductosVisibles}
                 disabled={ejecutandoAccionMasiva}
               >
                 Seleccionar visibles ({productosVisibles.length})
@@ -974,8 +812,8 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
               <button
                 type="button"
                 className="mis-productos-btn-secundario"
-                onClick={limpiarSeleccionFotosMasivas}
-                disabled={ejecutandoAccionMasiva || fotosMasivasSeleccionados.length === 0}
+                onClick={limpiarSeleccionProductos}
+                disabled={ejecutandoAccionMasiva || productosSeleccionados.length === 0}
               >
                 Limpiar selección
               </button>
@@ -989,165 +827,6 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         </p>
         {mensajeAccionMasiva && (
           <p className="mis-productos-ajuste-masivo-mensaje">{mensajeAccionMasiva}</p>
-        )}
-      </section>
-      <section className="mis-productos-fotos-masivas" aria-label="Carga masiva de fotos">
-        <div className="mis-productos-fotos-masivas-header">
-          <div>
-            <p className="mis-productos-ajuste-masivo-titulo">Carga masiva de fotos</p>
-            <p className="mis-productos-ajuste-masivo-descripcion">
-              Sube hasta 4 fotos comunes para aplicarlas a varios productos. La foto 1 será la principal.
-              Escribe en el buscador (varias palabras, singular/plural, typos leves): la lista y el
-              contador se actualizan al instante. <strong>Buscar</strong> recarga el catálogo;{' '}
-              <strong>Buscar en alcance</strong> solo limita por fotos (sin foto / todos / seleccionados).
-            </p>
-          </div>
-          <span className="mis-productos-fotos-masivas-contador">
-            Productos objetivo: {productosObjetivoFotosMasivas.length}
-          </span>
-        </div>
-        {busquedaProductosInput.trim() ? (
-          <p className="mis-productos-fotos-masivas-lista-filtro" role="status">
-            Texto «{busquedaProductosInput.trim()}»: <strong>{productosVisibles.length}</strong> producto(s)
-            coinciden
-            {productosVisibles.length === 0
-              ? ' (prueba otra palabra o revisa el nombre exacto en el catálogo).'
-              : '.'}
-          </p>
-        ) : null}
-        <div className="mis-productos-fotos-masivas-config">
-          <label htmlFor="mis-productos-fotos-busqueda">
-            Buscar producto (inteligente)
-            <span className="mis-productos-fotos-masivas-alcance-fila">
-              <input
-                id="mis-productos-fotos-busqueda"
-                type="search"
-                value={busquedaProductosInput}
-                onChange={(e) => setBusquedaProductosInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    void aplicarFiltrosMisProductos();
-                  }
-                }}
-                placeholder="Ej: amortiguador espiral, bateria, Cheroke..."
-                disabled={aplicandoFotosMasivas || cargandoFiltrosProductos}
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <button
-                type="button"
-                className="mis-productos-btn-secundario mis-productos-fotos-masivas-buscar"
-                onClick={() => void aplicarFiltrosMisProductos()}
-                disabled={aplicandoFotosMasivas || cargandoFiltrosProductos}
-              >
-                {cargandoFiltrosProductos ? 'Buscando…' : 'Buscar'}
-              </button>
-            </span>
-          </label>
-          <label>
-            Alcance (solo para fotos masivas)
-            <span className="mis-productos-fotos-masivas-alcance-fila">
-              <select
-                value={fotosMasivasAlcance}
-                onChange={(e) => {
-                  setFotosMasivasAlcance(e.target.value as 'sin_foto' | 'todos' | 'seleccionados');
-                  setMensajeFotosMasivas(null);
-                }}
-                disabled={aplicandoFotosMasivas}
-              >
-                <option value="sin_foto">Solo productos sin foto principal</option>
-                <option value="todos">Todos mis productos</option>
-                <option value="seleccionados">Solo productos seleccionados manualmente</option>
-              </select>
-              <button
-                type="button"
-                className="mis-productos-btn-secundario mis-productos-fotos-masivas-buscar"
-                onClick={buscarProductosPorAlcance}
-                disabled={aplicandoFotosMasivas}
-              >
-                Buscar en alcance
-              </button>
-            </span>
-          </label>
-          {filtroAlcanceListaAplicado && (
-            <div className="mis-productos-fotos-masivas-lista-filtro" role="status">
-              <p>
-                La lista de abajo está limitada por alcance de fotos ({etiquetaAlcanceLista}):{' '}
-                <strong>{productosParaLista.length}</strong> de {productosVisibles.length} producto(s)
-                del buscador.
-              </p>
-              <button
-                type="button"
-                className="mis-productos-btn-secundario"
-                onClick={quitarFiltroAlcanceLista}
-                disabled={aplicandoFotosMasivas}
-              >
-                Mostrar todos los del buscador ({productosVisibles.length})
-              </button>
-            </div>
-          )}
-        </div>
-        {fotosMasivasAlcance === 'seleccionados' && (
-          <div className="mis-productos-fotos-masivas-seleccion">
-            <p>
-              Seleccionados: {productosObjetivoFotosMasivas.length}. Marca los productos en la lista inferior.
-            </p>
-            <div className="mis-productos-fotos-masivas-acciones">
-              <button type="button" className="mis-productos-btn-secundario" onClick={seleccionarTodosProductosFotosMasivas}>
-                Seleccionar visibles ({productosVisibles.length})
-              </button>
-              <button
-                type="button"
-                className="mis-productos-btn-secundario"
-                onClick={limpiarSeleccionFotosMasivas}
-                disabled={fotosMasivasSeleccionados.length === 0}
-              >
-                Limpiar selección
-              </button>
-            </div>
-          </div>
-        )}
-        <div className="mis-productos-fotos-masivas-files">
-          {fotosMasivasArchivos.map((archivo, idx) => (
-            <label key={`${fotosMasivasInputKey}-${idx}`}>
-              Foto {idx + 1}{idx === 0 ? ' (principal)' : ''}
-              <input
-                type="file"
-                accept="image/*"
-                disabled={aplicandoFotosMasivas}
-                onChange={(e) => cambiarFotoMasiva(idx, e.target.files?.[0] ?? null)}
-              />
-              {archivo && <span>{archivo.name}</span>}
-            </label>
-          ))}
-        </div>
-        <div className="mis-productos-fotos-masivas-acciones">
-          <button
-            type="button"
-            className="mis-productos-btn-secundario"
-            disabled={aplicandoFotosMasivas || fotosMasivasArchivos.every((archivo) => !archivo)}
-            onClick={resetearFotosMasivas}
-          >
-            Resetear fotos
-          </button>
-          <button
-            type="button"
-            className="mis-productos-btn-primario"
-            disabled={
-              aplicandoFotosMasivas ||
-              !fotosMasivasArchivos[0] ||
-              productosObjetivoFotosMasivas.length === 0
-            }
-            onClick={() => void aplicarFotosMasivas()}
-          >
-            {aplicandoFotosMasivas
-              ? 'Aplicando fotos...'
-              : `Aplicar fotos a ${productosObjetivoFotosMasivas.length} producto(s)`}
-          </button>
-        </div>
-        {mensajeFotosMasivas && (
-          <p className="mis-productos-ajuste-masivo-mensaje">{mensajeFotosMasivas}</p>
         )}
       </section>
       {productoDetalle && (
@@ -1368,30 +1047,29 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
           const estaActivo = p.activo !== false;
           const semaforoStock = semaforoStockProducto(p);
           const mod = (p.aprobacion_publica ?? 'aprobado').toLowerCase();
-          const seleccionadoFotosMasivas = fotosMasivasSeleccionados.includes(p.id);
+          const seleccionado = productosSeleccionados.includes(p.id);
           const claseMod =
             mod === 'aprobado' ? 'aprobado' : mod === 'rechazado' ? 'rechazado' : 'pendiente';
           return (
             <article
               key={p.id}
               className={`mis-productos-card${
-                (fotosMasivasAlcance === 'seleccionados' || accionMasivaAlcance === 'seleccionados') &&
-                seleccionadoFotosMasivas
+                accionMasivaAlcance === 'seleccionados' && seleccionado
                   ? ' mis-productos-card--seleccionada'
                   : ''
               }`}
               onClick={() => setProductoDetalle(p)}
             >
-              {(fotosMasivasAlcance === 'seleccionados' || accionMasivaAlcance === 'seleccionados') && (
+              {accionMasivaAlcance === 'seleccionados' && (
                 <label
                   className="mis-productos-card-selector"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <input
                     type="checkbox"
-                    checked={seleccionadoFotosMasivas}
-                    onChange={(e) => toggleProductoFotoMasiva(p.id, e.target.checked)}
-                    disabled={aplicandoFotosMasivas || ejecutandoAccionMasiva}
+                    checked={seleccionado}
+                    onChange={(e) => toggleProductoSeleccionado(p.id, e.target.checked)}
+                    disabled={ejecutandoAccionMasiva}
                   />
                   Seleccionar
                 </label>

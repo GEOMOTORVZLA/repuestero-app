@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../supabaseClient';
 import { RegistroRepuestos } from './RegistroRepuestos';
 import { MisProductos } from './MisProductos';
+import { GestionFotosVendedor } from './GestionFotosVendedor';
 import { VisorMostrador } from './VisorMostrador';
 import { ResumenVendedor } from './ResumenVendedor';
 import { PerfilUsuario } from './PerfilUsuario';
@@ -14,7 +15,7 @@ import type { BannerEstadoCuenta } from '../utils/estadoCuentaVendedorTaller';
 import { EstadoCuentaNegocioBanner } from './EstadoCuentaNegocioBanner';
 import './Dashboard.css';
 
-type TabId = 'resumen' | 'productos' | 'mostrador' | 'perfil';
+type TabId = 'resumen' | 'productos' | 'fotos' | 'mostrador' | 'perfil';
 
 interface DashboardVendedorProps {
   onVolverInicio?: () => void;
@@ -132,6 +133,13 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
             onClick={() => setTab('productos')}
           >
             Editar productos
+          </button>
+          <button
+            type="button"
+            className={`dashboard-menu-item ${tab === 'fotos' ? 'activo' : ''}`}
+            onClick={() => setTab('fotos')}
+          >
+            Gestión de fotos
           </button>
           <button
             type="button"
@@ -258,6 +266,19 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
             </section>
           )}
 
+          {tab === 'fotos' && (
+            <section className="dashboard-seccion">
+              <h2 className="dashboard-seccion-titulo">Gestión de fotos</h2>
+              <p className="dashboard-productos-toolbar-hint">
+                Asigna fotos a varios productos de <strong>{etiquetaVertical}</strong> sin mezclar con filtros ni
+                acciones de Editar productos. Busca, elige el alcance y aplica hasta 4 fotos.
+              </p>
+              <div className="dashboard-card">
+                <GestionFotosVendedor vertical={vertical} refreshTrigger={refreshProductos} />
+              </div>
+            </section>
+          )}
+
           {tab === 'mostrador' && (
             <section className="dashboard-seccion">
               <h2 className="dashboard-seccion-titulo dashboard-seccion-titulo--mostrador-busqueda">
@@ -307,6 +328,13 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
           onClick={() => setTab('productos')}
         >
           Editar
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'fotos' ? 'activo' : ''}`}
+          onClick={() => setTab('fotos')}
+        >
+          Fotos
         </button>
         <button
           type="button"
