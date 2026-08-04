@@ -175,7 +175,8 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
           </span>
         </div>
         <p className="visor-mostrador-ayuda">
-          Busca por nombre o código (plural/typos OK). No usa la descripción, para evitar resultados ajenos.
+          Búsqueda flexible: plural/singular y errores de tipeo leves (ej. camaras, camra). Solo mira nombre y
+          código, no la descripción, para no mezclar productos ajenos.
         </p>
       </header>
 
