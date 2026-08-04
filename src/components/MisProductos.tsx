@@ -20,7 +20,7 @@ import {
   type DisponibilidadAviso,
 } from '../utils/avisoProductoPublicacion';
 import { etiquetaStockActual } from '../utils/stockActualInventario';
-import { productoCoincideTextoGestion } from '../utils/busquedaProductosTexto';
+import { productoCoincideTextoFlexible } from '../utils/busquedaProductosTexto';
 
 const NETWORK_TIMEOUT_MS = 30000;
 const NETWORK_RETRIES = 1;
@@ -301,9 +301,9 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     }
   }, [productoDetalle, user]);
 
-  /** Búsqueda de gestión: contiene la palabra (sin acentos / plural), sin typos agresivos. */
+  /** Criterio inteligente: multi-palabra, plural/singular y typo leve (prioriza encontrar, no ser estricto). */
   const productoCoincideBusqueda = (p: ProductoPanel, texto: string) =>
-    productoCoincideTextoGestion(
+    productoCoincideTextoFlexible(
       [p.nombre, p.codigo, p.descripcion, p.comentarios, p.marca, p.modelo, p.categoria],
       texto
     );
@@ -787,8 +787,8 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
           <p className="mis-productos-ajuste-masivo-titulo">Buscar y filtrar mis productos</p>
             <p className="mis-productos-ajuste-masivo-descripcion">
               Escribe en la búsqueda: la lista de abajo se filtra al instante (nombre, código, descripción,
-              etc.). Pulsa <strong>Aplicar filtros</strong> (o Intro) para recargar el catálogo desde el
-              servidor. El alcance de fotos masivas no oculta esta lista.
+              etc.). Acepta plural/singular y errores leves. Pulsa <strong>Aplicar filtros</strong> (o Intro)
+              para recargar el catálogo desde el servidor. El alcance de fotos masivas no oculta esta lista.
             </p>
         </div>
         <form
@@ -808,7 +808,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
                 // La búsqueda de esta sección no debe quedar tapada por el alcance de fotos.
                 if (filtroAlcanceListaAplicado) setFiltroAlcanceListaAplicado(null);
               }}
-              placeholder="Ej: camara, amortiguador, codigo SKU..."
+              placeholder="Ej: camara, amortiguadores, batería (plural/typos OK)..."
             />
           </label>
           {!verticalFijo && (
