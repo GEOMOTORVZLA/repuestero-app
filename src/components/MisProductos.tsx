@@ -317,12 +317,13 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     }
   }, [productoDetalle, user]);
 
-  /** Criterio inteligente: multi-palabra, plural/singular y typo leve (prioriza encontrar, no ser estricto). */
+  /**
+   * Primera sección «Buscar y filtrar»: nombre + código con match flexible
+   * (plural/singular y typo leve). No usa descripción/comentarios aquí para evitar
+   * que un texto repetido en todos los productos (plantilla) devuelva el catálogo entero.
+   */
   const productoCoincideBusqueda = (p: ProductoPanel, texto: string) =>
-    productoCoincideTextoFlexible(
-      [p.nombre, p.codigo, p.descripcion, p.comentarios, p.marca, p.modelo, p.categoria],
-      texto
-    );
+    productoCoincideTextoFlexible([p.nombre, p.codigo], texto);
 
   const productoCoincideEstado = (p: ProductoPanel, filtro: FiltroEstadoProductoGestion) => {
     const semaforo = semaforoStockProducto(p);
@@ -802,9 +803,9 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         <div>
           <p className="mis-productos-ajuste-masivo-titulo">Buscar y filtrar mis productos</p>
             <p className="mis-productos-ajuste-masivo-descripcion">
-              Escribe en la búsqueda: la lista de abajo se filtra al instante (nombre, código, descripción,
-              etc.). Acepta plural/singular y errores leves. Pulsa <strong>Aplicar filtros</strong> (o Intro)
-              para recargar el catálogo desde el servidor. El alcance de fotos masivas no oculta esta lista.
+              Escribe el nombre o código: la lista se filtra al instante. Acepta plural/singular y errores
+              leves (ej. camaras → camara). Pulsa <strong>Aplicar filtros</strong> (o Intro) para recargar
+              el catálogo desde el servidor. El alcance de fotos no oculta esta lista.
             </p>
         </div>
         <form

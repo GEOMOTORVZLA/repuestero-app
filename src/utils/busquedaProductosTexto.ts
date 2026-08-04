@@ -110,7 +110,7 @@ export function terminoCoincideEnTextoFlexible(termino: string, textoFuente: str
   const fuente = normalizarTextoBusqueda(textoFuente);
   if (!fuente) return false;
   const variantes = variantesFormaPalabra(termino);
-  if (variantes.length === 0) return true;
+  if (variantes.length === 0) return false;
 
   for (const v of variantes) {
     if (fuente.includes(v)) return true;
@@ -121,7 +121,9 @@ export function terminoCoincideEnTextoFlexible(termino: string, textoFuente: str
   for (const tok of tokens) {
     for (const v of variantes) {
       if (tok === v) return true;
-      if (tok.length >= 4 && v.length >= 4 && (tok.startsWith(v) || v.startsWith(tok))) return true;
+      // El usuario escribe un prefijo del nombre del producto (amort → amortiguador).
+      // NO al revés (cama ↛ camara): eso generaba falsos positivos masivos.
+      if (v.length >= 4 && tok.length > v.length && tok.startsWith(v)) return true;
       const maxD = Math.min(maxDistanciaTypo(v.length), maxDistanciaTypo(tok.length));
       if (maxD > 0 && Math.abs(tok.length - v.length) <= maxD && distanciaLevenshtein(tok, v) <= maxD) {
         return true;
