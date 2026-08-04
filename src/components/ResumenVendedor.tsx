@@ -5,6 +5,10 @@ import { etiquetaMoneda } from '../utils/monedaProducto';
 import { formatearPrecioProducto } from '../utils/precioProducto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_MOTO } from '../utils/verticalVehiculo';
+import {
+  claseSemaforoStockPorDias,
+  diasDesdeFechaISO,
+} from '../utils/stockActualInventario';
 
 type ProductoResumen = {
   id: string;
@@ -56,22 +60,10 @@ async function cargarProductosVendedor(
   return { productos: acumulado, error: null };
 }
 
-function diasDesdeFechaISO(fechaIso: string | null | undefined): number | null {
-  if (!fechaIso) return null;
-  const ts = Date.parse(fechaIso);
-  if (Number.isNaN(ts)) return null;
-  return Math.max(0, Math.floor((Date.now() - ts) / (1000 * 60 * 60 * 24)));
-}
-
 /** Misma lógica de semáforo que MisProductos (amarillo/rojo = próximos a pausarse). */
 function semaforoStockProducto(p: ProductoResumen): 'verde' | 'amarillo' | 'rojo' | 'vencido' | 'sin-fecha' {
   const base = p.stock_confirmado_at ?? p.created_at ?? null;
-  const dias = diasDesdeFechaISO(base);
-  if (dias == null) return 'sin-fecha';
-  if (dias <= 9) return 'verde';
-  if (dias <= 15) return 'amarillo';
-  if (dias <= 20) return 'rojo';
-  return 'vencido';
+  return claseSemaforoStockPorDias(diasDesdeFechaISO(base));
 }
 
 function formatearFechaMembresia(iso: string | null): string {

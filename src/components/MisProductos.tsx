@@ -13,7 +13,11 @@ import {
   etiquetaDisponibilidadAviso,
   type DisponibilidadAviso,
 } from '../utils/avisoProductoPublicacion';
-import { etiquetaStockActual } from '../utils/stockActualInventario';
+import {
+  etiquetaStockActual,
+  claseSemaforoStockPorDias,
+  diasDesdeFechaISO,
+} from '../utils/stockActualInventario';
 import { productoCoincideTextoFlexible } from '../utils/busquedaProductosTexto';
 
 const NETWORK_TIMEOUT_MS = 30000;
@@ -162,33 +166,26 @@ async function fetchProductosDelVendedor(
   return { productos: acumulado, error: null };
 }
 
-function diasDesdeFechaISO(fechaIso: string | null | undefined): number | null {
-  if (!fechaIso) return null;
-  const ts = Date.parse(fechaIso);
-  if (Number.isNaN(ts)) return null;
-  const dias = Math.floor((Date.now() - ts) / (1000 * 60 * 60 * 24));
-  return Math.max(0, dias);
-}
-
 function semaforoStockProducto(p: ProductoPanel): {
   clase: 'verde' | 'amarillo' | 'rojo' | 'vencido' | 'sin-fecha';
   texto: string;
 } {
   const base = p.stock_confirmado_at ?? p.created_at ?? null;
   const dias = diasDesdeFechaISO(base);
-  if (dias == null) {
-    return { clase: 'sin-fecha', texto: 'Sin fecha de stock' };
+  const clase = claseSemaforoStockPorDias(dias);
+  if (clase === 'sin-fecha') {
+    return { clase, texto: 'Sin fecha de stock' };
   }
-  if (dias <= 9) {
-    return { clase: 'verde', texto: `Stock confirmado hace ${dias} día(s)` };
+  if (clase === 'verde') {
+    return { clase, texto: `Stock confirmado hace ${dias} día(s)` };
   }
-  if (dias <= 15) {
-    return { clase: 'amarillo', texto: `Stock por confirmar (${dias} día(s))` };
+  if (clase === 'amarillo') {
+    return { clase, texto: `Stock por confirmar (${dias} día(s))` };
   }
-  if (dias <= 20) {
-    return { clase: 'rojo', texto: `Stock crítico (${dias} día(s))` };
+  if (clase === 'rojo') {
+    return { clase, texto: `Stock crítico (${dias} día(s))` };
   }
-  return { clase: 'vencido', texto: `Vencido (${dias} día(s) sin confirmar)` };
+  return { clase, texto: `Vencido (${dias} día(s) sin confirmar)` };
 }
 
 export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps) {

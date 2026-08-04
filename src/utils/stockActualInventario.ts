@@ -1,6 +1,35 @@
 import type { DisponibilidadAviso } from './avisoProductoPublicacion';
 
 /**
+ * Días sin confirmar stock antes de pausa automática (cron Supabase).
+ * Debe coincidir con `pausar_productos_stock_vencido()` en SQL.
+ */
+export const DIAS_PAUSA_STOCK_VENCIDO = 60;
+
+/** Semáforo UI (proporcional al plazo de pausa). */
+export const DIAS_STOCK_SEMAFORO_VERDE = 30;
+export const DIAS_STOCK_SEMAFORO_AMARILLO = 45;
+export const DIAS_STOCK_SEMAFORO_ROJO = DIAS_PAUSA_STOCK_VENCIDO;
+
+export type ClaseSemaforoStock = 'verde' | 'amarillo' | 'rojo' | 'vencido' | 'sin-fecha';
+
+export function diasDesdeFechaISO(fechaIso: string | null | undefined): number | null {
+  if (!fechaIso) return null;
+  const ts = Date.parse(fechaIso);
+  if (Number.isNaN(ts)) return null;
+  const dias = Math.floor((Date.now() - ts) / (1000 * 60 * 60 * 24));
+  return Math.max(0, dias);
+}
+
+export function claseSemaforoStockPorDias(dias: number | null): ClaseSemaforoStock {
+  if (dias == null) return 'sin-fecha';
+  if (dias <= DIAS_STOCK_SEMAFORO_VERDE) return 'verde';
+  if (dias <= DIAS_STOCK_SEMAFORO_AMARILLO) return 'amarillo';
+  if (dias <= DIAS_STOCK_SEMAFORO_ROJO) return 'rojo';
+  return 'vencido';
+}
+
+/**
  * Inventario opcional (columna productos.stock_actual).
  * null = no controla existencia; 0 = agotado; >0 = unidades.
  */

@@ -21,6 +21,10 @@ import { VERTICAL_AUTO, VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import { mensajeNegocioNoListoParaAprobar } from '../utils/validarDatosNegocio';
 import { ImportarProductosCSV } from './ImportarProductosCSV';
 import { productoCoincideTextoFlexible } from '../utils/busquedaProductosTexto';
+import {
+  claseSemaforoStockPorDias,
+  diasDesdeFechaISO,
+} from '../utils/stockActualInventario';
 import './Dashboard.css';
 import './MisProductos.css';
 
@@ -558,25 +562,18 @@ function etiquetaVendedorDesdeProducto(p: AdminProducto, vendedores: AdminTienda
   return '—';
 }
 
-function diasDesdeFechaISO(fechaIso: string | null | undefined): number | null {
-  if (!fechaIso) return null;
-  const ts = Date.parse(fechaIso);
-  if (Number.isNaN(ts)) return null;
-  const dias = Math.floor((Date.now() - ts) / (1000 * 60 * 60 * 24));
-  return Math.max(0, dias);
-}
-
 function semaforoStockGestion(p: {
   stock_confirmado_at?: string | null;
   created_at?: string | null;
 }): { clase: 'verde' | 'amarillo' | 'rojo' | 'vencido' | 'sin-fecha'; texto: string } {
   const base = p.stock_confirmado_at ?? p.created_at ?? null;
   const dias = diasDesdeFechaISO(base);
-  if (dias == null) return { clase: 'sin-fecha', texto: 'Sin fecha' };
-  if (dias <= 9) return { clase: 'verde', texto: `${dias} día(s)` };
-  if (dias <= 15) return { clase: 'amarillo', texto: `Por confirmar (${dias})` };
-  if (dias <= 20) return { clase: 'rojo', texto: `Crítico (${dias})` };
-  return { clase: 'vencido', texto: `Vencido (${dias})` };
+  const clase = claseSemaforoStockPorDias(dias);
+  if (clase === 'sin-fecha') return { clase, texto: 'Sin fecha' };
+  if (clase === 'verde') return { clase, texto: `${dias} día(s)` };
+  if (clase === 'amarillo') return { clase, texto: `Por confirmar (${dias})` };
+  if (clase === 'rojo') return { clase, texto: `Crítico (${dias})` };
+  return { clase, texto: `Vencido (${dias})` };
 }
 
 /** Columnas del listado admin de productos (compartido entre páginas de carga). */

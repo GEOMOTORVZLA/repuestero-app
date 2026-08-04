@@ -63,6 +63,6 @@ select
   count(*) filter (where coalesce(pausado_por_stock_vencido, false))::bigint as marcados_pausa_automatica,
   count(*) filter (
     where coalesce(activo, true)
-      and coalesce(stock_confirmado_at, created_at, now()) <= (now() - interval '20 days')
-  )::bigint as activos_con_stock_vencido_20d
+      and coalesce(stock_confirmado_at, created_at, now()) <= (now() - interval '60 days')
+  )::bigint as activos_con_stock_vencido_60d
 from public.productos;

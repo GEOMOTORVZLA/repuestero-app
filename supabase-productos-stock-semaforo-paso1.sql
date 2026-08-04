@@ -51,7 +51,7 @@ begin
     pausado_por_stock_vencido = true
   where
     coalesce(p.activo, true) = true
-    and coalesce(p.stock_confirmado_at, p.created_at, now()) <= (now() - interval '20 days');
+    and coalesce(p.stock_confirmado_at, p.created_at, now()) <= (now() - interval '60 days');
 
   get diagnostics v_actualizados = row_count;
   return v_actualizados;

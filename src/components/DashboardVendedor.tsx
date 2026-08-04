@@ -211,7 +211,7 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
                 </button>
               </div>
               <div className="mis-productos-alerta-stock mis-productos-alerta-stock--titilar" role="alert">
-                <strong>Control de inventario:</strong> todo producto con más de 20 días sin actualización de
+                <strong>Control de inventario:</strong> todo producto con más de 60 días sin actualización de
                 stock será pausado automáticamente y dejará de verse en búsquedas públicas hasta que lo
                 reactives.
               </div>
