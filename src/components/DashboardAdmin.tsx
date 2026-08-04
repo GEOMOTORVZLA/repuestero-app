@@ -180,6 +180,7 @@ type AdminComprador = {
 type AdminProducto = {
   id: string;
   nombre: string;
+  codigo?: string | null;
   descripcion?: string | null;
   comentarios?: string | null;
   tienda_id?: string | null;
@@ -577,7 +578,7 @@ function semaforoStockGestion(p: {
 
 /** Columnas del listado admin de productos (compartido entre páginas de carga). */
 const ADMIN_PRODUCTOS_SELECT =
-  'id, nombre, descripcion, comentarios, tienda_id, categoria, marca, modelo, anio, precio_usd, moneda, activo, aprobacion_publica, imagen_url, imagenes_extra, created_at, stock_confirmado_at, pausado_por_stock_vencido, stock_actual, vertical, disponibilidad_aviso, es_oferta, tiendas(id, nombre, nombre_comercial)';
+  'id, nombre, codigo, descripcion, comentarios, tienda_id, categoria, marca, modelo, anio, precio_usd, moneda, activo, aprobacion_publica, imagen_url, imagenes_extra, created_at, stock_confirmado_at, pausado_por_stock_vencido, stock_actual, vertical, disponibilidad_aviso, es_oferta, tiendas(id, nombre, nombre_comercial)';
 
 const ADMIN_PRODUCTOS_PAGE = 1000;
 
@@ -589,10 +590,10 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [adminFiltroVertical, setAdminFiltroVertical] = useState<'todos' | 'auto' | 'moto'>(defaultVerticalFiltro);
   /** id de tienda = vendedor en catálogo */
   const [adminFiltroVendedorTiendaId, setAdminFiltroVendedorTiendaId] = useState('');
-  const [busquedaProductosAdmin, setBusquedaProductosAdmin] = useState('');
   const [filtroEstadoProductosAdmin, setFiltroEstadoProductosAdmin] =
     useState<FiltroEstadoProductoGestion>('todos');
-  /** Valores en los controles; los filtros del listado solo cambian al pulsar «Aplicar filtros». */
+  /** Valores en los controles; vertical/vendedor/estado se aplican al pulsar «Aplicar filtros».
+   *  El texto de búsqueda filtra en vivo (igual que Mis productos del vendedor). */
   const [adminFiltroVerticalDraft, setAdminFiltroVerticalDraft] =
     useState<'todos' | 'auto' | 'moto'>(defaultVerticalFiltro);
   const [adminFiltroVendedorTiendaIdDraft, setAdminFiltroVendedorTiendaIdDraft] = useState('');
@@ -690,7 +691,6 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   };
 
   const aplicarFiltrosProductosAdmin = async () => {
-    setBusquedaProductosAdmin(busquedaProductosAdminDraft);
     setAdminFiltroVendedorTiendaId(adminFiltroVendedorTiendaIdDraft);
     setAdminFiltroVertical(adminFiltroVerticalDraft);
     setFiltroEstadoProductosAdmin(filtroEstadoProductosAdminDraft);
@@ -703,7 +703,6 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     setAdminFiltroVendedorTiendaIdDraft('');
     setAdminFiltroVerticalDraft(defaultVerticalFiltro);
     setFiltroEstadoProductosAdminDraft('todos');
-    setBusquedaProductosAdmin('');
     setAdminFiltroVendedorTiendaId('');
     setAdminFiltroVertical(defaultVerticalFiltro);
     setFiltroEstadoProductosAdmin('todos');
@@ -1070,10 +1069,11 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           (semaforo.clase === 'amarillo' || semaforo.clase === 'rojo')) ||
         (filtroEstadoProductosAdmin === 'stock_vencido' && semaforo.clase === 'vencido') ||
         (filtroEstadoProductosAdmin === 'sin_fecha_stock' && semaforo.clase === 'sin-fecha');
-      // Mismo criterio que Visor de mostrador (+ nombre de vendedor para admin).
+      // Criterio inteligente (+ código + nombre de vendedor). Texto en vivo desde el input.
       const textoOk = productoCoincideTextoFlexible(
         [
           p.nombre,
+          p.codigo,
           p.descripcion,
           p.comentarios,
           p.marca,
@@ -1081,7 +1081,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           p.categoria,
           etiquetaVendedorDesdeProducto(p, vendedores),
         ],
-        busquedaProductosAdmin
+        busquedaProductosAdminDraft
       );
       return vertOk && vendedorOk && estadoOk && textoOk;
     });
@@ -1089,28 +1089,24 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     productos,
     adminFiltroVertical,
     adminFiltroVendedorTiendaId,
-    busquedaProductosAdmin,
+    busquedaProductosAdminDraft,
     filtroEstadoProductosAdmin,
     vendedores,
   ]);
   const productosObjetivoFotosMasivas = useMemo(() => {
     if (!fotosMasivasTiendaId) return [];
-    if (fotosMasivasAlcance === 'seleccionados') {
-      return productos.filter((p) => {
-        if (!fotosMasivasSeleccionados.includes(p.id)) return false;
-        const tidProd = p.tienda_id ?? primeraTiendaProducto(p)?.id;
-        return tidProd === fotosMasivasTiendaId;
-      });
-    }
-    return productos.filter((p) => {
+    const delVendedor = productosFiltrados.filter((p) => {
       const tidProd = p.tienda_id ?? primeraTiendaProducto(p)?.id;
-      if (tidProd !== fotosMasivasTiendaId) return false;
-      if (fotosMasivasAlcance === 'sin_foto') {
-        return !p.imagen_url || !String(p.imagen_url).trim();
-      }
-      return true;
+      return tidProd === fotosMasivasTiendaId;
     });
-  }, [productos, fotosMasivasTiendaId, fotosMasivasAlcance, fotosMasivasSeleccionados]);
+    if (fotosMasivasAlcance === 'seleccionados') {
+      return delVendedor.filter((p) => fotosMasivasSeleccionados.includes(p.id));
+    }
+    if (fotosMasivasAlcance === 'sin_foto') {
+      return delVendedor.filter((p) => !p.imagen_url || !String(p.imagen_url).trim());
+    }
+    return delVendedor;
+  }, [productosFiltrados, fotosMasivasTiendaId, fotosMasivasAlcance, fotosMasivasSeleccionados]);
   const productosSeleccionablesFotosMasivas = useMemo(() => {
     if (!fotosMasivasTiendaId) return [];
     return productosFiltrados.filter((p) => {
@@ -2548,7 +2544,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
 
                   <div className="dashboard-admin-filtros-productos">
                     <div className="dashboard-admin-filtro-vertical dashboard-admin-filtro-producto-buscar">
-                      <label htmlFor="admin-buscar-productos">Buscar producto</label>
+                      <label htmlFor="admin-buscar-productos">Buscar producto (inteligente)</label>
                       <input
                         id="admin-buscar-productos"
                         type="search"
@@ -2560,7 +2556,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             void aplicarFiltrosProductosAdmin();
                           }
                         }}
-                        placeholder="Criterio inteligente (como Visor): varias palabras, plural, typos..."
+                        placeholder="Filtra al escribir: plural, typos, código SKU..."
+                        autoComplete="off"
+                        spellCheck={false}
                       />
                     </div>
                     <div className="dashboard-admin-filtro-vertical">
@@ -2630,10 +2628,12 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       Restablecer filtros
                     </button>
                   </div>
-                  <p className="dashboard-admin-productos-hint">
-                    El listado usa los valores de arriba solo después de pulsar «Aplicar filtros» (también Enter en
-                    la búsqueda). Mostrando {productosFiltrados.length} de {productos.length} producto(s) cargados
-                    que coinciden con los filtros aplicados.
+                  <p className="dashboard-admin-productos-hint" role="status">
+                    {busquedaProductosAdminDraft.trim()
+                      ? `Búsqueda «${busquedaProductosAdminDraft.trim()}»: ${productosFiltrados.length} de ${productos.length} producto(s). `
+                      : `Mostrando ${productosFiltrados.length} de ${productos.length} producto(s). `}
+                    El texto filtra al instante (plural/typos/código). Vertical, vendedor y estado se
+                    aplican con «Aplicar filtros» (también recarga el catálogo).
                   </p>
                   <div className="dashboard-admin-acciones-masivas dashboard-admin-bulk-productos-toolbar">
                     <label htmlFor="admin-bulk-productos-accion" className="dashboard-admin-filtro-vertical">
@@ -2677,8 +2677,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         <h3>Fotos masivas por vendedor</h3>
                         <p>
                           Usa hasta 4 fotos comunes: la foto 1 será principal y las demás adicionales.
-                          Filtra con el buscador de esta sección (mismo criterio inteligente que el Visor
-                          de mostrador) y elige vendedor/alcance.
+                          El buscador de arriba filtra en vivo (mismo criterio inteligente). El alcance
+                          de fotos se aplica sobre esos resultados del vendedor elegido.
                         </p>
                       </div>
                       <span className="dashboard-admin-busqueda-hint">
@@ -2700,7 +2700,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                 void aplicarFiltrosProductosAdmin();
                               }
                             }}
-                            placeholder="Varias palabras, plural, typos leves..."
+                            placeholder="Filtra al escribir: plural, typos, código..."
                             disabled={accionando === 'bulk-fotos-productos' || cargandoFiltrosProductos}
                             autoComplete="off"
                             spellCheck={false}
@@ -2711,7 +2711,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             onClick={() => void aplicarFiltrosProductosAdmin()}
                             disabled={accionando === 'bulk-fotos-productos' || cargandoFiltrosProductos}
                           >
-                            {cargandoFiltrosProductos ? 'Buscando…' : 'Buscar'}
+                            {cargandoFiltrosProductos ? 'Recargando…' : 'Recargar catálogo'}
                           </button>
                         </span>
                       </label>
