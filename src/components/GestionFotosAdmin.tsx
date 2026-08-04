@@ -155,7 +155,7 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
     return porBusqueda;
   }, [porBusqueda, alcance, seleccionados]);
 
-  const listaVisible = alcance === 'seleccionados' ? porBusqueda : objetivos;
+  const listaVisible = porBusqueda;
 
   const etiquetaVendedor =
     vendedoresOrdenados.find((v) => v.id === tiendaId)?.nombre_comercial ||
@@ -330,7 +330,11 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
             : cargando
               ? 'Cargando productos del vendedor…'
               : busqueda.trim()
-                ? `Búsqueda «${busqueda.trim()}»: ${porBusqueda.length} de ${productos.length}. Alcance → ${objetivos.length} objetivo(s).`
+                ? `Búsqueda «${busqueda.trim()}»: ${porBusqueda.length} de ${productos.length}. Alcance → ${objetivos.length} objetivo(s)${
+                    alcance === 'sin_foto' && porBusqueda.length > 0 && objetivos.length === 0
+                      ? '. Todos ya tienen foto; cambia a «Todos» para reemplazarlas.'
+                      : '.'
+                  }`
                 : `Catálogo del vendedor: ${productos.length} producto(s). Alcance → ${objetivos.length} objetivo(s).`}
         </p>
 
@@ -413,9 +417,11 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
           {listaVisible.length === 0 ? (
             <div className="mis-productos-mensaje mis-productos-mensaje--bloque">
               <p>
-                {busqueda.trim()
-                  ? `No hay productos que coincidan con «${busqueda.trim()}» en este alcance.`
-                  : 'No hay productos en este alcance para el vendedor elegido.'}
+                {!busqueda.trim()
+                  ? 'Escribe en el buscador para filtrar el catálogo del vendedor.'
+                  : porBusqueda.length === 0
+                    ? `Ningún producto coincide con «${busqueda.trim()}» (nombre o código).`
+                    : 'No hay productos para mostrar.'}
               </p>
             </div>
           ) : (
@@ -460,6 +466,12 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
                     {p.codigo ? (
                       <p className="mis-productos-card-desc">Código: {p.codigo}</p>
                     ) : null}
+                    <p className="mis-productos-card-desc">
+                      {p.imagen_url && String(p.imagen_url).trim()
+                        ? 'Con foto principal'
+                        : 'Sin foto principal'}
+                      {objetivos.some((o) => o.id === p.id) ? ' · Se aplicará foto' : ''}
+                    </p>
                   </div>
                 </article>
               );

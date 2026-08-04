@@ -155,7 +155,7 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
     return porBusqueda;
   }, [porBusqueda, alcance, seleccionados]);
 
-  const listaVisible = alcance === 'seleccionados' ? porBusqueda : objetivos;
+  const listaVisible = porBusqueda;
 
   const toggleSeleccionado = (id: string, checked: boolean) => {
     setSeleccionados((prev) => {
@@ -287,9 +287,9 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
         </div>
 
         <div className="mis-productos-fotos-masivas-config">
-          <label htmlFor="gestion-fotos-busqueda">
-            Buscar producto (nombre o código)
-            <span className="mis-productos-fotos-masivas-alcance-fila">
+          <div className="mis-productos-fotos-masivas-config-fila">
+            <label htmlFor="gestion-fotos-busqueda">
+              Buscar producto (nombre o código)
               <input
                 id="gestion-fotos-busqueda"
                 type="search"
@@ -300,8 +300,24 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
                 autoComplete="off"
                 spellCheck={false}
               />
-            </span>
-          </label>
+            </label>
+            <label htmlFor="gestion-fotos-alcance">
+              Alcance
+              <select
+                id="gestion-fotos-alcance"
+                value={alcance}
+                onChange={(e) => {
+                  setAlcance(e.target.value as AlcanceFotos);
+                  setMensaje(null);
+                }}
+                disabled={aplicando}
+              >
+                <option value="sin_foto">Solo sin foto principal</option>
+                <option value="todos">Todos los de la búsqueda</option>
+                <option value="seleccionados">Solo seleccionados manualmente</option>
+              </select>
+            </label>
+          </div>
           <p className="mis-productos-fotos-masivas-lista-filtro" role="status">
             {busqueda.trim()
               ? `Búsqueda «${busqueda.trim()}»: ${porBusqueda.length} de ${productos.length}. `
@@ -312,23 +328,11 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
               : alcance === 'seleccionados'
                 ? 'seleccionados'
                 : 'todos'}
-            » → <strong>{objetivos.length}</strong> objetivo(s).
+            » → <strong>{objetivos.length}</strong> objetivo(s)
+            {alcance === 'sin_foto' && porBusqueda.length > 0 && objetivos.length === 0
+              ? '. Todos los encontrados ya tienen foto; cambia a «Todos» si quieres reemplazarlas.'
+              : '.'}
           </p>
-          <label>
-            Alcance
-            <select
-              value={alcance}
-              onChange={(e) => {
-                setAlcance(e.target.value as AlcanceFotos);
-                setMensaje(null);
-              }}
-              disabled={aplicando}
-            >
-              <option value="sin_foto">Solo sin foto principal</option>
-              <option value="todos">Todos los de la búsqueda</option>
-              <option value="seleccionados">Solo seleccionados manualmente</option>
-            </select>
-          </label>
         </div>
 
         {alcance === 'seleccionados' && (
@@ -407,9 +411,11 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
         {listaVisible.length === 0 ? (
           <div className="mis-productos-mensaje mis-productos-mensaje--bloque">
             <p>
-              {busqueda.trim()
-                ? `No hay productos que coincidan con «${busqueda.trim()}» en este alcance.`
-                : 'No hay productos en este alcance. Prueba «Todos» o sube productos sin foto.'}
+              {!busqueda.trim()
+                ? 'Escribe en el buscador para filtrar el catálogo.'
+                : porBusqueda.length === 0
+                  ? `Ningún producto coincide con «${busqueda.trim()}» (nombre o código).`
+                  : 'No hay productos para mostrar.'}
             </p>
           </div>
         ) : (
@@ -454,6 +460,12 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
                   {p.codigo ? (
                     <p className="mis-productos-card-desc">Código: {p.codigo}</p>
                   ) : null}
+                  <p className="mis-productos-card-desc">
+                    {p.imagen_url && String(p.imagen_url).trim()
+                      ? 'Con foto principal'
+                      : 'Sin foto principal'}
+                    {objetivos.some((o) => o.id === p.id) ? ' · Se aplicará foto' : ''}
+                  </p>
                 </div>
               </article>
             );
