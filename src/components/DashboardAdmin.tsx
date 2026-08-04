@@ -1,15 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../supabaseClient';
-import {
-  MAX_BYTES_FOTO_PRODUCTO,
-  MAX_MB_FOTO_PRODUCTO,
-  optimizarImagenProductoParaStorage,
-  subirImagenProductoConMiniatura,
-} from '../utils/imagenProducto';
 import { urlsFotosProducto } from '../utils/productoImagenesExtra';
 import { EspecialidadTallerCeldaAdmin } from './EspecialidadTallerCeldaAdmin';
 import { ImagenProducto } from './ImagenProducto';
+import { GestionFotosAdmin } from './GestionFotosAdmin';
 import { AdminCeldaAutorizacionWeb } from './AdminCeldaAutorizacionWeb';
 import { AdminCeldaUbicacion } from './AdminCeldaUbicacion';
 import { AdminCeldaUserId } from './AdminCeldaUserId';
@@ -74,7 +69,14 @@ function escapeIlikePatron(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
-type AdminTab = 'resumen' | 'usuarios' | 'productos' | 'vendedores' | 'talleres' | 'compradores';
+type AdminTab =
+  | 'resumen'
+  | 'usuarios'
+  | 'productos'
+  | 'fotos'
+  | 'vendedores'
+  | 'talleres'
+  | 'compradores';
 
 const KPI_DETALLE_IR_TAB: Partial<Record<AdminKpiDetalle, AdminTab>> = {
   usuarios_total: 'usuarios',
@@ -97,6 +99,7 @@ function etiquetaPestañaAdmin(t: AdminTab): string {
     resumen: 'Inicio admin',
     usuarios: 'Usuarios',
     productos: 'Productos',
+    fotos: 'Gestión de fotos',
     vendedores: 'Vendedores',
     talleres: 'Talleres',
     compradores: 'Compradores',
@@ -631,11 +634,6 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     'todos'
   );
   const [busquedaTalleres, setBusquedaTalleres] = useState('');
-  const [fotosMasivasTiendaId, setFotosMasivasTiendaId] = useState('');
-  const [fotosMasivasAlcance, setFotosMasivasAlcance] = useState<'todos' | 'sin_foto' | 'seleccionados'>('sin_foto');
-  const [fotosMasivasArchivos, setFotosMasivasArchivos] = useState<(File | null)[]>([null, null, null, null]);
-  const [fotosMasivasSeleccionados, setFotosMasivasSeleccionados] = useState<string[]>([]);
-  const [mensajeFotosMasivas, setMensajeFotosMasivas] = useState<string | null>(null);
   const [fotoActivaAdminProducto, setFotoActivaAdminProducto] = useState<Record<string, number>>({});
   const [productoEditandoAdmin, setProductoEditandoAdmin] = useState<AdminProducto | null>(null);
   const [modalProductosVendedor, setModalProductosVendedor] = useState<{
@@ -1108,27 +1106,6 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     filtroEstadoProductosAdmin,
     vendedores,
   ]);
-  const productosObjetivoFotosMasivas = useMemo(() => {
-    if (!fotosMasivasTiendaId) return [];
-    const delVendedor = productosFiltrados.filter((p) => {
-      const tidProd = p.tienda_id ?? primeraTiendaProducto(p)?.id;
-      return tidProd === fotosMasivasTiendaId;
-    });
-    if (fotosMasivasAlcance === 'seleccionados') {
-      return delVendedor.filter((p) => fotosMasivasSeleccionados.includes(p.id));
-    }
-    if (fotosMasivasAlcance === 'sin_foto') {
-      return delVendedor.filter((p) => !p.imagen_url || !String(p.imagen_url).trim());
-    }
-    return delVendedor;
-  }, [productosFiltrados, fotosMasivasTiendaId, fotosMasivasAlcance, fotosMasivasSeleccionados]);
-  const productosSeleccionablesFotosMasivas = useMemo(() => {
-    if (!fotosMasivasTiendaId) return [];
-    return productosFiltrados.filter((p) => {
-      const tidProd = p.tienda_id ?? primeraTiendaProducto(p)?.id;
-      return tidProd === fotosMasivasTiendaId;
-    });
-  }, [productosFiltrados, fotosMasivasTiendaId]);
   const productosPendientesFiltrados = useMemo(
     () => productosFiltrados.filter((p) => (p.aprobacion_publica ?? 'aprobado') === 'pendiente'),
     [productosFiltrados]
@@ -1528,117 +1505,12 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     setAccionando(null);
   };
 
-  const cambiarFotoMasiva = (idx: number, file: File | null) => {
-    setMensajeFotosMasivas(null);
-    setFotosMasivasArchivos((prev) => prev.map((f, i) => (i === idx ? file : f)));
-  };
-
-  const toggleProductoFotoMasiva = (productoId: string, checked: boolean) => {
-    setMensajeFotosMasivas(null);
-    setFotosMasivasSeleccionados((prev) => {
-      if (checked) return prev.includes(productoId) ? prev : [...prev, productoId];
-      return prev.filter((id) => id !== productoId);
-    });
-  };
-
-  const seleccionarProductosFotosMasivasVisibles = () => {
-    setMensajeFotosMasivas(null);
-    const ids = productosSeleccionablesFotosMasivas.map((p) => p.id);
-    setFotosMasivasSeleccionados((prev) => Array.from(new Set([...prev, ...ids])));
-  };
-
-  const limpiarSeleccionFotosMasivas = () => {
-    setMensajeFotosMasivas(null);
-    setFotosMasivasSeleccionados([]);
-  };
-
   const cambiarFotoAdminProducto = (productoId: string, total: number, delta: number) => {
     if (total <= 1) return;
     setFotoActivaAdminProducto((prev) => {
       const actual = prev[productoId] ?? 0;
       return { ...prev, [productoId]: (actual + delta + total) % total };
     });
-  };
-
-  const aplicarFotosMasivas = async () => {
-    setMensajeFotosMasivas(null);
-    setError(null);
-
-    const tiendaId = fotosMasivasTiendaId.trim();
-    const fotoPrincipal = fotosMasivasArchivos[0];
-    const objetivos = productosObjetivoFotosMasivas;
-
-    if (!tiendaId) {
-      setMensajeFotosMasivas('Selecciona un vendedor.');
-      return;
-    }
-    if (!fotoPrincipal) {
-      setMensajeFotosMasivas('Sube al menos la foto 1 (principal).');
-      return;
-    }
-    if (!objetivos.length) {
-      setMensajeFotosMasivas('No hay productos para actualizar con el alcance elegido.');
-      return;
-    }
-
-    const vendedor = vendedores.find((v) => v.id === tiendaId);
-    const etiqueta = vendedor?.nombre_comercial || vendedor?.nombre || 'este vendedor';
-    if (
-      !window.confirm(
-        `¿Aplicar estas fotos a ${objetivos.length} producto(s) de "${etiqueta}"?\n\n` +
-          'La foto 1 será principal y las demás quedarán como fotos adicionales. Esta acción reemplaza las fotos actuales de esos productos.'
-      )
-    ) {
-      return;
-    }
-
-    setAccionando('bulk-fotos-productos');
-    try {
-      const bucket = supabase.storage.from('productos');
-      const urls: string[] = [];
-      const lote = `${Date.now()}`;
-
-      for (let i = 0; i < fotosMasivasArchivos.length; i += 1) {
-        const raw = fotosMasivasArchivos[i];
-        if (!raw) continue;
-        const lista = await optimizarImagenProductoParaStorage(raw, {
-          maxBytes: MAX_BYTES_FOTO_PRODUCTO,
-        });
-        if (lista.size > MAX_BYTES_FOTO_PRODUCTO) {
-          throw new Error(`La foto ${i + 1} no debe superar ${MAX_MB_FOTO_PRODUCTO} MB.`);
-        }
-        const ext = lista.name.split('.').pop() || 'jpg';
-        const path = `admin-fotos-masivas/${tiendaId}/${lote}/foto-${i + 1}.${ext}`;
-        const subida = await subirImagenProductoConMiniatura(bucket, path, lista);
-        urls[i] = subida.urlOriginal;
-      }
-
-      const imagenUrl = urls[0];
-      const extras = urls.slice(1).filter((u): u is string => typeof u === 'string' && Boolean(u));
-      const ids = objetivos.map((p) => p.id);
-      const { data, error: rpcError } = await supabase.rpc('admin_set_productos_fotos_masivas', {
-        p_producto_ids: ids,
-        p_imagen_url: imagenUrl,
-        p_imagenes_extra: extras.length ? extras : null,
-      });
-      if (rpcError) throw rpcError;
-
-      const actualizados = typeof data === 'number' ? data : ids.length;
-      setProductos((prev) =>
-        prev.map((p) =>
-          ids.includes(p.id)
-            ? { ...p, imagen_url: imagenUrl, imagenes_extra: extras.length ? extras : null }
-            : p
-        )
-      );
-      setMensajeFotosMasivas(`Fotos aplicadas a ${actualizados} producto(s).`);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'No se pudieron aplicar las fotos masivas.';
-      setMensajeFotosMasivas(msg);
-      setError(msg);
-    } finally {
-      setAccionando(null);
-    }
   };
 
   const aprobarProductosPendientesVisibles = async () => {
@@ -2222,6 +2094,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           <button type="button" className={`dashboard-menu-item ${tab === 'resumen' ? 'activo' : ''}`} onClick={() => setTab('resumen')}>Inicio admin</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'usuarios' ? 'activo' : ''}`} onClick={() => setTab('usuarios')}>Usuarios</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'productos' ? 'activo' : ''}`} onClick={() => setTab('productos')}>Productos</button>
+          <button type="button" className={`dashboard-menu-item ${tab === 'fotos' ? 'activo' : ''}`} onClick={() => setTab('fotos')}>Gestión de fotos</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'vendedores' ? 'activo' : ''}`} onClick={() => setTab('vendedores')}>Vendedores</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'talleres' ? 'activo' : ''}`} onClick={() => setTab('talleres')}>Talleres</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'compradores' ? 'activo' : ''}`} onClick={() => setTab('compradores')}>Compradores</button>
@@ -2684,148 +2557,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                   </div>
                   <p className="dashboard-admin-productos-hint">
                     Cada fila muestra las miniaturas de la foto principal y las adicionales. Pulsa una imagen para
-                    abrirla en tamaño completo en otra pestaña y verificar el contenido antes de autorizar.
+                    abrirla en tamaño completo en otra pestaña y verificar el contenido antes de autorizar. Para
+                    asignar fotos masivas usa el menú <strong>Gestión de fotos</strong>.
                   </p>
-                  <div className="dashboard-admin-fotos-masivas">
-                    <div className="dashboard-admin-fotos-masivas-header">
-                      <div>
-                        <h3>Fotos masivas por vendedor</h3>
-                        <p>
-                          Usa hasta 4 fotos comunes: la foto 1 será principal y las demás adicionales.
-                          El buscador de arriba filtra en vivo (mismo criterio inteligente). El alcance
-                          de fotos se aplica sobre esos resultados del vendedor elegido.
-                        </p>
-                      </div>
-                      <span className="dashboard-admin-busqueda-hint">
-                        Productos objetivo: {productosObjetivoFotosMasivas.length}
-                      </span>
-                    </div>
-                    <div className="dashboard-admin-fotos-masivas-grid">
-                      <label htmlFor="admin-fotos-busqueda-inteligente">
-                        Buscar producto (inteligente)
-                        <span className="dashboard-admin-fotos-busqueda-fila">
-                          <input
-                            id="admin-fotos-busqueda-inteligente"
-                            type="search"
-                            value={busquedaProductosAdminDraft}
-                            onChange={(e) => setBusquedaProductosAdminDraft(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                void aplicarFiltrosProductosAdmin();
-                              }
-                            }}
-                            placeholder="Filtra al escribir: plural, typos, código..."
-                            disabled={accionando === 'bulk-fotos-productos' || cargandoFiltrosProductos}
-                            autoComplete="off"
-                            spellCheck={false}
-                          />
-                          <button
-                            type="button"
-                            className="dashboard-admin-btn"
-                            onClick={() => void aplicarFiltrosProductosAdmin()}
-                            disabled={accionando === 'bulk-fotos-productos' || cargandoFiltrosProductos}
-                          >
-                            {cargandoFiltrosProductos ? 'Recargando…' : 'Recargar catálogo'}
-                          </button>
-                        </span>
-                      </label>
-                      <label>
-                        Vendedor
-                        <select
-                          value={fotosMasivasTiendaId}
-                          onChange={(e) => {
-                            setFotosMasivasTiendaId(e.target.value);
-                            setFotosMasivasSeleccionados([]);
-                            setMensajeFotosMasivas(null);
-                          }}
-                          disabled={accionando === 'bulk-fotos-productos'}
-                        >
-                          <option value="">Selecciona vendedor</option>
-                          {vendedoresParaFiltroProductos.map((v) => (
-                            <option key={v.id} value={v.id}>
-                              {v.nombre_comercial || v.nombre || v.id}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Alcance
-                        <select
-                          value={fotosMasivasAlcance}
-                          onChange={(e) => {
-                            setFotosMasivasAlcance(e.target.value as 'todos' | 'sin_foto' | 'seleccionados');
-                            setMensajeFotosMasivas(null);
-                          }}
-                          disabled={accionando === 'bulk-fotos-productos'}
-                        >
-                          <option value="sin_foto">Solo productos sin foto principal</option>
-                          <option value="todos">Todos los productos del vendedor</option>
-                          <option value="seleccionados">Solo productos seleccionados manualmente</option>
-                        </select>
-                      </label>
-                    </div>
-                    {fotosMasivasAlcance === 'seleccionados' && (
-                      <div className="dashboard-admin-fotos-masivas-seleccion">
-                        <p>
-                          Seleccionados: {productosObjetivoFotosMasivas.length}. Usa la columna “Seleccionar”
-                          en la tabla de productos filtrada.
-                        </p>
-                        <div className="dashboard-admin-acciones-masivas">
-                          <button
-                            type="button"
-                            className="dashboard-admin-btn"
-                            disabled={!fotosMasivasTiendaId || productosSeleccionablesFotosMasivas.length === 0}
-                            onClick={seleccionarProductosFotosMasivasVisibles}
-                          >
-                            Seleccionar visibles de este vendedor ({productosSeleccionablesFotosMasivas.length})
-                          </button>
-                          <button
-                            type="button"
-                            className="dashboard-admin-btn warn"
-                            disabled={fotosMasivasSeleccionados.length === 0}
-                            onClick={limpiarSeleccionFotosMasivas}
-                          >
-                            Limpiar selección
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    <div className="dashboard-admin-fotos-masivas-files">
-                      {fotosMasivasArchivos.map((archivo, idx) => (
-                        <label key={idx}>
-                          Foto {idx + 1}{idx === 0 ? ' (principal)' : ''}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            disabled={accionando === 'bulk-fotos-productos'}
-                            onChange={(e) => cambiarFotoMasiva(idx, e.target.files?.[0] ?? null)}
-                          />
-                          {archivo && <span>{archivo.name}</span>}
-                        </label>
-                      ))}
-                    </div>
-                    <div className="dashboard-admin-acciones-masivas">
-                      <button
-                        type="button"
-                        className="dashboard-admin-btn ok"
-                        disabled={
-                          accionando === 'bulk-fotos-productos' ||
-                          !fotosMasivasTiendaId ||
-                          !fotosMasivasArchivos[0] ||
-                          productosObjetivoFotosMasivas.length === 0
-                        }
-                        onClick={() => void aplicarFotosMasivas()}
-                      >
-                        {accionando === 'bulk-fotos-productos'
-                          ? 'Aplicando fotos...'
-                          : `Aplicar fotos a ${productosObjetivoFotosMasivas.length} producto(s)`}
-                      </button>
-                    </div>
-                    {mensajeFotosMasivas && (
-                      <p className="dashboard-admin-fotos-masivas-mensaje">{mensajeFotosMasivas}</p>
-                    )}
-                  </div>
                   <div className="dashboard-admin-acciones-masivas">
                     <button
                       type="button"
@@ -2844,7 +2578,6 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     <table className="dashboard-admin-table dashboard-admin-table--catalogo">
                       <thead>
                         <tr>
-                          {fotosMasivasAlcance === 'seleccionados' && <th>Seleccionar</th>}
                           <th>Fotos</th>
                           <th>Nombre</th>
                           <th>Vendedor</th>
@@ -2872,21 +2605,6 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           const fotoActiva = fotos[fotoActivaIdx] ?? null;
                           return (
                           <tr key={p.id}>
-                            {fotosMasivasAlcance === 'seleccionados' && (
-                              <td>
-                                <input
-                                  type="checkbox"
-                                  checked={fotosMasivasSeleccionados.includes(p.id)}
-                                  disabled={
-                                    !fotosMasivasTiendaId ||
-                                    (p.tienda_id ?? primeraTiendaProducto(p)?.id) !== fotosMasivasTiendaId ||
-                                    accionando === 'bulk-fotos-productos'
-                                  }
-                                  onChange={(e) => toggleProductoFotoMasiva(p.id, e.target.checked)}
-                                  aria-label={`Seleccionar ${p.nombre} para fotos masivas`}
-                                />
-                              </td>
-                            )}
                             <td className="dashboard-admin-td-fotos">
                               {fotos.length === 0 ? (
                                 <span className="dashboard-admin-sin-foto">Sin fotos</span>
@@ -3033,6 +2751,22 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         })}
                       </tbody>
                     </table>
+                  </div>
+                </section>
+              )}
+
+              {tab === 'fotos' && (
+                <section className="dashboard-seccion">
+                  <h2 className="dashboard-seccion-titulo">Gestión de fotos</h2>
+                  <p className="dashboard-admin-productos-hint">
+                    Asigna fotos a varios productos de un vendedor sin mezclar con filtros ni acciones de la
+                    pestaña Productos.
+                  </p>
+                  <div className="dashboard-card">
+                    <GestionFotosAdmin
+                      vendedores={vendedores}
+                      onFotosAplicadas={() => void cargar({ silencioso: true })}
+                    />
                   </div>
                 </section>
               )}
@@ -4026,6 +3760,13 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           onClick={() => setTab('productos')}
         >
           Productos
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'fotos' ? 'activo' : ''}`}
+          onClick={() => setTab('fotos')}
+        >
+          Fotos
         </button>
         <button
           type="button"
