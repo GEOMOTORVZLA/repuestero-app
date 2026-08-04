@@ -580,7 +580,15 @@ function semaforoStockGestion(p: {
 const ADMIN_PRODUCTOS_SELECT =
   'id, nombre, codigo, descripcion, comentarios, tienda_id, categoria, marca, modelo, anio, precio_usd, moneda, activo, aprobacion_publica, imagen_url, imagenes_extra, created_at, stock_confirmado_at, pausado_por_stock_vencido, stock_actual, vertical, disponibilidad_aviso, es_oferta, tiendas(id, nombre, nombre_comercial)';
 
+const ADMIN_PRODUCTOS_SELECT_SIN_CODIGO =
+  'id, nombre, descripcion, comentarios, tienda_id, categoria, marca, modelo, anio, precio_usd, moneda, activo, aprobacion_publica, imagen_url, imagenes_extra, created_at, stock_confirmado_at, pausado_por_stock_vencido, stock_actual, vertical, disponibilidad_aviso, es_oferta, tiendas(id, nombre, nombre_comercial)';
+
 const ADMIN_PRODUCTOS_PAGE = 1000;
+
+function errorAdminPorColumnaCodigo(msg: string | undefined): boolean {
+  const m = (msg ?? '').toLowerCase();
+  return m.includes('codigo') && (m.includes('does not exist') || m.includes('column'));
+}
 
 export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: DashboardAdminProps) {
   const { user, signOut } = useAuth();
@@ -668,18 +676,25 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     if (conIndicador) setCargandoFiltrosProductos(true);
     const acumulado: AdminProducto[] = [];
     let from = 0;
+    let selectCols = ADMIN_PRODUCTOS_SELECT;
     try {
       while (true) {
         const pRes = await supabase
           .from('productos')
-          .select(ADMIN_PRODUCTOS_SELECT)
+          .select(selectCols)
           .order('created_at', { ascending: false })
           .range(from, from + ADMIN_PRODUCTOS_PAGE - 1);
         if (pRes.error) {
+          if (selectCols === ADMIN_PRODUCTOS_SELECT && errorAdminPorColumnaCodigo(pRes.error.message)) {
+            selectCols = ADMIN_PRODUCTOS_SELECT_SIN_CODIGO;
+            from = 0;
+            acumulado.length = 0;
+            continue;
+          }
           setError(pRes.error.message);
           break;
         }
-        const batch = (pRes.data ?? []) as AdminProducto[];
+        const batch = (pRes.data ?? []) as unknown as AdminProducto[];
         acumulado.push(...batch);
         if (batch.length < ADMIN_PRODUCTOS_PAGE) break;
         from += ADMIN_PRODUCTOS_PAGE;

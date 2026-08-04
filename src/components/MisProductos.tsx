@@ -107,7 +107,16 @@ const ACCION_MASIVA_PAGE = 80;
 const PRODUCTOS_VENDEDOR_SELECT =
   'id, nombre, codigo, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, aprobacion_publica, created_at, stock_confirmado_at, pausado_por_stock_vencido, stock_actual, vertical, disponibilidad_aviso, es_oferta';
 
+/** Fallback si aún no existe productos.codigo en Supabase. */
+const PRODUCTOS_VENDEDOR_SELECT_SIN_CODIGO =
+  'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, aprobacion_publica, created_at, stock_confirmado_at, pausado_por_stock_vencido, stock_actual, vertical, disponibilidad_aviso, es_oferta';
+
 const PRODUCTOS_VENDEDOR_PAGE = 1000;
+
+function errorPorColumnaCodigo(msg: string | undefined): boolean {
+  const m = (msg ?? '').toLowerCase();
+  return m.includes('codigo') && (m.includes('does not exist') || m.includes('column'));
+}
 
 /** Carga todos los productos de las tiendas del usuario (paginado; PostgREST limita ~1000 por solicitud). */
 async function fetchProductosDelVendedor(
@@ -128,22 +137,29 @@ async function fetchProductosDelVendedor(
   const tiendaIds = tiendas.map((t) => t.id);
   const acumulado: ProductoPanel[] = [];
   let from = 0;
+  let selectCols = PRODUCTOS_VENDEDOR_SELECT;
 
   while (true) {
     const { data: productosData, error: errProd } = await withRetry(() =>
       supabase
         .from('productos')
-        .select(PRODUCTOS_VENDEDOR_SELECT)
+        .select(selectCols)
         .in('tienda_id', tiendaIds)
         .order('nombre')
         .range(from, from + PRODUCTOS_VENDEDOR_PAGE - 1)
     );
 
     if (errProd) {
+      if (selectCols === PRODUCTOS_VENDEDOR_SELECT && errorPorColumnaCodigo(errProd.message)) {
+        selectCols = PRODUCTOS_VENDEDOR_SELECT_SIN_CODIGO;
+        from = 0;
+        acumulado.length = 0;
+        continue;
+      }
       return { productos: [], error: errProd.message || 'Error al cargar tus productos.' };
     }
 
-    const batch = (productosData ?? []) as ProductoPanel[];
+    const batch = (productosData ?? []) as unknown as ProductoPanel[];
     acumulado.push(...batch);
     if (batch.length < PRODUCTOS_VENDEDOR_PAGE) break;
     from += PRODUCTOS_VENDEDOR_PAGE;
