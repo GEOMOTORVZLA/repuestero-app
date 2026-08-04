@@ -406,17 +406,37 @@
 
 @media (max-width: 640px) {
   .vendedores-cerca-card-cuerpo {
+    position: relative;
     flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.45rem;
+  }
+
+  .vendedores-cerca-card-info {
+    order: 1;
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    /* Deja hueco al botón compartir en la esquina superior derecha */
+    padding-right: 2.85rem;
+    box-sizing: border-box;
   }
 
   .vendedores-cerca-card-compartir {
     order: 2;
+    position: absolute;
+    top: 0.55rem;
+    right: 0.55rem;
+    margin: 0;
+    width: 2.35rem;
+    height: 2.35rem;
   }
 
   .vendedores-cerca-card-botones {
     order: 3;
     width: 100%;
     justify-content: stretch;
+    margin-top: 0;
   }
 
   .vendedores-cerca-card-botones .vendedores-cerca-card-btn {
