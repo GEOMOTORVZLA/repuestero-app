@@ -60,6 +60,7 @@ async function withRetry<T>(
 interface ProductoPanel {
   id: string;
   nombre: string;
+  codigo?: string | null;
   descripcion: string | null;
   comentarios?: string | null;
   categoria?: string | null;
@@ -104,7 +105,7 @@ type AlcanceAccionMasiva = 'filtrados' | 'seleccionados';
 const ACCION_MASIVA_PAGE = 80;
 
 const PRODUCTOS_VENDEDOR_SELECT =
-  'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, aprobacion_publica, created_at, stock_confirmado_at, pausado_por_stock_vencido, stock_actual, vertical, disponibilidad_aviso, es_oferta';
+  'id, nombre, codigo, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, aprobacion_publica, created_at, stock_confirmado_at, pausado_por_stock_vencido, stock_actual, vertical, disponibilidad_aviso, es_oferta';
 
 const PRODUCTOS_VENDEDOR_PAGE = 1000;
 
@@ -205,10 +206,8 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
   const [aplicandoFotosMasivas, setAplicandoFotosMasivas] = useState(false);
   const [mensajeFotosMasivas, setMensajeFotosMasivas] = useState<string | null>(null);
   const [etiquetandoId, setEtiquetandoId] = useState<string | null>(null);
-  /** Texto de búsqueda en el control (borrador). */
+  /** Texto de búsqueda: filtra la lista en vivo al escribir. */
   const [busquedaProductosInput, setBusquedaProductosInput] = useState('');
-  /** Filtros aplicados al listado (tras «Aplicar filtros»). */
-  const [busquedaProductos, setBusquedaProductos] = useState('');
   const [filtroEstadoProductos, setFiltroEstadoProductos] = useState<FiltroEstadoProductoGestion>('todos');
   const [filtroEstadoProductosDraft, setFiltroEstadoProductosDraft] =
     useState<FiltroEstadoProductoGestion>('todos');
@@ -305,7 +304,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
   /** Mismo criterio que Visor de mostrador: multi-palabra AND, plural/singular y typo leve. */
   const productoCoincideBusqueda = (p: ProductoPanel, texto: string) =>
     productoCoincideTextoFlexible(
-      [p.nombre, p.descripcion, p.comentarios, p.marca, p.modelo, p.categoria],
+      [p.nombre, p.codigo, p.descripcion, p.comentarios, p.marca, p.modelo, p.categoria],
       texto
     );
 
@@ -321,6 +320,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     return true;
   };
 
+  // Filtra en vivo con el texto del cuadro (no hace falta “aplicar” para ver resultados).
   const productosVisibles = useMemo(
     () =>
       productos.filter((p) => {
@@ -328,11 +328,11 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
           filtroVerticalProductos === 'todos' || (p.vertical ?? 'auto') === filtroVerticalProductos;
         return (
           vertOk &&
-          productoCoincideBusqueda(p, busquedaProductos) &&
+          productoCoincideBusqueda(p, busquedaProductosInput) &&
           productoCoincideEstado(p, filtroEstadoProductos)
         );
       }),
-    [productos, busquedaProductos, filtroEstadoProductos, filtroVerticalProductos]
+    [productos, busquedaProductosInput, filtroEstadoProductos, filtroVerticalProductos]
   );
 
   if (!user) {
@@ -341,7 +341,6 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
 
   const aplicarFiltrosMisProductos = async () => {
     if (!user) return;
-    setBusquedaProductos(busquedaProductosInput.trim());
     setFiltroEstadoProductos(filtroEstadoProductosDraft);
     setFiltroVerticalProductos(verticalFijo ?? filtroVerticalProductosDraft);
     // Al buscar productos, quitamos el filtro de alcance de fotos para no “esconder” el resultado.
@@ -375,7 +374,6 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     setBusquedaProductosInput('');
     setFiltroEstadoProductosDraft('todos');
     setFiltroVerticalProductosDraft(verticalReset);
-    setBusquedaProductos('');
     setFiltroEstadoProductos('todos');
     setFiltroVerticalProductos(verticalReset);
     setFiltroAlcanceListaAplicado(null);
@@ -787,11 +785,11 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
       <section className="mis-productos-filtros" aria-label="Buscar y filtrar productos">
         <div>
           <p className="mis-productos-ajuste-masivo-titulo">Buscar y filtrar mis productos</p>
-          <p className="mis-productos-ajuste-masivo-descripcion">
-            Elige criterios y pulsa <strong>Aplicar filtros</strong> para actualizar el listado (también puedes pulsar
-            Intro en la búsqueda). Así se vuelven a cargar todos tus artículos desde el servidor y se evita el límite
-            por defecto de mil filas.
-          </p>
+            <p className="mis-productos-ajuste-masivo-descripcion">
+              Elige criterios y escribe en la búsqueda: la lista se filtra al instante. Pulsa{' '}
+              <strong>Aplicar filtros</strong> (o Intro) para volver a cargar el catálogo desde el servidor
+              y evitar el límite por defecto de mil filas.
+            </p>
         </div>
         <form
           className="mis-productos-filtros-grid"
@@ -977,15 +975,24 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
             <p className="mis-productos-ajuste-masivo-titulo">Carga masiva de fotos</p>
             <p className="mis-productos-ajuste-masivo-descripcion">
               Sube hasta 4 fotos comunes para aplicarlas a varios productos. La foto 1 será la principal.
-              Usa el buscador de esta sección (mismo criterio inteligente que el Visor de mostrador:
-              varias palabras, singular/plural y errores leves) para ubicar el producto o el grupo.
-              El botón <strong>Buscar en alcance</strong> solo limita la lista de abajo por alcance de fotos.
+              Escribe en el buscador (varias palabras, singular/plural, typos leves): la lista y el
+              contador se actualizan al instante. <strong>Buscar</strong> recarga el catálogo;{' '}
+              <strong>Buscar en alcance</strong> solo limita por fotos (sin foto / todos / seleccionados).
             </p>
           </div>
           <span className="mis-productos-fotos-masivas-contador">
             Productos objetivo: {productosObjetivoFotosMasivas.length}
           </span>
         </div>
+        {busquedaProductosInput.trim() ? (
+          <p className="mis-productos-fotos-masivas-lista-filtro" role="status">
+            Texto «{busquedaProductosInput.trim()}»: <strong>{productosVisibles.length}</strong> producto(s)
+            coinciden
+            {productosVisibles.length === 0
+              ? ' (prueba otra palabra o revisa el nombre exacto en el catálogo).'
+              : '.'}
+          </p>
+        ) : null}
         <div className="mis-productos-fotos-masivas-config">
           <label htmlFor="mis-productos-fotos-busqueda">
             Buscar producto (inteligente)
