@@ -67,12 +67,13 @@ async function cargarProductosVendedor(
   return { productos: acumulado, error: null };
 }
 
-/** Busqueda flexible solo del Visor: multi-palabra AND, plural/singular y typo leve. */
+/**
+ * Visor (mostrador): solo nombre + código con match flexible (plural/typos).
+ * No usa descripción/comentarios: plantillas o textos tipo «cámara de combustión»
+ * devolvían casi todo el catálogo (ej. buscar CAMARA → cientos de anillos).
+ */
 function coincideBusquedaVisor(p: ProductoMostrador, texto: string): boolean {
-  return productoCoincideTextoFlexible(
-    [p.nombre, p.codigo, p.descripcion, p.comentarios, p.marca, p.modelo, p.categoria],
-    texto
-  );
+  return productoCoincideTextoFlexible([p.nombre, p.codigo], texto);
 }
 
 type VisorMostradorProps = {
@@ -158,7 +159,7 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
           className="visor-mostrador-buscar"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Ej: código, amortiguador, Cherokee..."
+          placeholder="Nombre o código (ej: camara, amortiguadores…)"
           autoComplete="off"
           spellCheck={false}
         />
@@ -173,6 +174,9 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
               : `${visibles.length} resultado${visibles.length === 1 ? '' : 's'}`}
           </span>
         </div>
+        <p className="visor-mostrador-ayuda">
+          Busca por nombre o código (plural/typos OK). No usa la descripción, para evitar resultados ajenos.
+        </p>
       </header>
 
       {error && <p className="visor-mostrador-error">{error}</p>}

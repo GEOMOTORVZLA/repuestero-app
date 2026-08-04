@@ -66,6 +66,13 @@
   color: #0f766e;
 }
 
+.visor-mostrador-ayuda {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
 .visor-mostrador-error {
   margin: 0;
   color: #b91c1c;
