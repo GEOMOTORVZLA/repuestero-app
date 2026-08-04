@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { ImagenProducto } from './ImagenProducto';
 import {
+  EditorFotosProductoModal,
+  type ProductoFotosEditable,
+} from './EditorFotosProductoModal';
+import {
   MAX_BYTES_FOTO_PRODUCTO,
   MAX_MB_FOTO_PRODUCTO,
   optimizarImagenProductoParaStorage,
@@ -101,6 +105,7 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
   const [inputKey, setInputKey] = useState(0);
   const [aplicando, setAplicando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [productoEditando, setProductoEditando] = useState<ProductoFotosEditable | null>(null);
 
   useEffect(() => {
     let cancelado = false;
@@ -413,7 +418,7 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
       </section>
 
       {tiendaId && !cargando && (
-        <div className="mis-productos-grid" aria-label="Productos del vendedor para fotos">
+        <div className="mis-productos-grid gestion-fotos-lista" aria-label="Productos del vendedor para fotos">
           {listaVisible.length === 0 ? (
             <div className="mis-productos-mensaje mis-productos-mensaje--bloque">
               <p>
@@ -427,22 +432,39 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
           ) : (
             listaVisible.map((p) => {
               const sel = seleccionados.includes(p.id);
+              const esObjetivo = objetivos.some((o) => o.id === p.id);
+              const nFotos = [p.imagen_url, ...(Array.isArray(p.imagenes_extra) ? p.imagenes_extra : [])]
+                .filter((u) => typeof u === 'string' && u.trim()).length;
               return (
                 <article
                   key={p.id}
-                  className={`mis-productos-card${
+                  className={`mis-productos-card gestion-fotos-card${
                     alcance === 'seleccionados' && sel ? ' mis-productos-card--seleccionada' : ''
                   }`}
+                  onClick={() => setProductoEditando(p)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setProductoEditando(p);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  title="Ver y editar fotos de este producto"
                 >
                   {alcance === 'seleccionados' && (
-                    <label className="mis-productos-card-selector">
+                    <label
+                      className="mis-productos-card-selector"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
                       <input
                         type="checkbox"
                         checked={sel}
                         disabled={aplicando}
                         onChange={(e) => toggleSeleccionado(p.id, e.target.checked)}
                       />
-                      Seleccionar
+                      Masivo
                     </label>
                   )}
                   <div className="mis-productos-card-foto">
@@ -461,17 +483,17 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
                       <div className="mis-productos-card-foto-placeholder">Sin foto</div>
                     )}
                   </div>
-                  <div className="mis-productos-card-cuerpo">
+                  <div className="mis-productos-card-cuerpo gestion-fotos-card-cuerpo">
                     <h3 className="mis-productos-card-nombre">{p.nombre}</h3>
                     {p.codigo ? (
                       <p className="mis-productos-card-desc">Código: {p.codigo}</p>
                     ) : null}
                     <p className="mis-productos-card-desc">
-                      {p.imagen_url && String(p.imagen_url).trim()
-                        ? 'Con foto principal'
-                        : 'Sin foto principal'}
-                      {objetivos.some((o) => o.id === p.id) ? ' · Se aplicará foto' : ''}
+                      {nFotos > 0 ? `${nFotos} foto(s)` : 'Sin fotos'}
+                      {p.imagen_url && String(p.imagen_url).trim() ? ' · Con principal' : ' · Sin principal'}
+                      {esObjetivo ? ' · Objetivo masivo' : ''}
                     </p>
+                    <p className="gestion-fotos-card-hint">Toca para ver / editar fotos</p>
                   </div>
                 </article>
               );
@@ -479,6 +501,31 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
           )}
         </div>
       )}
+
+      {productoEditando && (
+        <EditorFotosProductoModal
+          producto={productoEditando}
+          modoGuardado="admin"
+          onClose={() => setProductoEditando(null)}
+          onSaved={(actualizado) => {
+            setProductos((prev) =>
+              prev.map((p) =>
+                p.id === actualizado.id
+                  ? {
+                      ...p,
+                      imagen_url: actualizado.imagen_url,
+                      imagenes_extra: actualizado.imagenes_extra,
+                    }
+                  : p
+              )
+            );
+            setProductoEditando(null);
+            setMensaje('Fotos del producto actualizadas.');
+            onFotosAplicadas?.();
+          }}
+        />
+      )}
+
     </div>
   );
 }

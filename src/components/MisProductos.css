@@ -1175,3 +1175,170 @@
 .mis-productos-acciones-masivas-porcentaje .mis-productos-ajuste-masivo-ayuda {
   margin: 0.45rem 0 0;
 }
+
+/* —— Gestión de fotos: lista compacta + modal de edición —— */
+.gestion-fotos-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.gestion-fotos-lista .gestion-fotos-card {
+  flex-direction: column;
+  align-items: stretch;
+  max-width: 100%;
+  padding: 0.55rem;
+}
+
+.gestion-fotos-lista .gestion-fotos-card .mis-productos-card-foto {
+  width: 100%;
+  min-width: 0;
+  height: 150px;
+  align-self: stretch;
+}
+
+.gestion-fotos-lista .gestion-fotos-card-cuerpo {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
+}
+
+.gestion-fotos-card-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #6366f1;
+}
+
+.gestion-fotos-modal {
+  max-width: min(920px, 96vw);
+  width: 100%;
+}
+
+.gestion-fotos-modal .mis-productos-detalle-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.gestion-fotos-modal .mis-productos-detalle-cerrar {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.gestion-fotos-modal-cuerpo {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 800px) {
+  .gestion-fotos-modal-cuerpo {
+    grid-template-columns: 1fr;
+  }
+}
+
+.gestion-fotos-modal-ranuras {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.gestion-fotos-modal-ranuras-titulo {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #1e3a5f;
+}
+
+.gestion-fotos-modal-ranuras-ayuda {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.gestion-fotos-modal-ranura {
+  display: grid;
+  grid-template-columns: 88px 72px 1fr;
+  gap: 0.45rem;
+  align-items: center;
+  padding: 0.45rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.gestion-fotos-modal-ranura > span:first-child {
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #334155;
+}
+
+.gestion-fotos-modal-ranura-preview {
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gestion-fotos-modal-ranura-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gestion-fotos-modal-ranura-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.gestion-fotos-modal-ranura-acciones input[type='file'] {
+  max-width: 100%;
+  font-size: 0.72rem;
+}
+
+.gestion-fotos-modal-file {
+  grid-column: 1 / -1;
+  font-size: 0.7rem;
+  color: #64748b;
+  word-break: break-word;
+}
+
+.gestion-fotos-modal-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+  margin-top: 0.85rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+@media (max-width: 640px) {
+  .gestion-fotos-modal-ranura {
+    grid-template-columns: 1fr;
+  }
+}
