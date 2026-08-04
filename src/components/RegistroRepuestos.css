@@ -254,6 +254,33 @@
   font-style: italic;
 }
 
+.registro-repuestos-fotos-ranura-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.registro-repuestos-fotos-borrar {
+  border: 1px solid #feb2b2;
+  background: #fff5f5;
+  color: #c53030;
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.registro-repuestos-fotos-borrar:hover:not(:disabled) {
+  background: #fed7d7;
+}
+
+.registro-repuestos-fotos-borrar:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 @media (max-width: 768px) {
   .registro-repuestos {
     max-width: none;

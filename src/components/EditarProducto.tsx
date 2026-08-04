@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { CATEGORIAS_PRODUCTO } from '../data/categoriasProducto';
 import { CATEGORIAS_PRODUCTO_MOTO } from '../data/categoriasProductoMoto';
@@ -7,6 +7,7 @@ import { VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import {
   MAX_BYTES_FOTO_PRODUCTO,
   MAX_MB_FOTO_PRODUCTO,
+  eliminarImagenProductoEnStorage,
   optimizarImagenProductoParaStorage,
   subirImagenProductoConMiniatura,
 } from '../utils/imagenProducto';
@@ -81,14 +82,49 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
   const [estado, setEstado] = useState<'idle' | 'guardando' | 'ok' | 'error'>('idle');
   const [mensaje, setMensaje] = useState('');
   const [nuevaFotoPrincipal, setNuevaFotoPrincipal] = useState<File | null>(null);
+  const [principalUrlLocal, setPrincipalUrlLocal] = useState<string | null>(
+    () => (typeof producto.imagen_url === 'string' && producto.imagen_url.trim() ? producto.imagen_url.trim() : null)
+  );
   const [nuevasFotosExtraSlots, setNuevasFotosExtraSlots] = useState<(File | null)[]>(() =>
     slotsArchivosExtraVacios()
   );
-
-  const urlsExtrasActuales = useMemo(
-    () => normalizarUrlsACuatroSlots(producto.imagenes_extra as string[] | null | undefined),
-    [producto.id, producto.imagenes_extra]
+  const [slotsExtrasLocal, setSlotsExtrasLocal] = useState<(string | null)[]>(() =>
+    normalizarUrlsACuatroSlots(producto.imagenes_extra as string[] | null | undefined)
   );
+  /** URLs a borrar de Storage al guardar (no se acumulan en BD ni en el bucket). */
+  const [urlsAEliminarStorage, setUrlsAEliminarStorage] = useState<string[]>([]);
+
+  const marcarUrlParaBorrarStorage = (url: string | null | undefined) => {
+    const u = typeof url === 'string' ? url.trim() : '';
+    if (!u) return;
+    setUrlsAEliminarStorage((prev) => (prev.includes(u) ? prev : [...prev, u]));
+  };
+
+  const borrarFotoPrincipal = () => {
+    if (nuevaFotoPrincipal) {
+      setNuevaFotoPrincipal(null);
+      return;
+    }
+    if (principalUrlLocal) {
+      marcarUrlParaBorrarStorage(principalUrlLocal);
+      setPrincipalUrlLocal(null);
+    }
+  };
+
+  const borrarFotoExtra = (idx: number) => {
+    const actual = slotsExtrasLocal[idx];
+    if (actual) marcarUrlParaBorrarStorage(actual);
+    setNuevasFotosExtraSlots((prev) => {
+      const next = [...prev];
+      next[idx] = null;
+      return next;
+    });
+    setSlotsExtrasLocal((prev) => {
+      const next = [...prev];
+      next[idx] = null;
+      return next;
+    });
+  };
 
   const guardar = async () => {
     if (!nombre.trim()) {
@@ -161,12 +197,15 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       payload.pausado_por_stock_vencido = inv.pausado_por_stock_vencido;
     }
 
-    // Subir nuevas imágenes si el usuario seleccionó
-    let imagenPrincipalUrl = producto.imagen_url ?? null;
+    // Subir / borrar imágenes
+    let imagenPrincipalUrl = principalUrlLocal;
     const bucket = supabase.storage.from('productos');
     const MAX_MB = 2;
+    const urlsStoragePendientes = [...urlsAEliminarStorage];
 
     if (nuevaFotoPrincipal) {
+      if (principalUrlLocal) urlsStoragePendientes.push(principalUrlLocal);
+      if (producto.imagen_url) urlsStoragePendientes.push(producto.imagen_url);
       const fotoPrincipalLista = await optimizarImagenProductoParaStorage(nuevaFotoPrincipal, {
         maxBytes: MAX_MB * 1024 * 1024,
       });
@@ -188,12 +227,20 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
     }
 
     const hayNuevasExtras = nuevasFotosExtraSlots.some((f) => f != null);
-    let slotsUrls = normalizarUrlsACuatroSlots(producto.imagenes_extra as string[] | null | undefined);
+    const slotsUrls = [...slotsExtrasLocal];
+    let extrasModificados =
+      hayNuevasExtras ||
+      urlsAEliminarStorage.some((u) =>
+        normalizarUrlsACuatroSlots(producto.imagenes_extra as string[] | null | undefined).includes(u)
+      ) ||
+      JSON.stringify(slotsExtrasLocal) !==
+        JSON.stringify(normalizarUrlsACuatroSlots(producto.imagenes_extra as string[] | null | undefined));
 
     if (hayNuevasExtras) {
       for (let i = 0; i < MAX_FOTOS_EXTRA; i += 1) {
         const fileRaw = nuevasFotosExtraSlots[i];
         if (!fileRaw) continue;
+        if (slotsUrls[i]) urlsStoragePendientes.push(slotsUrls[i]!);
         const file = await optimizarImagenProductoParaStorage(fileRaw, {
           maxBytes: MAX_BYTES_FOTO_PRODUCTO,
         });
@@ -209,15 +256,25 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
         try {
           const subidaExtra = await subirImagenProductoConMiniatura(bucket, extraPath, file);
           slotsUrls[i] = subidaExtra.urlOriginal;
+          extrasModificados = true;
         } catch {
           /* keep previous slot */
         }
       }
+    }
+
+    if (extrasModificados) {
       const tieneAlgunaExtra = slotsUrls.some((s) => s != null && String(s).trim() !== '');
       payload.imagenes_extra = tieneAlgunaExtra ? slotsUrls : null;
     }
 
-    if (imagenPrincipalUrl !== null) {
+    const principalCambio =
+      Boolean(nuevaFotoPrincipal) ||
+      (principalUrlLocal ?? null) !==
+        (typeof producto.imagen_url === 'string' && producto.imagen_url.trim()
+          ? producto.imagen_url.trim()
+          : null);
+    if (principalCambio) {
       payload.imagen_url = imagenPrincipalUrl;
     }
 
@@ -229,11 +286,30 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       return;
     }
 
+    // Limpiar archivos en Storage (best-effort) para no acumular basura.
+    const unicas = [...new Set(urlsStoragePendientes.map((u) => u.trim()).filter(Boolean))];
+    for (const u of unicas) {
+      // No borrar si la URL sigue siendo la foto vigente tras el guardado.
+      if (u === imagenPrincipalUrl) continue;
+      if (slotsUrls.some((s) => s === u)) continue;
+      await eliminarImagenProductoEnStorage(bucket, u);
+    }
+
     setEstado('ok');
     setMensaje('Repuesto actualizado correctamente.');
+    setUrlsAEliminarStorage([]);
+    setNuevaFotoPrincipal(null);
+    setNuevasFotosExtraSlots(slotsArchivosExtraVacios());
+    setPrincipalUrlLocal(imagenPrincipalUrl);
+    setSlotsExtrasLocal(
+      Array.from({ length: MAX_FOTOS_EXTRA }, (_, i) => {
+        const s = slotsUrls[i];
+        return typeof s === 'string' && s.trim() ? s.trim() : null;
+      })
+    );
 
-    const imagenesExtraGuardadas = hayNuevasExtras
-      ? ((payload.imagenes_extra as (string | null)[] | null) ?? producto.imagenes_extra ?? null)
+    const imagenesExtraGuardadas = extrasModificados
+      ? ((payload.imagenes_extra as (string | null)[] | null) ?? null)
       : producto.imagenes_extra ?? null;
 
     const avisoGuardado =
@@ -253,7 +329,7 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
       comentarios: (payload.comentarios as string | null) ?? null,
       precio_usd: precioNum,
       moneda,
-      imagen_url: imagenPrincipalUrl,
+      imagen_url: principalCambio ? imagenPrincipalUrl : producto.imagen_url ?? null,
       imagenes_extra: imagenesExtraGuardadas,
       disponibilidad_aviso: avisoGuardado,
       es_oferta: esOferta,
@@ -382,28 +458,62 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
         </label>
       </div>
       <div className="registro-repuestos-fotos">
-        <label className="registro-repuestos-fotos-label">Subir foto (opcional)</label>
+        <label className="registro-repuestos-fotos-label">Foto principal</label>
         <p className="registro-repuestos-fotos-peso-ayuda">
-          Máximo {MAX_MB_FOTO_PRODUCTO} MB por imagen (JPG, PNG, WebP, etc.).
+          Máximo {MAX_MB_FOTO_PRODUCTO} MB por imagen (JPG, PNG, WebP, etc.). Usa <strong>Borrar</strong> para
+          quitarla del producto y del almacenamiento (al guardar).
         </p>
-        <input
-          type="file"
-          accept="image/*"
-          disabled={estado === 'guardando'}
-          onChange={(e) => {
-            const file = e.target.files?.[0] ?? null;
-            setNuevaFotoPrincipal(file);
-          }}
-        />
+        <div className="registro-repuestos-fotos-extra-fila registro-repuestos-fotos-principal-fila">
+          <div className="registro-repuestos-fotos-extra-vista">
+            {nuevaFotoPrincipal ? (
+              <span className="registro-repuestos-fotos-extra-nombre">Nueva: {nuevaFotoPrincipal.name}</span>
+            ) : principalUrlLocal ? (
+              <ImagenProducto
+                className="registro-repuestos-fotos-extra-thumb"
+                url={principalUrlLocal}
+                variante="miniatura"
+                alt=""
+                width={160}
+                height={160}
+                loading="lazy"
+                decoding="async"
+              />
+            ) : (
+              <span className="registro-repuestos-fotos-extra-sin">Sin foto principal</span>
+            )}
+          </div>
+          <div className="registro-repuestos-fotos-ranura-acciones">
+            <input
+              type="file"
+              accept="image/*"
+              disabled={estado === 'guardando'}
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                setNuevaFotoPrincipal(file);
+                e.target.value = '';
+              }}
+            />
+            {(nuevaFotoPrincipal || principalUrlLocal) && (
+              <button
+                type="button"
+                className="registro-repuestos-fotos-borrar"
+                disabled={estado === 'guardando'}
+                onClick={borrarFotoPrincipal}
+              >
+                Borrar foto
+              </button>
+            )}
+          </div>
+        </div>
         <span className="registro-repuestos-fotos-label">
           Fotos adicionales (opcionales, hasta {MAX_FOTOS_EXTRA})
         </span>
         <p className="registro-repuestos-fotos-extra-ayuda">
-          Cada ranura es independiente: elige una imagen por botón para reemplazar solo esa foto.
+          Cada ranura es independiente. Puedes reemplazar o borrar solo esa foto.
         </p>
         <div className="registro-repuestos-fotos-extra-bloque">
           {Array.from({ length: MAX_FOTOS_EXTRA }, (_, idx) => {
-            const urlActual = urlsExtrasActuales[idx];
+            const urlActual = slotsExtrasLocal[idx];
             const archivoNuevo = nuevasFotosExtraSlots[idx];
             return (
               <div key={idx} className="registro-repuestos-fotos-extra-fila">
@@ -428,21 +538,36 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
                     <span className="registro-repuestos-fotos-extra-sin">Sin imagen en esta ranura</span>
                   )}
                 </div>
-                <input
-                  id={`foto-extra-edit-${idx}`}
-                  type="file"
-                  accept="image/*"
-                  disabled={estado === 'guardando'}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] ?? null;
-                    setNuevasFotosExtraSlots((prev) => {
-                      const next = [...prev];
-                      next[idx] = file;
-                      return next;
-                    });
-                    e.target.value = '';
-                  }}
-                />
+                <div className="registro-repuestos-fotos-ranura-acciones">
+                  <input
+                    id={`foto-extra-edit-${idx}`}
+                    type="file"
+                    accept="image/*"
+                    disabled={estado === 'guardando'}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      if (file && slotsExtrasLocal[idx]) {
+                        marcarUrlParaBorrarStorage(slotsExtrasLocal[idx]);
+                      }
+                      setNuevasFotosExtraSlots((prev) => {
+                        const next = [...prev];
+                        next[idx] = file;
+                        return next;
+                      });
+                      e.target.value = '';
+                    }}
+                  />
+                  {(archivoNuevo || urlActual) && (
+                    <button
+                      type="button"
+                      className="registro-repuestos-fotos-borrar"
+                      disabled={estado === 'guardando'}
+                      onClick={() => borrarFotoExtra(idx)}
+                    >
+                      Borrar foto
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}

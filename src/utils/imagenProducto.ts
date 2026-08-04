@@ -357,3 +357,55 @@ export async function subirImagenProductoConMiniatura(
   }
 }
 
+/**
+ * Path relativo al bucket `productos` desde una URL pública
+ * (`.../object/public/productos/{id}/principal.webp?v=...` → `{id}/principal.webp`).
+ */
+export function pathStorageDesdeUrlPublicaProducto(url: string | null | undefined): string | null {
+  if (typeof url !== 'string' || !url.trim()) return null;
+  const u = url.trim();
+  const i = u.indexOf(MARKER_OBJECT_PUBLIC);
+  if (i === -1) return null;
+  let rest = u.slice(i + MARKER_OBJECT_PUBLIC.length);
+  const q = rest.indexOf('?');
+  if (q !== -1) rest = rest.slice(0, q);
+  rest = rest.replace(/^\/+/, '');
+  if (rest.startsWith('productos/')) rest = rest.slice('productos/'.length);
+  return rest || null;
+}
+
+type BucketProductoRemove = {
+  remove: (paths: string[]) => PromiseLike<{ error: { message?: string } | null }>;
+};
+
+/** Borra original + thumb (y extensiones hermanas) para no dejar basura en Storage. */
+export async function eliminarImagenProductoEnStorage(
+  bucket: BucketProductoRemove,
+  url: string | null | undefined
+): Promise<void> {
+  const path = pathStorageDesdeUrlPublicaProducto(url);
+  if (!path) return;
+
+  const paths = new Set<string>([path]);
+  const thumb = pathStorageMiniaturaDesdePath(path);
+  if (thumb) paths.add(thumb);
+
+  const m = path.match(/^(.*)(\.[a-z0-9]+)$/i);
+  if (m) {
+    const stem = m[1];
+    // Si ya es *-thumb, no duplicar mal; si es original, probar otras ext.
+    if (!/-thumb$/i.test(stem)) {
+      for (const ext of ['jpg', 'jpeg', 'png', 'webp']) {
+        paths.add(`${stem}.${ext}`);
+        paths.add(`${stem}-thumb.${ext}`);
+      }
+    }
+  }
+
+  try {
+    await bucket.remove([...paths]);
+  } catch {
+    /* best-effort: el registro en BD igual se limpia */
+  }
+}
+
