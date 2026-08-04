@@ -7,6 +7,7 @@ import { VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import {
   MAX_BYTES_FOTO_PRODUCTO,
   MAX_MB_FOTO_PRODUCTO,
+  debeEliminarFotoStorageTrasGuardar,
   eliminarImagenProductoEnStorage,
   optimizarImagenProductoParaStorage,
   subirImagenProductoConMiniatura,
@@ -287,11 +288,11 @@ export function EditarProducto({ producto, onCancel, onSaved }: EditarProductoPr
     }
 
     // Limpiar archivos en Storage (best-effort) para no acumular basura.
+    // Comparar por ruta (sin ?v=) para no borrar el upsert recién subido.
     const unicas = [...new Set(urlsStoragePendientes.map((u) => u.trim()).filter(Boolean))];
+    const vigentes = [imagenPrincipalUrl, ...slotsUrls];
     for (const u of unicas) {
-      // No borrar si la URL sigue siendo la foto vigente tras el guardado.
-      if (u === imagenPrincipalUrl) continue;
-      if (slotsUrls.some((s) => s === u)) continue;
+      if (!debeEliminarFotoStorageTrasGuardar(u, vigentes, producto.id)) continue;
       await eliminarImagenProductoEnStorage(bucket, u);
     }
 

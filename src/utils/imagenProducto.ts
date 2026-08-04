@@ -357,8 +357,7 @@ export async function subirImagenProductoConMiniatura(
   }
 }
 
-/**
- * Path relativo al bucket `productos` desde una URL pública
+/** Path relativo al bucket `productos` desde una URL pública
  * (`.../object/public/productos/{id}/principal.webp?v=...` → `{id}/principal.webp`).
  */
 export function pathStorageDesdeUrlPublicaProducto(url: string | null | undefined): string | null {
@@ -372,6 +371,33 @@ export function pathStorageDesdeUrlPublicaProducto(url: string | null | undefine
   rest = rest.replace(/^\/+/, '');
   if (rest.startsWith('productos/')) rest = rest.slice('productos/'.length);
   return rest || null;
+}
+
+/**
+ * ¿Se puede borrar esta URL de Storage tras guardar fotos de un producto?
+ * - No borra si la ruta sigue en uso (ignora ?v=; evita borrar el upsert recién subido).
+ * - No borra lotes compartidos de carga masiva (rompería otros productos).
+ * - Solo limpia archivos bajo `{productoId}/`.
+ */
+export function debeEliminarFotoStorageTrasGuardar(
+  urlAntigua: string | null | undefined,
+  urlsVigentes: (string | null | undefined)[],
+  productoId: string
+): boolean {
+  const path = pathStorageDesdeUrlPublicaProducto(urlAntigua);
+  if (!path || !productoId) return false;
+  if (path.startsWith('fotos-masivas-vendedor/') || path.startsWith('admin-fotos-masivas/')) {
+    return false;
+  }
+  if (!path.startsWith(`${productoId}/`)) return false;
+
+  const vigentes = new Set<string>();
+  for (const u of urlsVigentes) {
+    const p = pathStorageDesdeUrlPublicaProducto(u);
+    if (p) vigentes.add(p);
+  }
+  if (vigentes.has(path)) return false;
+  return true;
 }
 
 type BucketProductoRemove = {

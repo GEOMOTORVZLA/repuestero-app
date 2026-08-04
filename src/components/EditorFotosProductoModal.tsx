@@ -4,6 +4,7 @@ import { ImagenProducto } from './ImagenProducto';
 import {
   MAX_BYTES_FOTO_PRODUCTO,
   MAX_MB_FOTO_PRODUCTO,
+  debeEliminarFotoStorageTrasGuardar,
   eliminarImagenProductoEnStorage,
   optimizarImagenProductoParaStorage,
   subirImagenProductoConMiniatura,
@@ -192,11 +193,9 @@ export function EditorFotosProductoModal({
         if (updErr) throw updErr;
       }
 
-      const vigentes = new Set(
-        [imagenUrl, ...slotsUrls].filter((u): u is string => typeof u === 'string' && Boolean(u))
-      );
+      const vigentes = [imagenUrl, ...slotsUrls];
       for (const u of [...new Set(pendientes.map((x) => x.trim()).filter(Boolean))]) {
-        if (vigentes.has(u)) continue;
+        if (!debeEliminarFotoStorageTrasGuardar(u, vigentes, producto.id)) continue;
         await eliminarImagenProductoEnStorage(bucket, u);
       }
 

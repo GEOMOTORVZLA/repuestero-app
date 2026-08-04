@@ -15,16 +15,19 @@ export function ImagenProducto({ url, variante, alt = '', onError, ...rest }: Im
   const original = typeof url === 'string' ? url.trim() : '';
   const preferred = original ? urlImagenProductoVariante(original, variante) ?? original : '';
   const [src, setSrc] = useState(preferred);
+  const [fallo, setFallo] = useState(false);
 
   useEffect(() => {
     if (!original) {
       setSrc('');
+      setFallo(false);
       return;
     }
+    setFallo(false);
     setSrc(urlImagenProductoVariante(original, variante) ?? original);
   }, [original, variante]);
 
-  if (!original || !src) return null;
+  if (!original || !src || fallo) return null;
 
   return (
     <img
@@ -32,7 +35,12 @@ export function ImagenProducto({ url, variante, alt = '', onError, ...rest }: Im
       alt={alt}
       src={src}
       onError={(e) => {
-        if (src !== original) setSrc(original);
+        if (src !== original) {
+          setSrc(original);
+          onError?.(e);
+          return;
+        }
+        setFallo(true);
         onError?.(e);
       }}
     />
