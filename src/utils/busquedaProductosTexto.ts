@@ -1,6 +1,7 @@
 /** Valor en filtros PostgREST: comas u otros caracteres sin citar rompen `.or()` y devuelven resultados erróneos. */
 export function comillasFiltroPostgrest(valor: string): string {
-  if (/[",()]/.test(valor)) {
+  // Incluye `.` `[` etc. para patrones regex (imatch); `%` citado también es válido en ilike.
+  if (/[",().*[\]\\^$+?{}|%]/.test(valor)) {
     return `"${valor.replace(/"/g, '""')}"`;
   }
   return valor;
@@ -34,6 +35,34 @@ export function patronIlikeTerminoProducto(termino: string): string {
   return comillasFiltroPostgrest(`%${limpio}%`);
 }
 
+/** Vocales/ñ: el usuario escribe sin tilde y debe hallar "bujía", "muñon", etc. */
+const CLASE_LETRA_SIN_ACENTO: Record<string, string> = {
+  a: '[aAáÁàÀäÄâÂãÃ]',
+  e: '[eEéÉèÈëËêÊ]',
+  i: '[iIíÍìÌïÏîÎ]',
+  o: '[oOóÓòÒöÖôÔõÕ]',
+  u: '[uUúÚùÙüÜûÛ]',
+  n: '[nNñÑ]',
+};
+
+function escaparMetacaracterRegexLiteral(ch: string): string {
+  if (/[.*+?^${}()|[\]\\]/.test(ch)) return `\\${ch}`;
+  return ch;
+}
+
+/**
+ * Patrón PostgREST `imatch` (regex sin distinguir mayúsculas) que ignora acentos.
+ * Ej.: "bujia" → ".*buj[iíìïî]a.*" coincide con "BUJÍA".
+ */
+export function patronImatchTerminoProductoSinAcento(termino: string): string {
+  const limpio = normalizarTextoBusqueda(termino).replace(/[%_]/g, '');
+  let cuerpo = '';
+  for (const ch of limpio) {
+    cuerpo += CLASE_LETRA_SIN_ACENTO[ch] ?? escaparMetacaracterRegexLiteral(ch);
+  }
+  return comillasFiltroPostgrest(`.*${cuerpo}.*`);
+}
+
 type QueryConOr = {
   or: (filtro: string) => QueryConOr;
 };
@@ -45,9 +74,9 @@ export function aplicarTerminosTextoABusquedaProductos<T extends QueryConOr>(
 ): T {
   let q = query;
   for (const termino of terminosBusquedaProducto(texto)) {
-    const like = patronIlikeTerminoProducto(termino);
+    const pat = patronImatchTerminoProductoSinAcento(termino);
     q = q.or(
-      `nombre.ilike.${like},descripcion.ilike.${like},comentarios.ilike.${like},marca.ilike.${like},modelo.ilike.${like},categoria.ilike.${like}`
+      `nombre.imatch.${pat},descripcion.imatch.${pat},comentarios.imatch.${pat},marca.imatch.${pat},modelo.imatch.${pat},categoria.imatch.${pat}`
     ) as T;
   }
   return q;
