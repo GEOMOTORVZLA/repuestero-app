@@ -410,6 +410,12 @@ export function Landing({
                     alt="Embrague"
                     className="landing-categoria-icono landing-categoria-icono-img"
                   />
+                ) : cat.nombre === 'Aire acondicionado Automotriz' ? (
+                  <img
+                    src="/categoria-aire-acondicionado-automotriz.png"
+                    alt="Aire acondicionado Automotriz"
+                    className="landing-categoria-icono landing-categoria-icono-img"
+                  />
                 ) : cat.nombre === 'Aceites y lubricantes' ? (
                   <img
                     src="/categoria-aceites-lubricantes.png"
