@@ -93,6 +93,7 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
   const etiquetaDisponibilidad = etiquetaDisponibilidadAviso(p.disponibilidad_aviso);
   const mostrarOferta = Boolean(p.es_oferta);
   const mostrarAvisos = Boolean(etiquetaDisponibilidad || mostrarOferta);
+  const textoPrecio = `${etiquetaMoneda(p.moneda)} ${formatearPrecioProducto(p.precio_usd)}`;
 
   const bloqueAvisos = mostrarAvisos ? (
     <div className="busqueda-repuestos-card-avisos" aria-label="Avisos del producto">
@@ -114,20 +115,21 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
     void abrirWhatsappConTexto(mensajeWhatsappCompartirRepuesto(p.nombre, url));
   };
 
-  const bloqueInfo = (
-    <div className="busqueda-repuestos-card-info">
-      {bloqueAvisos}
-      <h4 className="busqueda-repuestos-card-nombre">{p.nombre}</h4>
-      {(p.marca || p.modelo || p.anio) && (
-        <p className="busqueda-repuestos-card-vehiculo">
-          {[p.marca, p.modelo, p.anio].filter(Boolean).join(' · ')}
-        </p>
-      )}
-      {p.descripcion && <p className="busqueda-repuestos-card-desc">{p.descripcion}</p>}
-      <p className="busqueda-repuestos-card-precio">
-        {etiquetaMoneda(p.moneda)} {formatearPrecioProducto(p.precio_usd)}
-      </p>
-    </div>
+  const botonCompartir = (
+    <button
+      type="button"
+      className="busqueda-repuestos-card-compartir"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (requiereLogin) return;
+        compartirPorWhatsapp();
+      }}
+      disabled={requiereLogin}
+      title={requiereLogin ? 'Inicia sesión para compartir productos' : undefined}
+      aria-label="Compartir este repuesto por WhatsApp"
+    >
+      <IconoCompartir />
+    </button>
   );
 
   return (
@@ -136,33 +138,48 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
       data-producto-id={p.id}
     >
       {!expandida ? (
-        <button
-          type="button"
-          className="busqueda-repuestos-card-resumen"
-          onClick={onExpand}
-          aria-expanded={false}
-        >
-          <div className="busqueda-repuestos-card-foto">
-            {thumb ? (
-              <ImagenProducto
-                url={thumb}
-                variante="tarjeta"
-                alt=""
-                width={400}
-                height={400}
-                loading="lazy"
-                decoding="async"
-                fetchPriority="low"
-                sizes="(max-width: 640px) 88px, 200px"
-              />
-            ) : (
-              <div className="busqueda-repuestos-card-foto-placeholder">Sin foto</div>
-            )}
+        <>
+          <button
+            type="button"
+            className="busqueda-repuestos-card-resumen"
+            onClick={onExpand}
+            aria-expanded={false}
+          >
+            <div className="busqueda-repuestos-card-foto">
+              {thumb ? (
+                <ImagenProducto
+                  url={thumb}
+                  variante="tarjeta"
+                  alt=""
+                  width={400}
+                  height={400}
+                  loading="lazy"
+                  decoding="async"
+                  fetchPriority="low"
+                  sizes="(max-width: 640px) 88px, 200px"
+                />
+              ) : (
+                <div className="busqueda-repuestos-card-foto-placeholder">Sin foto</div>
+              )}
+            </div>
+            <div className="busqueda-repuestos-card-cuerpo busqueda-repuestos-card-cuerpo--solo-info">
+              <div className="busqueda-repuestos-card-info">
+                {bloqueAvisos}
+                <h4 className="busqueda-repuestos-card-nombre">{p.nombre}</h4>
+                {(p.marca || p.modelo || p.anio) && (
+                  <p className="busqueda-repuestos-card-vehiculo">
+                    {[p.marca, p.modelo, p.anio].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+                {p.descripcion && <p className="busqueda-repuestos-card-desc">{p.descripcion}</p>}
+              </div>
+            </div>
+          </button>
+          <div className="busqueda-repuestos-card-pie">
+            <p className="busqueda-repuestos-card-precio busqueda-repuestos-card-precio--pie">{textoPrecio}</p>
+            {botonCompartir}
           </div>
-          <div className="busqueda-repuestos-card-cuerpo busqueda-repuestos-card-cuerpo--solo-info">
-            {bloqueInfo}
-          </div>
-        </button>
+        </>
       ) : (
         <>
           <div className="busqueda-repuestos-card-cabecera-expandida">
@@ -187,9 +204,7 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
               <h4 className="busqueda-repuestos-card-nombre busqueda-repuestos-card-nombre--compacto">
                 {p.nombre}
               </h4>
-              <p className="busqueda-repuestos-card-precio busqueda-repuestos-card-precio--inline">
-                {etiquetaMoneda(p.moneda)} {formatearPrecioProducto(p.precio_usd)}
-              </p>
+              <p className="busqueda-repuestos-card-precio busqueda-repuestos-card-precio--inline">{textoPrecio}</p>
             </div>
             <div className="busqueda-repuestos-card-cabecera-expandida-acciones">
               <button
@@ -297,24 +312,11 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
               >
                 Contactar vendedor
               </button>
+              {botonCompartir}
             </div>
           </div>
         </>
       )}
-      <button
-        type="button"
-        className="busqueda-repuestos-card-compartir busqueda-repuestos-card-compartir--flotante"
-        onClick={(e) => {
-          e.stopPropagation();
-          if (requiereLogin) return;
-          compartirPorWhatsapp();
-        }}
-        disabled={requiereLogin}
-        title={requiereLogin ? 'Inicia sesión para compartir productos' : undefined}
-        aria-label="Compartir este repuesto por WhatsApp"
-      >
-        <IconoCompartir />
-      </button>
       {visorAbierto && fotos.length > 0 && (
         <VisorFotoProducto
           fotos={fotos}

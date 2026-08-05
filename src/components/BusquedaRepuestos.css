@@ -579,23 +579,13 @@
 .busqueda-repuestos-card {
   position: relative;
   display: flex;
+  flex-direction: column;
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  overflow: hidden;
+  border-radius: 10px;
+  overflow: visible;
+  isolation: isolate;
   transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-/* Espacio para el botón compartir flotante (no tapa título/precio ni el CTA) */
-.busqueda-repuestos-card:not(.busqueda-repuestos-card--expandida) {
-  padding-right: 3.75rem;
-  padding-bottom: 0.35rem;
-}
-
-@media (min-width: 641px) {
-  .busqueda-repuestos-card:not(.busqueda-repuestos-card--expandida) {
-    padding-right: 4.15rem;
-  }
 }
 
 .busqueda-repuestos-card:hover {
@@ -604,16 +594,14 @@
 }
 
 .busqueda-repuestos-card--expandida {
-  flex-direction: column;
   align-items: stretch;
-  padding-bottom: 4.65rem;
 }
 
 .busqueda-repuestos-card--expandida:hover {
   box-shadow: 0 4px 16px rgba(30, 58, 95, 0.12);
 }
 
-/* Resumen colapsado: toda la tarjeta es un botón */
+/* Resumen colapsado: foto + texto (sin precio/compartir) */
 .busqueda-repuestos-card-resumen {
   display: flex;
   width: 100%;
@@ -625,26 +613,71 @@
   text-align: left;
   font: inherit;
   color: inherit;
-  align-items: stretch;
+  align-items: flex-start;
+  border-radius: 10px 10px 0 0;
 }
 
 .busqueda-repuestos-card-resumen:focus-visible {
   outline: 2px solid #1e3a5f;
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 .busqueda-repuestos-card-cuerpo--solo-info {
   justify-content: flex-start;
+  padding-bottom: 0.35rem;
+}
+
+@media (min-width: 641px) {
+  .busqueda-repuestos-card-cuerpo--solo-info {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+}
+
+/* Pie fijo: precio + compartir (no flota, no tapa el nombre) */
+.busqueda-repuestos-card-pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.4rem 0.55rem 0.5rem;
+  border-top: 1px solid #edf2f7;
+  background: #fff;
+  border-radius: 0 0 10px 10px;
+}
+
+@media (min-width: 641px) {
+  .busqueda-repuestos-card-pie {
+    padding: 0.55rem 1.1rem 0.65rem;
+  }
+}
+
+.busqueda-repuestos-card-precio--pie {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #2d3748;
+  line-height: 1.2;
+}
+
+@media (min-width: 641px) {
+  .busqueda-repuestos-card-precio--pie {
+    font-size: 1.35rem;
+  }
 }
 
 /* Cabecera cuando está expandida */
 .busqueda-repuestos-card-cabecera-expandida {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
-  padding: 0.5rem 0.65rem;
+  padding: 0.55rem 0.65rem;
   border-bottom: 1px solid #e2e8f0;
   background: #fafbfc;
+  border-radius: 10px 10px 0 0;
 }
 
 @media (min-width: 641px) {
@@ -658,6 +691,8 @@
   width: 52px;
   min-width: 52px;
   height: 52px;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 @media (min-width: 641px) {
@@ -676,8 +711,9 @@
 .busqueda-repuestos-card-cabecera-expandida-acciones {
   display: flex;
   flex-shrink: 0;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.35rem;
+  padding-top: 0.1rem;
 }
 
 @media (min-width: 641px) {
@@ -686,13 +722,14 @@
   }
 }
 
-/* WhatsApp brand green + boton ~50% mas grande que la version inicial */
+/* WhatsApp brand green */
 .busqueda-repuestos-card-compartir {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 3.375rem;
-  height: 3.375rem;
+  flex-shrink: 0;
+  width: 2.85rem;
+  height: 2.85rem;
   padding: 0;
   margin: 0;
   border-radius: 9999px;
@@ -721,45 +758,33 @@
 }
 
 .busqueda-repuestos-card-compartir svg {
-  width: 1.725rem;
-  height: 1.725rem;
+  width: 1.45rem;
+  height: 1.45rem;
 }
 
 @media (min-width: 641px) {
   .busqueda-repuestos-card-compartir {
-    width: 3.75rem;
-    height: 3.75rem;
+    width: 3.25rem;
+    height: 3.25rem;
   }
 
   .busqueda-repuestos-card-compartir svg {
-    width: 1.875rem;
-    height: 1.875rem;
-  }
-}
-
-.busqueda-repuestos-card-compartir--flotante {
-  position: absolute;
-  right: 0.45rem;
-  bottom: 0.45rem;
-  z-index: 4;
-}
-
-@media (min-width: 641px) {
-  .busqueda-repuestos-card-compartir--flotante {
-    right: 0.65rem;
-    bottom: 0.65rem;
+    width: 1.65rem;
+    height: 1.65rem;
   }
 }
 
 .busqueda-repuestos-card-nombre--compacto {
-  font-size: 0.88rem;
-  margin: 0 0 0.1rem;
-  line-height: 1.25;
+  font-size: 0.84rem;
+  margin: 0 0 0.15rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 @media (min-width: 641px) {
   .busqueda-repuestos-card-nombre--compacto {
-    font-size: 1.15rem;
+    font-size: 1.1rem;
     margin: 0 0 0.15rem;
   }
 }
@@ -795,7 +820,7 @@
 
 /* Panel tipo “segunda tarjeta” con galería — móvil: columna única */
 .busqueda-repuestos-card-panel-fotos {
-  margin: 0.45rem;
+  margin: 0.45rem 0.45rem 0.55rem;
   padding: 0.6rem 0.65rem;
   background: #f7fafc;
   border: 1px solid #e2e8f0;
@@ -805,7 +830,7 @@
 
 @media (min-width: 641px) {
   .busqueda-repuestos-card-panel-fotos {
-    margin: 0.75rem;
+    margin: 0.75rem 0.75rem 0.85rem;
     padding: 1rem 1.1rem;
   }
 }
@@ -1057,7 +1082,8 @@
   margin-top: 0.65rem;
   padding-top: 0.55rem;
   border-top: 1px solid #e2e8f0;
-  justify-content: flex-start;
+  justify-content: space-between;
+  align-items: center;
 }
 
 @media (min-width: 641px) {
@@ -1081,6 +1107,8 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  border-radius: 9px 0 0 0;
+  overflow: hidden;
 }
 
 .busqueda-repuestos-card-foto img {
@@ -1205,11 +1233,13 @@
 }
 
 .busqueda-repuestos-card-nombre {
-  margin: 0 0 0.1rem;
-  font-size: 0.88rem;
+  margin: 0 0 0.15rem;
+  font-size: 0.84rem;
   font-weight: 600;
   color: #1e3a5f;
-  line-height: 1.25;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .busqueda-repuestos-card-vehiculo {
@@ -1233,18 +1263,18 @@
 @media (min-width: 641px) {
   .busqueda-repuestos-card-nombre {
     margin: 0 0 0.2rem;
-    font-size: 1.4rem;
-    line-height: 1.2;
+    font-size: 1.25rem;
+    line-height: 1.25;
   }
 
   .busqueda-repuestos-card-vehiculo {
     margin: 0 0 0.15rem;
-    font-size: 1.1rem;
+    font-size: 1.05rem;
   }
 
   .busqueda-repuestos-card-desc {
     margin: 0 0 0.15rem;
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     line-height: 1.3;
   }
 }
@@ -1736,7 +1766,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 1rem 1rem;
+  padding: 0 0.85rem 1.15rem;
 }
 
 .resultados-busqueda-pagina-panel-header {
