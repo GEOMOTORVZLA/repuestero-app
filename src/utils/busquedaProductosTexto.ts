@@ -138,11 +138,13 @@ function maxDistanciaTypo(len: number): number {
 export function terminoCoincideEnTextoFlexible(termino: string, textoFuente: string): boolean {
   const fuente = normalizarTextoBusqueda(textoFuente);
   if (!fuente) return false;
+  // Códigos tipo RPR544-STD: el término se compacta a rpr544std; hay que comparar igual en la fuente.
+  const fuenteCompacta = fuente.replace(/[^a-z0-9]+/g, '');
   const variantes = variantesFormaPalabra(termino);
   if (variantes.length === 0) return false;
 
   for (const v of variantes) {
-    if (fuente.includes(v)) return true;
+    if (fuente.includes(v) || fuenteCompacta.includes(v)) return true;
   }
 
   const tokens = fuente.split(/[^a-z0-9]+/).filter((tok) => tok.length >= 2);
@@ -195,9 +197,10 @@ export function productoCoincideTextoGestion(
     .map((c) => normalizarTextoBusqueda(String(c)))
     .join(' ');
   if (!fuente.trim()) return false;
+  const fuenteCompacta = fuente.replace(/[^a-z0-9]+/g, '');
   return terminos.every((t) => {
     const variantes = variantesFormaPalabra(t);
     if (variantes.length === 0) return true;
-    return variantes.some((v) => fuente.includes(v));
+    return variantes.some((v) => fuente.includes(v) || fuenteCompacta.includes(v));
   });
 }
