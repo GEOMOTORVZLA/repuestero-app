@@ -446,6 +446,18 @@ export function Landing({
                     alt="Motores y componentes"
                     className="landing-categoria-icono landing-categoria-icono-img"
                   />
+                ) : cat.nombre === 'Tren Delantero' ? (
+                  <img
+                    src="/categoria-tren-delantero.png"
+                    alt="Tren Delantero"
+                    className="landing-categoria-icono landing-categoria-icono-img"
+                  />
+                ) : cat.nombre === 'Transmisiones' ? (
+                  <img
+                    src="/categoria-transmisiones.png"
+                    alt="Transmisiones"
+                    className="landing-categoria-icono landing-categoria-icono-img"
+                  />
                 ) : (
                   <IconoCategoria nombre={cat.nombre} className="landing-categoria-icono" />
                 )}
