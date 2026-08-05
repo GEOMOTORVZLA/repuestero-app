@@ -14,7 +14,46 @@ function limpiarTokenTermino(raw: string): string {
     .trim();
 }
 
-/** Palabras clave (min. 2 caracteres, sin duplicados) para busqueda multi-termino AND. */
+/** Conectores que el usuario escribe pero no deben exigir AND (rompe "cables de bujia"). */
+const STOPWORDS_BUSQUEDA = new Set([
+  'a',
+  'al',
+  'con',
+  'da',
+  'de',
+  'del',
+  'el',
+  'en',
+  'es',
+  'la',
+  'las',
+  'le',
+  'les',
+  'lo',
+  'los',
+  'mi',
+  'o',
+  'para',
+  'por',
+  'que',
+  'se',
+  'sin',
+  'su',
+  'sus',
+  'the',
+  'tu',
+  'un',
+  'una',
+  'unas',
+  'unos',
+  'y',
+]);
+
+function esStopwordBusqueda(termino: string): boolean {
+  return STOPWORDS_BUSQUEDA.has(normalizarTextoBusqueda(termino));
+}
+
+/** Palabras clave (min. 2 caracteres, sin duplicados ni conectores) para busqueda multi-termino AND. */
 export function terminosBusquedaProducto(texto: string): string[] {
   const vistos = new Set<string>();
   return texto
@@ -22,8 +61,9 @@ export function terminosBusquedaProducto(texto: string): string[] {
     .split(/\s+/)
     .map((t) => limpiarTokenTermino(t.trim()))
     .filter((t) => t.length >= 2)
+    .filter((t) => !esStopwordBusqueda(t))
     .filter((t) => {
-      const k = t.toLocaleLowerCase();
+      const k = normalizarTextoBusqueda(t);
       if (vistos.has(k)) return false;
       vistos.add(k);
       return true;
@@ -67,17 +107,32 @@ type QueryConOr = {
   or: (filtro: string) => QueryConOr;
 };
 
-/** Cada termino debe coincidir en al menos uno de los campos de texto del producto. */
+const CAMPOS_TEXTO_PRODUCTO = [
+  'nombre',
+  'descripcion',
+  'comentarios',
+  'marca',
+  'modelo',
+  'categoria',
+] as const;
+
+/** Cada termino (o su singular/plural) debe coincidir en al menos un campo; sin exigir acentos. */
 export function aplicarTerminosTextoABusquedaProductos<T extends QueryConOr>(
   query: T,
   texto: string
 ): T {
   let q = query;
   for (const termino of terminosBusquedaProducto(texto)) {
-    const pat = patronImatchTerminoProductoSinAcento(termino);
-    q = q.or(
-      `nombre.imatch.${pat},descripcion.imatch.${pat},comentarios.imatch.${pat},marca.imatch.${pat},modelo.imatch.${pat},categoria.imatch.${pat}`
-    ) as T;
+    const variantes = variantesFormaPalabra(termino);
+    const partes: string[] = [];
+    for (const v of variantes.length > 0 ? variantes : [termino]) {
+      const pat = patronImatchTerminoProductoSinAcento(v);
+      for (const campo of CAMPOS_TEXTO_PRODUCTO) {
+        partes.push(`${campo}.imatch.${pat}`);
+      }
+    }
+    if (partes.length === 0) continue;
+    q = q.or(partes.join(',')) as T;
   }
   return q;
 }
