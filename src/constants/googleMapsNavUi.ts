@@ -4,7 +4,7 @@ export const TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS =
 
 /** Modal repuestos / tienda: uso responsable del enlace Maps. */
 export const MENSAJE_AVISO_NAVEGACION_MAPS_TIENDA =
-  'Usa la navegaci\u00F3n con Google solo si est\u00E1s seguro de ir a la tienda del vendedor. Si no est\u00E1s seguro, vuelve a la b\u00FAsqueda, por favor.';
+  'Usa la navegaci\u00F3n con Google solo si ya confirmaste la existencia del producto con el vendedor y si est\u00E1s seguro de ir a su tienda o ubicaci\u00F3n. Si no est\u00E1s seguro, vuelve a la b\u00FAsqueda, por favor.';
 
 /** Modal talleres: mismo criterio de ahorro de clics innecesarios. */
 export const MENSAJE_AVISO_NAVEGACION_MAPS_TALLER =

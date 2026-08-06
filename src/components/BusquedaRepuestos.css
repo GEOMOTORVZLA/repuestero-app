@@ -1465,6 +1465,18 @@
 }
 
 /* Aviso fijo entre WhatsApp y enlace de navegación Maps (también en Vendedores / Talleres vía este CSS) */
+@keyframes maps-nav-aviso-borde-titilar {
+  0%,
+  100% {
+    border-color: #ecc94b;
+    box-shadow: 0 0 0 0 rgba(214, 158, 46, 0.15);
+  }
+  50% {
+    border-color: #dd6b20;
+    box-shadow: 0 0 0 3px rgba(221, 107, 32, 0.35);
+  }
+}
+
 .maps-nav-aviso-confirmacion {
   margin: 0;
   padding: 0.5rem 0.65rem;
@@ -1472,12 +1484,21 @@
   line-height: 1.4;
   color: #744210;
   background: #fffbeb;
-  border: 1px solid #ecc94b;
+  border: 2px solid #ecc94b;
   border-radius: 6px;
   text-align: center;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  animation: maps-nav-aviso-borde-titilar 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maps-nav-aviso-confirmacion {
+    animation: none;
+    border-color: #dd6b20;
+    box-shadow: 0 0 0 2px rgba(221, 107, 32, 0.25);
+  }
 }
 
 /* En modales que solo importan BusquedaRepuestos.css (sin VendedoresCercaDeMi.css) */
