@@ -284,10 +284,6 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
               <h2 className="dashboard-seccion-titulo dashboard-seccion-titulo--mostrador-busqueda">
                 BÚSQUEDA EN TUS PRODUCTOS PUBLICADOS
               </h2>
-              <p className="dashboard-productos-toolbar-hint">
-                Consulta rápida de tu catálogo de <strong>{etiquetaVertical}</strong> frente al cliente. Busca como
-                en la app pública; toca la foto para ampliarla sin ralentizar el listado.
-              </p>
               <div className="dashboard-card">
                 <VisorMostrador vertical={vertical} refreshTrigger={refreshProductos} />
               </div>

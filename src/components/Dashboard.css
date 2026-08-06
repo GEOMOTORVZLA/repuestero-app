@@ -340,6 +340,7 @@
   text-transform: uppercase;
   color: #0f172a;
   line-height: 1.2;
+  text-align: center;
 }
 
 .dashboard-btn-accion {
