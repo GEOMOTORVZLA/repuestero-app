@@ -270,8 +270,8 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
             <section className="dashboard-seccion">
               <h2 className="dashboard-seccion-titulo">Gestión de fotos</h2>
               <p className="dashboard-productos-toolbar-hint">
-                Asigna fotos a varios productos de <strong>{etiquetaVertical}</strong> sin mezclar con filtros ni
-                acciones de Editar productos. Busca, elige el alcance y aplica hasta 4 fotos.
+                Asigna fotos a varios productos de <strong>{etiquetaVertical}</strong>, elige el alcance y aplica
+                hasta 4 fotos.
               </p>
               <div className="dashboard-card">
                 <GestionFotosVendedor vertical={vertical} refreshTrigger={refreshProductos} />
