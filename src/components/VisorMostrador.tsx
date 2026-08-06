@@ -174,10 +174,6 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
               : `${visibles.length} resultado${visibles.length === 1 ? '' : 's'}`}
           </span>
         </div>
-        <p className="visor-mostrador-ayuda">
-          Búsqueda flexible: plural/singular y errores de tipeo leves (ej. camaras, camra). Solo mira nombre y
-          código, no la descripción, para no mezclar productos ajenos.
-        </p>
       </header>
 
       {error && <p className="visor-mostrador-error">{error}</p>}
