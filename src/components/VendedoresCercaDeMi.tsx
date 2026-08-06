@@ -17,6 +17,7 @@ import {
   construirUrlTiendaCompartida,
   mensajeWhatsappCompartirCatalogoVendedor,
 } from '../utils/enlaceCompartirProducto';
+import { productoCoincideTextoFlexible, terminosBusquedaProducto } from '../utils/busquedaProductosTexto';
 import './VendedoresCercaDeMi.css';
 import './avisoSeleccionarEstado.css';
 import './BusquedaRepuestos.css';
@@ -81,44 +82,12 @@ type ProductoVendedorCercaBusqueda = ProductoTarjetaBusqueda & {
   categoria?: string | null;
 };
 
-function limpiarTokenBusquedaVendedor(raw: string): string {
-  return raw
-    .replace(/^[\s"'«»\u2018\u2019\u201C\u201D\u201E\u201A\u00B4`„‚]+/u, '')
-    .replace(/[\s"'«»\u2018\u2019\u201C\u201D\u201E\u201A\u00B4`„‚]+$/u, '')
-    .trim();
-}
-
-function terminosBusquedaVendedor(texto: string): string[] {
-  const vistos = new Set<string>();
-  return texto
-    .trim()
-    .split(/\s+/)
-    .map((t) => limpiarTokenBusquedaVendedor(t.trim()))
-    .filter((t) => t.length >= 2)
-    .filter((t) => {
-      const k = t.toLocaleLowerCase('es');
-      if (vistos.has(k)) return false;
-      vistos.add(k);
-      return true;
-    });
-}
-
+/** Misma lógica flexible que Visor / gestión / landing (acentos, plural, conectores, typos). */
 function productoCoincideBusquedaVendedor(p: ProductoVendedorCercaBusqueda, texto: string): boolean {
-  const terminos = terminosBusquedaVendedor(texto);
-  if (terminos.length === 0) return true;
-  const fuente = [
-    p.nombre,
-    p.descripcion,
-    p.comentarios,
-    p.categoria,
-    p.marca,
-    p.modelo,
-    p.anio != null ? String(p.anio) : '',
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLocaleLowerCase('es');
-  return terminos.every((t) => fuente.includes(t.toLocaleLowerCase('es')));
+  return productoCoincideTextoFlexible(
+    [p.nombre, p.descripcion, p.comentarios, p.categoria, p.marca, p.modelo, p.anio],
+    texto
+  );
 }
 
 function resaltarCoincidenciaVendedor(texto: string, consulta: string) {
@@ -610,7 +579,7 @@ export function VendedoresCercaDeMi({
       setIndiceSugerenciaVendedor(-1);
       return;
     }
-    if (terminosBusquedaVendedor(texto).length === 0) {
+    if (terminosBusquedaProducto(texto).length === 0) {
       setMensajeBusquedaVendedor('Escribe al menos una palabra clave de 2 caracteres o más.');
       return;
     }
