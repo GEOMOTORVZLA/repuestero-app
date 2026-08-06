@@ -17,7 +17,7 @@ import {
   construirUrlTiendaCompartida,
   mensajeWhatsappCompartirCatalogoVendedor,
 } from '../utils/enlaceCompartirProducto';
-import { productoCoincideTextoFlexible, terminosBusquedaProducto } from '../utils/busquedaProductosTexto';
+import { productoCoincideTextoFlexible, terminosBusquedaProducto, aplicarTerminosTextoABusquedaTiendas } from '../utils/busquedaProductosTexto';
 import './VendedoresCercaDeMi.css';
 import './avisoSeleccionarEstado.css';
 import './BusquedaRepuestos.css';
@@ -212,6 +212,9 @@ export function VendedoresCercaDeMi({
   const [mensajeBusquedaVendedor, setMensajeBusquedaVendedor] = useState('');
   const [sugerenciasVendedorAbiertas, setSugerenciasVendedorAbiertas] = useState(false);
   const [indiceSugerenciaVendedor, setIndiceSugerenciaVendedor] = useState(-1);
+  const [busquedaNombreListaInput, setBusquedaNombreListaInput] = useState('');
+  const [busquedaNombreListaAplicada, setBusquedaNombreListaAplicada] = useState('');
+  const [mensajeBusquedaNombreLista, setMensajeBusquedaNombreLista] = useState('');
   const wrapBusquedaVendedorRef = useRef<HTMLDivElement>(null);
   const enlaceTiendaAbiertoOkRef = useRef<string | null>(null);
   const onRequiereLoginRef = useRef(onRequiereLoginParaCatalogo);
@@ -237,7 +240,7 @@ export function VendedoresCercaDeMi({
     onLimpiarEnlaceTienda?.();
   };
 
-  const construirQueryTiendas = () => {
+  const construirQueryTiendas = (textoNombre = busquedaNombreListaAplicada) => {
     let query = supabase
       .from('tiendas')
       .select('id, user_id, nombre, nombre_comercial, rif, estado, ciudad, latitud, longitud, telefono, direccion, metodos_pago')
@@ -253,14 +256,21 @@ export function VendedoresCercaDeMi({
       query = ciudadesBd.length === 1 ? query.eq('ciudad', ciudadesBd[0]) : query.in('ciudad', ciudadesBd);
     }
 
+    const texto = textoNombre.trim();
+    if (texto && terminosBusquedaProducto(texto).length > 0) {
+      query = aplicarTerminosTextoABusquedaTiendas(query, texto);
+    }
+
     return query;
   };
 
-  const cargarTiendas = async () => {
+  const cargarTiendas = async (textoNombreOverride?: string) => {
+    const textoNombre =
+      textoNombreOverride !== undefined ? textoNombreOverride : busquedaNombreListaAplicada;
     setCargando(true);
     setError(null);
     setHayMas(false);
-    const { data, error } = await construirQueryTiendas().range(0, PAGE_SIZE_VENDEDORES);
+    const { data, error } = await construirQueryTiendas(textoNombre).range(0, PAGE_SIZE_VENDEDORES);
 
     if (error) {
       setError(
@@ -286,7 +296,7 @@ export function VendedoresCercaDeMi({
     setCargandoMas(true);
     setError(null);
     const offset = tiendas.length;
-    const { data, error } = await construirQueryTiendas().range(
+    const { data, error } = await construirQueryTiendas(busquedaNombreListaAplicada).range(
       offset,
       offset + PAGE_SIZE_VENDEDORES
     );
@@ -502,6 +512,28 @@ export function VendedoresCercaDeMi({
 
   const cerrarOverlayVendedores = () => {
     setUbicado(false);
+    setBusquedaNombreListaInput('');
+    setBusquedaNombreListaAplicada('');
+    setMensajeBusquedaNombreLista('');
+  };
+
+  const aplicarBusquedaNombreLista = (textoOverride?: string) => {
+    const texto = (textoOverride !== undefined ? textoOverride : busquedaNombreListaInput).trim();
+    if (!texto) {
+      setBusquedaNombreListaInput('');
+      setBusquedaNombreListaAplicada('');
+      setMensajeBusquedaNombreLista('');
+      void cargarTiendas('');
+      return;
+    }
+    if (terminosBusquedaProducto(texto).length === 0) {
+      setMensajeBusquedaNombreLista('Escribe al menos una palabra clave de 2 caracteres o más.');
+      return;
+    }
+    setBusquedaNombreListaInput(texto);
+    setBusquedaNombreListaAplicada(texto);
+    setMensajeBusquedaNombreLista('');
+    void cargarTiendas(texto);
   };
 
   const ubicar = () => {
@@ -513,12 +545,15 @@ export function VendedoresCercaDeMi({
       return;
     }
     setMensaje('');
+    setBusquedaNombreListaInput('');
+    setBusquedaNombreListaAplicada('');
+    setMensajeBusquedaNombreLista('');
     setUbicado(true);
     // En móvil/calle: solicitar ubicación actual al iniciar la búsqueda por zona.
     if (!usandoGps && !gpsObteniendo) {
       obtenerMiUbicacion();
     }
-    void cargarTiendas();
+    void cargarTiendas('');
   };
 
   const abrirContactar = (t: TiendaCerca) => {
@@ -759,7 +794,9 @@ export function VendedoresCercaDeMi({
           >
             <div className="resultados-busqueda-pagina-panel-header">
               <h3 id="vendedores-cerca-overlay-titulo">
-                {`Vendedores en ${ciudadFiltro ? `${ciudadFiltro}, ` : ''}${estadoFiltro} (${listaMostrar.length}${hayMas ? '+' : ''})`}
+                {busquedaNombreListaAplicada.trim()
+                  ? `Vendedores que coinciden en ${ciudadFiltro ? `${ciudadFiltro}, ` : ''}${estadoFiltro} (${listaMostrar.length}${hayMas ? '+' : ''})`
+                  : `Vendedores en ${ciudadFiltro ? `${ciudadFiltro}, ` : ''}${estadoFiltro} (${listaMostrar.length}${hayMas ? '+' : ''})`}
               </h3>
               <button
                 type="button"
@@ -771,6 +808,65 @@ export function VendedoresCercaDeMi({
             </div>
             <div className="resultados-busqueda-pagina-panel-scroll">
               <div className="vendedores-cerca-resultados vendedores-cerca-resultados--en-overlay">
+                <div className="vendedores-cerca-busqueda-nombre">
+                  <label
+                    htmlFor="vendedores-cerca-buscar-nombre"
+                    className="vendedores-cerca-busqueda-nombre-label"
+                  >
+                    Buscar vendedor por nombre
+                  </label>
+                  <div className="vendedores-cerca-busqueda-nombre-fila">
+                    <input
+                      id="vendedores-cerca-buscar-nombre"
+                      type="search"
+                      className="vendedores-cerca-busqueda-nombre-input"
+                      value={busquedaNombreListaInput}
+                      onChange={(e) => {
+                        setBusquedaNombreListaInput(e.target.value);
+                        setMensajeBusquedaNombreLista('');
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          aplicarBusquedaNombreLista();
+                        }
+                      }}
+                      placeholder="Ej: mecanipartes, lubricantes del este…"
+                      spellCheck={false}
+                      autoComplete="off"
+                    />
+                    <button
+                      type="button"
+                      className="busqueda-repuestos-btn busqueda-repuestos-btn--compact"
+                      onClick={() => aplicarBusquedaNombreLista()}
+                      disabled={cargando}
+                    >
+                      Buscar
+                    </button>
+                  </div>
+                  <p className="vendedores-cerca-busqueda-nombre-hint">
+                    Dentro de esta zona: varias palabras, sin exigir acentos y plural/singular.
+                  </p>
+                  {mensajeBusquedaNombreLista && (
+                    <p className="vendedores-cerca-busqueda-nombre-aviso" role="status">
+                      {mensajeBusquedaNombreLista}
+                    </p>
+                  )}
+                  {busquedaNombreListaAplicada.trim() && (
+                    <p className="vendedores-cerca-busqueda-nombre-resultados" role="status">
+                      {listaMostrar.length === 0 && !cargando
+                        ? 'Ningún vendedor coincide con ese nombre en esta zona.'
+                        : `Mostrando coincidencias para «${busquedaNombreListaAplicada.trim()}».`}{' '}
+                      <button
+                        type="button"
+                        className="vendedores-cerca-productos-busqueda-limpiar"
+                        onClick={() => aplicarBusquedaNombreLista('')}
+                      >
+                        Ver todos
+                      </button>
+                    </p>
+                  )}
+                </div>
                 <div className="vendedores-cerca-resultados-header vendedores-cerca-resultados-header--en-overlay">
                   <div className="vendedores-cerca-gps">
                     {!usandoGps ? (
@@ -806,7 +902,9 @@ export function VendedoresCercaDeMi({
                   <p className="vendedores-cerca-error">{error}</p>
                 ) : listaMostrar.length === 0 ? (
                   <p className="vendedores-cerca-sin-resultados">
-                    No hay vendedores con ese filtro de zona. Prueba con otro estado o municipio.
+                    {busquedaNombreListaAplicada.trim()
+                      ? 'No hay vendedores que coincidan con ese nombre en esta zona. Prueba otras palabras o Ver todos.'
+                      : 'No hay vendedores con ese filtro de zona. Prueba con otro estado o municipio.'}
                   </p>
                 ) : (
                   <>

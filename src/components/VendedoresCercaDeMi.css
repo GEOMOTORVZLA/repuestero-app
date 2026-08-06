@@ -124,6 +124,69 @@
   margin-bottom: 0.75rem;
 }
 
+.vendedores-cerca-busqueda-nombre {
+  margin: 0 0 0.85rem;
+  padding: 0.75rem 0.85rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.vendedores-cerca-busqueda-nombre-label {
+  display: block;
+  margin: 0 0 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1e3a5f;
+}
+
+.vendedores-cerca-busqueda-nombre-fila {
+  display: flex;
+  gap: 0.45rem;
+  align-items: stretch;
+}
+
+.vendedores-cerca-busqueda-nombre-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.92rem;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  background: #fff;
+  color: #2d3748;
+}
+
+.vendedores-cerca-busqueda-nombre-input:focus {
+  outline: 2px solid rgba(30, 58, 95, 0.25);
+  border-color: #1e3a5f;
+}
+
+.vendedores-cerca-busqueda-nombre-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #718096;
+}
+
+.vendedores-cerca-busqueda-nombre-aviso,
+.vendedores-cerca-busqueda-nombre-resultados {
+  margin: 0.45rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: #2c5282;
+}
+
+@media (max-width: 640px) {
+  .vendedores-cerca-busqueda-nombre-fila {
+    flex-direction: column;
+  }
+
+  .vendedores-cerca-busqueda-nombre-fila .busqueda-repuestos-btn {
+    width: 100%;
+  }
+}
+
 .vendedores-cerca-btn-gps,
 .vendedores-cerca-btn-quitar-gps {
   padding: 0.6rem 1rem;

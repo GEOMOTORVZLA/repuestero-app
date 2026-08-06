@@ -116,10 +116,12 @@ const CAMPOS_TEXTO_PRODUCTO = [
   'categoria',
 ] as const;
 
-/** Cada termino (o su singular/plural) debe coincidir en al menos un campo; sin exigir acentos. */
-export function aplicarTerminosTextoABusquedaProductos<T extends QueryConOr>(
+const CAMPOS_TEXTO_TIENDA = ['nombre', 'nombre_comercial'] as const;
+
+function aplicarTerminosImatchEnCampos<T extends QueryConOr>(
   query: T,
-  texto: string
+  texto: string,
+  campos: readonly string[]
 ): T {
   let q = query;
   for (const termino of terminosBusquedaProducto(texto)) {
@@ -127,7 +129,7 @@ export function aplicarTerminosTextoABusquedaProductos<T extends QueryConOr>(
     const partes: string[] = [];
     for (const v of variantes.length > 0 ? variantes : [termino]) {
       const pat = patronImatchTerminoProductoSinAcento(v);
-      for (const campo of CAMPOS_TEXTO_PRODUCTO) {
+      for (const campo of campos) {
         partes.push(`${campo}.imatch.${pat}`);
       }
     }
@@ -135,6 +137,22 @@ export function aplicarTerminosTextoABusquedaProductos<T extends QueryConOr>(
     q = q.or(partes.join(',')) as T;
   }
   return q;
+}
+
+/** Cada termino (o su singular/plural) debe coincidir en al menos un campo; sin exigir acentos. */
+export function aplicarTerminosTextoABusquedaProductos<T extends QueryConOr>(
+  query: T,
+  texto: string
+): T {
+  return aplicarTerminosImatchEnCampos(query, texto, CAMPOS_TEXTO_PRODUCTO);
+}
+
+/** Búsqueda flexible de vendedores/tiendas por nombre (servidor, misma lógica de términos). */
+export function aplicarTerminosTextoABusquedaTiendas<T extends QueryConOr>(
+  query: T,
+  texto: string
+): T {
+  return aplicarTerminosImatchEnCampos(query, texto, CAMPOS_TEXTO_TIENDA);
 }
 
 /** Quita acentos para comparar (es/ES). */
