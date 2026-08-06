@@ -288,12 +288,10 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
                 </ul>
               ) : null}
             </div>
-            {fotos.length > 0 && (
-              <p className="busqueda-repuestos-card-galeria-hint">
-                Toca la foto para verla a pantalla completa. En móvil, elige una miniatura y luego toca la foto
-                grande. Cierra con Cerrar o el botón atrás del teléfono.
-              </p>
-            )}
+            <p className="busqueda-repuestos-card-galeria-hint">
+              Estimado comprador, desde Geomotor te sugerimos que confirmes la disponibilidad del articulo a
+              traves de Whatsapp, recuerda que todas las tiendas venden por otros medios.
+            </p>
             {requiereLogin && (
               <p className="busqueda-repuestos-login-aviso">
                 Debes iniciar sesión o registrarte para contactar vendedores y compartir productos.
