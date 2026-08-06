@@ -844,9 +844,6 @@ export function VendedoresCercaDeMi({
                       Buscar
                     </button>
                   </div>
-                  <p className="vendedores-cerca-busqueda-nombre-hint">
-                    Dentro de esta zona: varias palabras, sin exigir acentos y plural/singular.
-                  </p>
                   {mensajeBusquedaNombreLista && (
                     <p className="vendedores-cerca-busqueda-nombre-aviso" role="status">
                       {mensajeBusquedaNombreLista}
