@@ -150,6 +150,11 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
     [productos, busqueda]
   );
 
+  const productosConCodigo = useMemo(
+    () => productos.filter((p) => Boolean(p.codigo && String(p.codigo).trim())).length,
+    [productos]
+  );
+
   const objetivos = useMemo(() => {
     if (alcance === 'seleccionados') {
       return porBusqueda.filter((p) => seleccionados.includes(p.id));
@@ -327,16 +332,19 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
             {busqueda.trim()
               ? `Búsqueda «${busqueda.trim()}»: ${porBusqueda.length} de ${productos.length}. `
               : `Catálogo: ${productos.length} producto(s). `}
-            Alcance «
-            {alcance === 'sin_foto'
-              ? 'sin foto principal'
-              : alcance === 'seleccionados'
-                ? 'seleccionados'
-                : 'todos'}
-            » → <strong>{objetivos.length}</strong> objetivo(s)
+            {`Alcance «${
+              alcance === 'sin_foto'
+                ? 'sin foto principal'
+                : alcance === 'seleccionados'
+                  ? 'seleccionados'
+                  : 'todos'
+            }» → ${objetivos.length} objetivo(s).`}
             {alcance === 'sin_foto' && porBusqueda.length > 0 && objetivos.length === 0
-              ? '. Todos los encontrados ya tienen foto; cambia a «Todos» si quieres reemplazarlas.'
-              : '.'}
+              ? ' Ninguno de los resultados está sin foto principal; cambia el alcance a «Todos» o «Seleccionados».'
+              : ''}
+            {!cargando && productos.length > 0 && productosConCodigo === 0
+              ? ' Aviso: ningún producto tiene código en el campo «código»; la búsqueda solo puede usar el nombre.'
+              : ''}
           </p>
         </div>
 

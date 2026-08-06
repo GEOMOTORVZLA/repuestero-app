@@ -213,8 +213,17 @@ export function terminoCoincideEnTextoFlexible(termino: string, textoFuente: str
   if (!fuente) return false;
   // Códigos tipo RPR544-STD: el término se compacta a rpr544std; hay que comparar igual en la fuente.
   const fuenteCompacta = fuente.replace(/[^a-z0-9]+/g, '');
-  const variantes = variantesFormaPalabra(termino);
-  if (variantes.length === 0) return false;
+  const terminoCompacto = normalizarTextoBusqueda(termino).replace(/[^a-z0-9]+/g, '');
+  if (terminoCompacto.length >= 2 && fuenteCompacta.includes(terminoCompacto)) return true;
+
+  // Códigos con dígitos: no hace falta pluralizar (evita ruido tipo rpr544stds).
+  const esCodigo = /\d/.test(terminoCompacto) || /[-./_]/.test(termino);
+  const variantes = esCodigo
+    ? terminoCompacto.length >= 2
+      ? [terminoCompacto]
+      : []
+    : variantesFormaPalabra(termino);
+  if (variantes.length === 0) return terminoCompacto.length >= 2 && fuente.includes(terminoCompacto);
 
   for (const v of variantes) {
     if (fuente.includes(v) || fuenteCompacta.includes(v)) return true;
@@ -228,6 +237,7 @@ export function terminoCoincideEnTextoFlexible(termino: string, textoFuente: str
       // El usuario escribe un prefijo del nombre del producto (amort → amortiguador).
       // NO al revés (cama ↛ camara): eso generaba falsos positivos masivos.
       if (v.length >= 4 && tok.length > v.length && tok.startsWith(v)) return true;
+      if (esCodigo) continue;
       const maxD = Math.min(maxDistanciaTypo(v.length), maxDistanciaTypo(tok.length));
       if (maxD > 0 && Math.abs(tok.length - v.length) <= maxD && distanciaLevenshtein(tok, v) <= maxD) {
         return true;
@@ -245,13 +255,27 @@ export function productoCoincideTextoFlexible(
   campos: Array<string | number | null | undefined>,
   texto: string
 ): boolean {
-  const terminos = terminosBusquedaProducto(texto);
-  if (terminos.length === 0) return true;
+  const textoTrim = texto.trim();
+  if (!textoTrim) return true;
   const fuente = campos
     .filter((c) => c != null && String(c).trim() !== '')
     .map((c) => String(c))
     .join(' ');
   if (!fuente.trim()) return false;
+
+  // Códigos enteros (RPR544-STD / RPR544 STD): comparar compacto del query completo,
+  // aunque haya guiones, espacios o puntos.
+  const queryCompacto = normalizarTextoBusqueda(textoTrim).replace(/[^a-z0-9]+/g, '');
+  const fuenteCompacta = normalizarTextoBusqueda(fuente).replace(/[^a-z0-9]+/g, '');
+  if (queryCompacto.length >= 4 && /\d/.test(queryCompacto) && fuenteCompacta.includes(queryCompacto)) {
+    return true;
+  }
+
+  const terminos = terminosBusquedaProducto(textoTrim);
+  if (terminos.length === 0) {
+    // Solo conectores / tokens cortos, pero el compacto de código pudo bastar arriba.
+    return queryCompacto.length >= 2 && fuenteCompacta.includes(queryCompacto);
+  }
   return terminos.every((t) => terminoCoincideEnTextoFlexible(t, fuente));
 }
 
