@@ -13,7 +13,7 @@ import { parseStockActualInput, patchDesdeStockActual } from '../utils/stockActu
 import { LIMITE_DESCRIPCION_PRODUCTO } from '../utils/limiteDescripcionProducto';
 import './ImportarProductosCSV.css';
 
-type ModoImportacion = 'alta' | 'sincronizar';
+type ModoImportacion = 'alta' | 'sincronizar' | 'freemarket_fotos';
 
 /** Plantilla simple: marca/modelo/año van en comentarios/descripción. */
 const PLANTILLA_ALTA_HEADERS = [
@@ -35,9 +35,19 @@ const PLANTILLA_SYNC_HEADERS = [
   'cantidad',
 ] as const;
 
+/** Misma estructura que sincronizar + URLs de fotos (principal + hasta 3 extras). */
+const PLANTILLA_FREEMARKET_HEADERS = [
+  ...PLANTILLA_SYNC_HEADERS,
+  'imagen_url',
+  'imagen_url_2',
+  'imagen_url_3',
+  'imagen_url_4',
+] as const;
+
 const PLANTILLA_SHEET_PRODUCTOS = 'Productos';
 const EJEMPLO_NOMBRE_PLANTILLA = '(EJEMPLO - borrar esta fila)';
 const EJEMPLO_CODIGO_PLANTILLA = 'EJEMPLO-001';
+const EJEMPLO_IMAGEN_URL_PLANTILLA = 'https://ejemplo.com/foto-principal.jpg';
 
 function listasPlantillaImport(vertical: VerticalVehiculo) {
   return {
@@ -70,6 +80,21 @@ function filaEjemploSync(vertical: VerticalVehiculo): string[] {
   return [EJEMPLO_CODIGO_PLANTILLA, ...filaEjemploAlta(vertical)];
 }
 
+function filaEjemploFreemarket(vertical: VerticalVehiculo): string[] {
+  return [...filaEjemploSync(vertical), EJEMPLO_IMAGEN_URL_PLANTILLA, '', '', ''];
+}
+
+function esUrlHttpImagenValida(raw: string): boolean {
+  const t = raw.trim();
+  if (!t) return false;
+  try {
+    const u = new URL(t);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function sheetListaReferenciaPlantilla(titulo: string, valores: readonly string[]): XLSX.WorkSheet {
   const rows = [[titulo], ...valores.map((v) => [v])];
   const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -96,6 +121,11 @@ function normalizarCodigoProducto(raw: string): string {
 
 function nombreArchivoPlantilla(vertical: VerticalVehiculo, modo: ModoImportacion): string {
   // -v2: plantilla sin marca/modelo/año (van en comentarios)
+  if (modo === 'freemarket_fotos') {
+    return vertical === 'moto'
+      ? 'template_freemarket_fotos_url_moto.xlsx'
+      : 'template_freemarket_fotos_url_auto.xlsx';
+  }
   if (modo === 'sincronizar') {
     return vertical === 'moto'
       ? 'template_sincronizar_inventario_moto-v2.xlsx'
@@ -106,15 +136,26 @@ function nombreArchivoPlantilla(vertical: VerticalVehiculo, modo: ModoImportacio
     : 'template_productos_auto-v2.xlsx';
 }
 
+function headersPlantilla(modo: ModoImportacion): string[] {
+  if (modo === 'freemarket_fotos') return [...PLANTILLA_FREEMARKET_HEADERS];
+  if (modo === 'sincronizar') return [...PLANTILLA_SYNC_HEADERS];
+  return [...PLANTILLA_ALTA_HEADERS];
+}
+
+function filaEjemploPlantilla(vertical: VerticalVehiculo, modo: ModoImportacion): string[] {
+  if (modo === 'freemarket_fotos') return filaEjemploFreemarket(vertical);
+  if (modo === 'sincronizar') return filaEjemploSync(vertical);
+  return filaEjemploAlta(vertical);
+}
+
 function descargarPlantillaImportacion(vertical: VerticalVehiculo, modo: ModoImportacion): void {
   const { categorias } = listasPlantillaImport(vertical);
-  const headers = modo === 'sincronizar' ? [...PLANTILLA_SYNC_HEADERS] : [...PLANTILLA_ALTA_HEADERS];
-  const ejemplo = modo === 'sincronizar' ? filaEjemploSync(vertical) : filaEjemploAlta(vertical);
+  const headers = headersPlantilla(modo);
+  const ejemplo = filaEjemploPlantilla(vertical, modo);
   const wsProductos = XLSX.utils.aoa_to_sheet([headers, ejemplo]);
-  wsProductos['!cols'] =
-    modo === 'sincronizar'
+  const colsBase =
+    modo === 'alta'
       ? [
-          { wch: 18 },
           { wch: 34 },
           { wch: 28 },
           { wch: 42 },
@@ -123,6 +164,7 @@ function descargarPlantillaImportacion(vertical: VerticalVehiculo, modo: ModoImp
           { wch: 10 },
         ]
       : [
+          { wch: 18 },
           { wch: 34 },
           { wch: 28 },
           { wch: 42 },
@@ -130,6 +172,10 @@ function descargarPlantillaImportacion(vertical: VerticalVehiculo, modo: ModoImp
           { wch: 8 },
           { wch: 10 },
         ];
+  wsProductos['!cols'] =
+    modo === 'freemarket_fotos'
+      ? [...colsBase, { wch: 48 }, { wch: 36 }, { wch: 36 }, { wch: 36 }]
+      : colsBase;
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, wsProductos, PLANTILLA_SHEET_PRODUCTOS);
   XLSX.utils.book_append_sheet(wb, sheetListaReferenciaPlantilla('categoria', categorias), 'Categorias');
@@ -154,6 +200,7 @@ type ParsedRow = {
   precio: number;
   moneda: Moneda;
   cantidad: number | null;
+  imagenesUrl: string[];
 };
 
 function normalizeHeader(s: string): string {
@@ -242,6 +289,8 @@ export function ImportarProductosCSV({
   }, [vertical]);
 
   const esSync = modoImportacion === 'sincronizar';
+  const esFreemarket = modoImportacion === 'freemarket_fotos';
+  const usaCodigoObligatorio = esSync || esFreemarket;
 
   const descargarTemplate = () => {
     descargarPlantillaImportacion(vertical, modoImportacion);
@@ -272,14 +321,18 @@ export function ImportarProductosCSV({
 
     const rl = permitirAccionCliente(
       modoAdmin
-        ? esSync
-          ? 'sync-inventario-admin'
-          : 'importar-productos-admin'
-        : esSync
-          ? 'sync-inventario'
-          : 'importar-productos',
+        ? esFreemarket
+          ? 'freemarket-fotos-admin'
+          : esSync
+            ? 'sync-inventario-admin'
+            : 'importar-productos-admin'
+        : esFreemarket
+          ? 'freemarket-fotos'
+          : esSync
+            ? 'sync-inventario'
+            : 'importar-productos',
       {
-        maxIntentos: modoAdmin ? 12 : esSync ? 8 : 4,
+        maxIntentos: modoAdmin ? 12 : esFreemarket || esSync ? 8 : 4,
         ventanaMs: 10 * 60 * 1000,
         bloqueoMs: 3 * 60 * 1000,
       }
@@ -338,7 +391,7 @@ export function ImportarProductosCSV({
       return row[idx] ?? '';
     };
 
-    const REQUIRED = esSync
+    const REQUIRED = usaCodigoObligatorio
       ? (['codigo', 'nombre', 'categoria', 'precio', 'moneda'] as const)
       : (['nombre', 'categoria', 'precio', 'moneda'] as const);
     const missingHeaders = REQUIRED.filter((k) => headerMap.get(normalizeHeader(k)) === undefined);
@@ -346,6 +399,13 @@ export function ImportarProductosCSV({
       setEstado('error');
       setMensaje(
         `Faltan columnas en el archivo: ${missingHeaders.join(', ')}. Descarga la plantilla del modo actual.`
+      );
+      return;
+    }
+    if (esFreemarket && headerMap.get(normalizeHeader('imagen_url')) === undefined) {
+      setEstado('error');
+      setMensaje(
+        'Falta la columna "imagen_url". Descarga el modelo Freemarket con fotos en URL.'
       );
       return;
     }
@@ -372,9 +432,11 @@ export function ImportarProductosCSV({
 
       if (esFilaEjemploPlantilla(nombreRaw, codigoNorm)) continue;
 
-      if (esSync) {
+      if (usaCodigoObligatorio) {
         if (!codigoNorm) {
-          erroresFila.push(`Fila ${rowNumber}: falta "codigo" (obligatorio en sincronizar).`);
+          erroresFila.push(
+            `Fila ${rowNumber}: falta "codigo" (obligatorio en ${esFreemarket ? 'Freemarket' : 'sincronizar'}).`
+          );
           continue;
         }
         if (codigosEnArchivo.has(codigoNorm)) {
@@ -440,6 +502,36 @@ export function ImportarProductosCSV({
         continue;
       }
 
+      const imagenesUrl: string[] = [];
+      if (esFreemarket) {
+        const urlsRaw = [
+          get(row, 'imagen_url') || get(row, 'url_imagen') || get(row, 'foto_url'),
+          get(row, 'imagen_url_2') || get(row, 'url_imagen_2'),
+          get(row, 'imagen_url_3') || get(row, 'url_imagen_3'),
+          get(row, 'imagen_url_4') || get(row, 'url_imagen_4'),
+        ];
+        let urlInvalida = false;
+        for (let u = 0; u < urlsRaw.length; u += 1) {
+          const raw = urlsRaw[u].trim();
+          if (!raw) continue;
+          if (!esUrlHttpImagenValida(raw)) {
+            erroresFila.push(
+              `Fila ${rowNumber}: URL de foto inválida en columna ${u === 0 ? 'imagen_url' : `imagen_url_${u + 1}`} (${raw}).`
+            );
+            urlInvalida = true;
+            break;
+          }
+          imagenesUrl.push(raw);
+        }
+        if (urlInvalida) continue;
+        if (imagenesUrl.length === 0) {
+          erroresFila.push(
+            `Fila ${rowNumber}: falta al menos una URL válida en "imagen_url" (Freemarket).`
+          );
+          continue;
+        }
+      }
+
       filas.push({
         rowNumber,
         codigo: codigoNorm || null,
@@ -449,6 +541,7 @@ export function ImportarProductosCSV({
         precio,
         moneda,
         cantidad: cantidadParsed.value,
+        imagenesUrl,
       });
     }
 
@@ -494,7 +587,7 @@ export function ImportarProductosCSV({
     }
 
     let codigosExistentes = new Map<string, string>();
-    if (esSync || filas.some((f) => f.codigo)) {
+    if (usaCodigoObligatorio || filas.some((f) => f.codigo)) {
       setMensaje('Cargando códigos existentes de la tienda...');
       const mapa = await mapaCodigosExistentesTienda(tiendaId!);
       if (!mapa.ok) {
@@ -506,13 +599,17 @@ export function ImportarProductosCSV({
     }
 
     setMensaje(
-      esSync
+      esFreemarket
         ? modoAdmin
-          ? `Sincronizando inventario en ${etiquetaDestino?.trim() || 'la tienda'}...`
-          : 'Sincronizando inventario (precio, stock, nombre y descripción; conserva categoría y fotos)...'
-        : modoAdmin
-          ? `Insertando productos en ${etiquetaDestino?.trim() || 'la tienda seleccionada'}...`
-          : 'Insertando productos...'
+          ? `Freemarket: actualizando inventario y fotos URL en ${etiquetaDestino?.trim() || 'la tienda'}...`
+          : 'Freemarket: actualizando inventario y fotos por URL...'
+        : esSync
+          ? modoAdmin
+            ? `Sincronizando inventario en ${etiquetaDestino?.trim() || 'la tienda'}...`
+            : 'Sincronizando inventario (precio, stock, nombre y descripción; conserva categoría y fotos)...'
+          : modoAdmin
+            ? `Insertando productos en ${etiquetaDestino?.trim() || 'la tienda seleccionada'}...`
+            : 'Insertando productos...'
     );
 
     let okInsert = 0;
@@ -522,10 +619,17 @@ export function ImportarProductosCSV({
     for (const r of filas) {
       const inv = patchDesdeStockActual(r.cantidad);
       const existenteId = r.codigo ? codigosExistentes.get(r.codigo) : undefined;
+      const patchFotos =
+        esFreemarket && r.imagenesUrl.length > 0
+          ? {
+              imagen_url: r.imagenesUrl[0],
+              imagenes_extra: r.imagenesUrl.length > 1 ? r.imagenesUrl.slice(1) : null,
+            }
+          : null;
 
-      if (esSync && existenteId) {
-        // Sync por codigo: precio, stock, nombre y descripcion.
-        // Categoria e imagenes no se tocan (la foto queda ligada al mismo producto).
+      if ((esSync || esFreemarket) && existenteId) {
+        // Sync / Freemarket por codigo: precio, stock, nombre y descripcion.
+        // Sync: no toca categoría ni fotos. Freemarket: también actualiza fotos por URL.
         const patch: Record<string, unknown> = {
           nombre: r.nombre,
           descripcion: r.comentarios,
@@ -538,6 +642,10 @@ export function ImportarProductosCSV({
         };
         if (inv.activo !== undefined) patch.activo = inv.activo;
         if (inv.stock_confirmado_at) patch.stock_confirmado_at = inv.stock_confirmado_at;
+        if (patchFotos) {
+          patch.imagen_url = patchFotos.imagen_url;
+          patch.imagenes_extra = patchFotos.imagenes_extra;
+        }
 
         const { error: updError } = await supabase.from('productos').update(patch).eq('id', existenteId);
         if (updError) {
@@ -568,6 +676,10 @@ export function ImportarProductosCSV({
         vertical,
       };
       if (r.codigo) payload.codigo = r.codigo;
+      if (patchFotos) {
+        payload.imagen_url = patchFotos.imagen_url;
+        payload.imagenes_extra = patchFotos.imagenes_extra;
+      }
 
       const { data: inserted, error: insertError } = await supabase
         .from('productos')
@@ -600,7 +712,7 @@ export function ImportarProductosCSV({
       setErrores(erroresOp.slice(0, 20));
       setEstado('error');
       setMensaje(
-        esSync
+        usaCodigoObligatorio
           ? `Parcial: ${okUpdate} actualizado(s), ${okInsert} nuevo(s); ${erroresOp.length} error(es). (Mostrando hasta 20)`
           : `Se insertaron ${okInsert} producto(s), pero hubo ${erroresOp.length} error(es). (Mostrando hasta 20)`
       );
@@ -610,11 +722,13 @@ export function ImportarProductosCSV({
 
     setEstado('ok');
     setMensaje(
-      esSync
-        ? `Sincronización completada: ${okUpdate} actualizado(s) (categoría y fotos intactas), ${okInsert} nuevo(s) sin foto.`
-        : modoAdmin
-          ? `Importación completada: ${okInsert} producto(s) insertados en ${etiquetaDestino?.trim() || 'la tienda'} (sin fotos).`
-          : `Importación completada: ${okInsert} producto(s) insertados (sin fotos). Ya están publicados.`
+      esFreemarket
+        ? `Freemarket completado: ${okUpdate} actualizado(s) con fotos URL, ${okInsert} nuevo(s) con fotos URL.`
+        : esSync
+          ? `Sincronización completada: ${okUpdate} actualizado(s) (categoría y fotos intactas), ${okInsert} nuevo(s) sin foto.`
+          : modoAdmin
+            ? `Importación completada: ${okInsert} producto(s) insertados en ${etiquetaDestino?.trim() || 'la tienda'} (sin fotos).`
+            : `Importación completada: ${okInsert} producto(s) insertados (sin fotos). Ya están publicados.`
     );
     onImportado?.();
   };
@@ -625,14 +739,17 @@ export function ImportarProductosCSV({
         <h3 className="importar-productos-titulo">
           {modoAdmin
             ? 'Carga masiva de productos para un vendedor'
-            : 'Importar productos desde Excel (.xlsx, sin fotos)'}
+            : esFreemarket
+              ? 'Importar Freemarket (Excel con fotos en URL)'
+              : 'Importar productos desde Excel (.xlsx, sin fotos)'}
         </h3>
       <p className="importar-productos-ayuda">
         Elige el modo según tu flujo. <strong>Alta nueva</strong> crea productos.{' '}
-        <strong>Sincronizar inventario</strong> actualiza por <code>codigo</code>: cantidad, precio,
-        nombre y descripción; <strong>conserva categoría y fotos</strong>. Misma plantilla simple para{' '}
-        {vertical === 'moto' ? 'motocicleta' : 'automóvil'}: sin columnas de marca, modelo ni año
-        (escríbelos en comentarios).
+        <strong>Sincronizar inventario</strong> actualiza por <code>codigo</code> y{' '}
+        <strong>conserva fotos</strong>. <strong>Freemarket con fotos en URL</strong> usa la misma
+        estructura de sincronizar y agrega columnas de URL para asociar fotos al código. Misma
+        plantilla simple para {vertical === 'moto' ? 'motocicleta' : 'automóvil'}: sin columnas de
+        marca, modelo ni año (escríbelos en comentarios).
       </p>
       </div>
 
@@ -665,10 +782,31 @@ export function ImportarProductosCSV({
         >
           Sincronizar inventario
         </button>
+        <button
+          type="button"
+          className={`importar-productos-modo-btn${modoImportacion === 'freemarket_fotos' ? ' activo' : ''}`}
+          disabled={estado === 'importando'}
+          onClick={() => {
+            setModoImportacion('freemarket_fotos');
+            setArchivo(null);
+            setMensaje('');
+            setErrores([]);
+            setEstado('idle');
+          }}
+        >
+          Freemarket con fotos en URL
+        </button>
       </div>
 
       <p className="importar-productos-ayuda">
-        {esSync ? (
+        {esFreemarket ? (
+          <>
+            Descarga el <strong>modelo Freemarket con fotos en URL</strong> ({vertical === 'moto' ? 'moto' : 'auto'}
+            ): misma estructura que sincronizar más <code>imagen_url</code> … <code>imagen_url_4</code>.
+            Por <strong>codigo</strong> actualiza inventario y fotos (la URL se guarda en el producto).
+            Códigos nuevos se crean con foto. Máx. 1000 filas.
+          </>
+        ) : esSync ? (
           <>
             Descarga la <strong>plantilla de sincronizar ({vertical === 'moto' ? 'moto' : 'auto'})</strong>{' '}
             con columna <strong>codigo</strong>. Si el código ya existe: actualiza nombre, descripción
@@ -699,9 +837,11 @@ export function ImportarProductosCSV({
           className="importar-productos-link"
           disabled={estado === 'importando'}
         >
-          {esSync
-            ? 'Descargar plantilla sincronizar (.xlsx)'
-            : 'Descargar plantilla alta nueva (.xlsx)'}
+          {esFreemarket
+            ? 'Descargar modelo Freemarket con fotos en URL (.xlsx)'
+            : esSync
+              ? 'Descargar plantilla sincronizar (.xlsx)'
+              : 'Descargar plantilla alta nueva (.xlsx)'}
         </button>
 
         <button
@@ -714,12 +854,16 @@ export function ImportarProductosCSV({
           }
         >
           {estado === 'importando'
-            ? esSync
-              ? 'Sincronizando...'
-              : 'Importando...'
-            : esSync
-              ? 'Sincronizar inventario'
-              : 'Importar'}
+            ? esFreemarket
+              ? 'Importando Freemarket...'
+              : esSync
+                ? 'Sincronizando...'
+                : 'Importando...'
+            : esFreemarket
+              ? 'Importar Freemarket'
+              : esSync
+                ? 'Sincronizar inventario'
+                : 'Importar'}
         </button>
       </div>
 
