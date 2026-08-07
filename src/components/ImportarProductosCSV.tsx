@@ -35,19 +35,14 @@ const PLANTILLA_SYNC_HEADERS = [
   'cantidad',
 ] as const;
 
-/** Misma estructura que sincronizar + URLs de fotos (principal + hasta 3 extras). */
-const PLANTILLA_FREEMARKET_HEADERS = [
-  ...PLANTILLA_SYNC_HEADERS,
-  'imagen_url',
-  'imagen_url_2',
-  'imagen_url_3',
-  'imagen_url_4',
-] as const;
+/** Misma estructura que sincronizar + una columna de URLs separadas por ; (foto 1..4). */
+const PLANTILLA_FREEMARKET_HEADERS = [...PLANTILLA_SYNC_HEADERS, 'imagen_url'] as const;
 
 const PLANTILLA_SHEET_PRODUCTOS = 'Productos';
 const EJEMPLO_NOMBRE_PLANTILLA = '(EJEMPLO - borrar esta fila)';
 const EJEMPLO_CODIGO_PLANTILLA = 'EJEMPLO-001';
-const EJEMPLO_IMAGEN_URL_PLANTILLA = 'https://ejemplo.com/foto-principal.jpg';
+const EJEMPLO_IMAGEN_URL_PLANTILLA =
+  'https://ejemplo.com/foto1.jpg;https://ejemplo.com/foto2.jpg;https://ejemplo.com/foto3.jpg';
 
 function listasPlantillaImport(vertical: VerticalVehiculo) {
   return {
@@ -81,7 +76,7 @@ function filaEjemploSync(vertical: VerticalVehiculo): string[] {
 }
 
 function filaEjemploFreemarket(vertical: VerticalVehiculo): string[] {
-  return [...filaEjemploSync(vertical), EJEMPLO_IMAGEN_URL_PLANTILLA, '', '', ''];
+  return [...filaEjemploSync(vertical), EJEMPLO_IMAGEN_URL_PLANTILLA];
 }
 
 function esUrlHttpImagenValida(raw: string): boolean {
@@ -93,6 +88,29 @@ function esUrlHttpImagenValida(raw: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** Parte URLs de una celda (estilo Mercado Libre): separadas por ; en orden foto 1..4. */
+function parseUrlsImagenCelda(raw: string): { urls: string[]; error?: string } {
+  const partes = raw
+    .split(';')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (partes.length === 0) return { urls: [] };
+  const urls: string[] = [];
+  for (let i = 0; i < partes.length; i += 1) {
+    if (i >= 4) {
+      return {
+        urls: [],
+        error: `máximo 4 URLs en "imagen_url" (hay ${partes.length}; usa ; entre ellas).`,
+      };
+    }
+    if (!esUrlHttpImagenValida(partes[i])) {
+      return { urls: [], error: `URL inválida en posición ${i + 1} (${partes[i]}).` };
+    }
+    urls.push(partes[i]);
+  }
+  return { urls };
 }
 
 function sheetListaReferenciaPlantilla(titulo: string, valores: readonly string[]): XLSX.WorkSheet {
@@ -173,9 +191,7 @@ function descargarPlantillaImportacion(vertical: VerticalVehiculo, modo: ModoImp
           { wch: 10 },
         ];
   wsProductos['!cols'] =
-    modo === 'freemarket_fotos'
-      ? [...colsBase, { wch: 48 }, { wch: 36 }, { wch: 36 }, { wch: 36 }]
-      : colsBase;
+    modo === 'freemarket_fotos' ? [...colsBase, { wch: 72 }] : colsBase;
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, wsProductos, PLANTILLA_SHEET_PRODUCTOS);
   XLSX.utils.book_append_sheet(wb, sheetListaReferenciaPlantilla('categoria', categorias), 'Categorias');
@@ -504,32 +520,20 @@ export function ImportarProductosCSV({
 
       const imagenesUrl: string[] = [];
       if (esFreemarket) {
-        const urlsRaw = [
-          get(row, 'imagen_url') || get(row, 'url_imagen') || get(row, 'foto_url'),
-          get(row, 'imagen_url_2') || get(row, 'url_imagen_2'),
-          get(row, 'imagen_url_3') || get(row, 'url_imagen_3'),
-          get(row, 'imagen_url_4') || get(row, 'url_imagen_4'),
-        ];
-        let urlInvalida = false;
-        for (let u = 0; u < urlsRaw.length; u += 1) {
-          const raw = urlsRaw[u].trim();
-          if (!raw) continue;
-          if (!esUrlHttpImagenValida(raw)) {
-            erroresFila.push(
-              `Fila ${rowNumber}: URL de foto inválida en columna ${u === 0 ? 'imagen_url' : `imagen_url_${u + 1}`} (${raw}).`
-            );
-            urlInvalida = true;
-            break;
-          }
-          imagenesUrl.push(raw);
+        const celda =
+          get(row, 'imagen_url') || get(row, 'url_imagen') || get(row, 'foto_url') || get(row, 'fotos');
+        const parsedUrls = parseUrlsImagenCelda(celda);
+        if (parsedUrls.error) {
+          erroresFila.push(`Fila ${rowNumber}: ${parsedUrls.error}`);
+          continue;
         }
-        if (urlInvalida) continue;
-        if (imagenesUrl.length === 0) {
+        if (parsedUrls.urls.length === 0) {
           erroresFila.push(
-            `Fila ${rowNumber}: falta al menos una URL válida en "imagen_url" (Freemarket).`
+            `Fila ${rowNumber}: falta al menos una URL en "imagen_url" (separa varias con ; ).`
           );
           continue;
         }
+        imagenesUrl.push(...parsedUrls.urls);
       }
 
       filas.push({
@@ -747,9 +751,10 @@ export function ImportarProductosCSV({
         Elige el modo según tu flujo. <strong>Alta nueva</strong> crea productos.{' '}
         <strong>Sincronizar inventario</strong> actualiza por <code>codigo</code> y{' '}
         <strong>conserva fotos</strong>. <strong>Freemarket con fotos en URL</strong> usa la misma
-        estructura de sincronizar y agrega columnas de URL para asociar fotos al código. Misma
-        plantilla simple para {vertical === 'moto' ? 'motocicleta' : 'automóvil'}: sin columnas de
-        marca, modelo ni año (escríbelos en comentarios).
+        estructura de sincronizar y una columna <code>imagen_url</code> con URLs separadas por{' '}
+        <code>;</code> (hasta 4 fotos). Misma plantilla simple para{' '}
+        {vertical === 'moto' ? 'motocicleta' : 'automóvil'}: sin columnas de marca, modelo ni año
+        (escríbelos en comentarios).
       </p>
       </div>
 
@@ -802,9 +807,10 @@ export function ImportarProductosCSV({
         {esFreemarket ? (
           <>
             Descarga el <strong>modelo Freemarket con fotos en URL</strong> ({vertical === 'moto' ? 'moto' : 'auto'}
-            ): misma estructura que sincronizar más <code>imagen_url</code> … <code>imagen_url_4</code>.
-            Por <strong>codigo</strong> actualiza inventario y fotos (la URL se guarda en el producto).
-            Códigos nuevos se crean con foto. Máx. 1000 filas.
+            ): misma estructura que sincronizar más una columna <code>imagen_url</code>. En esa celda
+            pones las URLs en orden (foto 1; foto 2; foto 3; foto 4) separadas por <code>;</code>. Por{' '}
+            <strong>codigo</strong> actualiza inventario y fotos. Códigos nuevos se crean con foto. Máx.
+            1000 filas.
           </>
         ) : esSync ? (
           <>
