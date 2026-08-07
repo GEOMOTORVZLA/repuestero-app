@@ -77,6 +77,7 @@ const CATEGORIAS_REPUESTOS = [
   { nombre: 'Accesorios' },
   { nombre: 'Carrocería' },
   { nombre: 'Motores y componentes' },
+  { nombre: 'Motores a diesel y componentes' },
 ];
 
 export function Landing({
@@ -444,6 +445,12 @@ export function Landing({
                   <img
                     src="/categoria-motores-componentes.png"
                     alt="Motores y componentes"
+                    className="landing-categoria-icono landing-categoria-icono-img"
+                  />
+                ) : cat.nombre === 'Motores a diesel y componentes' ? (
+                  <img
+                    src="/categoria-motores-diesel-componentes.png"
+                    alt="Motores a diesel y componentes"
                     className="landing-categoria-icono landing-categoria-icono-img"
                   />
                 ) : cat.nombre === 'Tren Delantero' ? (
