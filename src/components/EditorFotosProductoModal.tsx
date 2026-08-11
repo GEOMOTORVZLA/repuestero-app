@@ -139,6 +139,13 @@ export function EditorFotosProductoModal({
       const bucket = supabase.storage.from('productos');
       const pendientes = [...urlsAEliminar];
       let imagenUrl = principalUrl;
+      // Admin: misma carpeta que la carga masiva (políticas Storage suelen permitirla).
+      // Vendedor: carpeta del producto.
+      const lote = String(Date.now());
+      const prefijoPath =
+        modoGuardado === 'admin'
+          ? `admin-fotos-masivas/${producto.id}/${lote}`
+          : producto.id;
 
       if (nuevaPrincipal) {
         if (principalUrl) pendientes.push(principalUrl);
@@ -150,7 +157,7 @@ export function EditorFotosProductoModal({
           throw new Error(`La foto principal no debe superar ${MAX_MB_FOTO_PRODUCTO} MB.`);
         }
         const ext = lista.name.split('.').pop() || 'jpg';
-        const path = `${producto.id}/principal.${ext}`;
+        const path = `${prefijoPath}/principal.${ext}`;
         const subida = await subirImagenProductoConMiniatura(bucket, path, lista);
         imagenUrl = subida.urlOriginal;
       }
@@ -167,13 +174,19 @@ export function EditorFotosProductoModal({
           throw new Error(`La foto adicional ${i + 1} no debe superar ${MAX_MB_FOTO_PRODUCTO} MB.`);
         }
         const ext = lista.name.split('.').pop() || 'jpg';
-        const path = `${producto.id}/extra-${i + 1}.${ext}`;
+        const path = `${prefijoPath}/extra-${i + 1}.${ext}`;
         const subida = await subirImagenProductoConMiniatura(bucket, path, lista);
         slotsUrls[i] = subida.urlOriginal;
       }
 
       const extrasLimpios = slotsUrls.filter((u): u is string => typeof u === 'string' && Boolean(u.trim()));
-      const imagenesExtra = extrasLimpios.length ? slotsUrls : null;
+      const imagenesExtra = extrasLimpios.length ? extrasLimpios : null;
+
+      if (!nuevaPrincipal && !nuevosExtras.some(Boolean) && !urlsAEliminar.length) {
+        throw new Error(
+          'No hay cambios: selecciona una foto nueva o borra una ranura antes de guardar.'
+        );
+      }
 
       if (modoGuardado === 'admin') {
         const { error: rpcError } = await supabase.rpc('admin_set_productos_fotos_masivas', {
@@ -181,7 +194,9 @@ export function EditorFotosProductoModal({
           p_imagen_url: imagenUrl,
           p_imagenes_extra: imagenesExtra,
         });
-        if (rpcError) throw rpcError;
+        if (rpcError) {
+          throw new Error(rpcError.message || 'No se pudo actualizar el producto (RPC admin).');
+        }
       } else {
         const { error: updErr } = await supabase
           .from('productos')
@@ -190,10 +205,12 @@ export function EditorFotosProductoModal({
             imagenes_extra: imagenesExtra,
           })
           .eq('id', producto.id);
-        if (updErr) throw updErr;
+        if (updErr) {
+          throw new Error(updErr.message || 'No se pudo actualizar el producto.');
+        }
       }
 
-      const vigentes = [imagenUrl, ...slotsUrls];
+      const vigentes = [imagenUrl, ...extrasLimpios];
       for (const u of [...new Set(pendientes.map((x) => x.trim()).filter(Boolean))]) {
         if (!debeEliminarFotoStorageTrasGuardar(u, vigentes, producto.id)) continue;
         await eliminarImagenProductoEnStorage(bucket, u);
@@ -206,7 +223,14 @@ export function EditorFotosProductoModal({
       };
       onSaved(guardado);
     } catch (e) {
-      setMensaje(e instanceof Error ? e.message : 'No se pudieron guardar las fotos.');
+      const raw =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: unknown }).message || '')
+          : '';
+      setMensaje(
+        (e instanceof Error ? e.message : raw) ||
+          'No se pudieron guardar las fotos. Revisa tamaño (máx. 2 MB) e inténtalo de nuevo.'
+      );
     } finally {
       setGuardando(false);
     }
@@ -292,13 +316,17 @@ export function EditorFotosProductoModal({
               <span>Foto 1 (principal)</span>
               <div className="gestion-fotos-modal-ranura-preview">
                 {previewPrincipal ? (
-                  <ImagenProducto
-                    url={previewPrincipal.startsWith('blob:') ? previewPrincipal : previewPrincipal}
-                    variante="miniatura"
-                    alt=""
-                    width={80}
-                    height={80}
-                  />
+                  previewPrincipal.startsWith('blob:') ? (
+                    <img src={previewPrincipal} alt="" width={80} height={80} />
+                  ) : (
+                    <ImagenProducto
+                      url={previewPrincipal}
+                      variante="miniatura"
+                      alt=""
+                      width={80}
+                      height={80}
+                    />
+                  )
                 ) : (
                   <span className="mis-productos-card-foto-placeholder">Vacía</span>
                 )}
@@ -400,7 +428,11 @@ export function EditorFotosProductoModal({
             {guardando ? 'Guardando…' : 'Guardar fotos de este producto'}
           </button>
         </div>
-        {mensaje && <p className="mis-productos-ajuste-masivo-mensaje">{mensaje}</p>}
+        {mensaje && (
+          <p className="mis-productos-error" role="alert">
+            {mensaje}
+          </p>
+        )}
       </div>
     </div>
   );
