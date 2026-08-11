@@ -504,7 +504,7 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
 
       {productoEditando && (
         <EditorFotosProductoModal
-          producto={productoEditando}
+          producto={{ ...productoEditando, tienda_id: tiendaId || productoEditando.tienda_id }}
           modoGuardado="admin"
           onClose={() => setProductoEditando(null)}
           onSaved={(actualizado) => {

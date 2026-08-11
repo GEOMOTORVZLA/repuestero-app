@@ -1337,6 +1337,19 @@
   border-top: 1px solid #e2e8f0;
 }
 
+.gestion-fotos-modal-error {
+  margin: 0 0 0.65rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 6px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.35;
+  flex-shrink: 0;
+}
+
 @media (max-width: 640px) {
   .gestion-fotos-modal-ranura {
     grid-template-columns: 1fr;

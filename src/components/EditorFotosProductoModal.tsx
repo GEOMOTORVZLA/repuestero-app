@@ -24,6 +24,8 @@ export type ProductoFotosEditable = {
   codigo?: string | null;
   imagen_url?: string | null;
   imagenes_extra?: (string | null)[] | string[] | null;
+  /** Para ruta Storage admin-fotos-masivas/{tiendaId}/... */
+  tienda_id?: string | null;
 };
 
 export type FotosProductoGuardadas = {
@@ -142,17 +144,29 @@ export function EditorFotosProductoModal({
       // Admin: misma carpeta que la carga masiva (políticas Storage suelen permitirla).
       // Vendedor: carpeta del producto.
       const lote = String(Date.now());
+      const tiendaParaPath = (producto.tienda_id || '').trim();
       const prefijoPath =
         modoGuardado === 'admin'
-          ? `admin-fotos-masivas/${producto.id}/${lote}`
+          ? tiendaParaPath
+            ? `admin-fotos-masivas/${tiendaParaPath}/${lote}`
+            : `admin-fotos-masivas/${producto.id}/${lote}`
           : producto.id;
 
       if (nuevaPrincipal) {
         if (principalUrl) pendientes.push(principalUrl);
         if (producto.imagen_url) pendientes.push(producto.imagen_url);
-        const lista = await optimizarImagenProductoParaStorage(nuevaPrincipal, {
-          maxBytes: MAX_BYTES_FOTO_PRODUCTO,
-        });
+        let lista: File;
+        try {
+          lista = await optimizarImagenProductoParaStorage(nuevaPrincipal, {
+            maxBytes: MAX_BYTES_FOTO_PRODUCTO,
+          });
+        } catch (optErr) {
+          if (nuevaPrincipal.size <= MAX_BYTES_FOTO_PRODUCTO) {
+            lista = nuevaPrincipal;
+          } else {
+            throw optErr;
+          }
+        }
         if (lista.size > MAX_BYTES_FOTO_PRODUCTO) {
           throw new Error(`La foto principal no debe superar ${MAX_MB_FOTO_PRODUCTO} MB.`);
         }
@@ -167,9 +181,18 @@ export function EditorFotosProductoModal({
         const raw = nuevosExtras[i];
         if (!raw) continue;
         if (slotsUrls[i]) pendientes.push(slotsUrls[i]!);
-        const lista = await optimizarImagenProductoParaStorage(raw, {
-          maxBytes: MAX_BYTES_FOTO_PRODUCTO,
-        });
+        let lista: File;
+        try {
+          lista = await optimizarImagenProductoParaStorage(raw, {
+            maxBytes: MAX_BYTES_FOTO_PRODUCTO,
+          });
+        } catch (optErr) {
+          if (raw.size <= MAX_BYTES_FOTO_PRODUCTO) {
+            lista = raw;
+          } else {
+            throw optErr;
+          }
+        }
         if (lista.size > MAX_BYTES_FOTO_PRODUCTO) {
           throw new Error(`La foto adicional ${i + 1} no debe superar ${MAX_MB_FOTO_PRODUCTO} MB.`);
         }
@@ -195,7 +218,18 @@ export function EditorFotosProductoModal({
           p_imagenes_extra: imagenesExtra,
         });
         if (rpcError) {
-          throw new Error(rpcError.message || 'No se pudo actualizar el producto (RPC admin).');
+          const { error: updErr } = await supabase
+            .from('productos')
+            .update({
+              imagen_url: imagenUrl,
+              imagenes_extra: imagenesExtra,
+            })
+            .eq('id', producto.id);
+          if (updErr) {
+            throw new Error(
+              `No se pudo guardar en el producto. RPC: ${rpcError.message}. Update: ${updErr.message}`
+            );
+          }
         }
       } else {
         const { error: updErr } = await supabase
@@ -227,10 +261,15 @@ export function EditorFotosProductoModal({
         e && typeof e === 'object' && 'message' in e
           ? String((e as { message?: unknown }).message || '')
           : '';
-      setMensaje(
+      const texto =
         (e instanceof Error ? e.message : raw) ||
-          'No se pudieron guardar las fotos. Revisa tamaño (máx. 2 MB) e inténtalo de nuevo.'
-      );
+        'No se pudieron guardar las fotos. Revisa tamaño (máx. 2 MB) e inténtalo de nuevo.';
+      setMensaje(texto);
+      try {
+        window.alert(`No se guardaron las fotos:\n\n${texto}`);
+      } catch {
+        /* ignore */
+      }
     } finally {
       setGuardando(false);
     }
@@ -262,6 +301,12 @@ export function EditorFotosProductoModal({
             Cerrar
           </button>
         </div>
+
+        {mensaje ? (
+          <p className="gestion-fotos-modal-error" role="alert">
+            {mensaje}
+          </p>
+        ) : null}
 
         <div className="gestion-fotos-modal-cuerpo">
           <div className="mis-productos-detalle-galeria">
@@ -428,11 +473,6 @@ export function EditorFotosProductoModal({
             {guardando ? 'Guardando…' : 'Guardar fotos de este producto'}
           </button>
         </div>
-        {mensaje && (
-          <p className="mis-productos-error" role="alert">
-            {mensaje}
-          </p>
-        )}
       </div>
     </div>
   );
