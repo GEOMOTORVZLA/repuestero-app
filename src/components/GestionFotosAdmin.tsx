@@ -8,6 +8,7 @@ import {
 import {
   MAX_BYTES_FOTO_PRODUCTO,
   MAX_MB_FOTO_PRODUCTO,
+  esUrlObjectPublicSupabase,
   optimizarImagenProductoParaStorage,
   subirImagenProductoConMiniatura,
 } from '../utils/imagenProducto';
@@ -15,7 +16,7 @@ import { productoCoincideTextoFlexible } from '../utils/busquedaProductosTexto';
 import './Dashboard.css';
 import './MisProductos.css';
 
-type AlcanceFotos = 'sin_foto' | 'todos' | 'seleccionados';
+type AlcanceFotos = 'sin_foto' | 'enlaces_externos' | 'todos' | 'seleccionados';
 
 type VendedorOpcion = {
   id: string;
@@ -41,10 +42,37 @@ type GestionFotosAdminProps = {
 const SELECT_CON_CODIGO = 'id, nombre, codigo, imagen_url, imagenes_extra, tienda_id';
 const SELECT_SIN_CODIGO = 'id, nombre, imagen_url, imagenes_extra, tienda_id';
 const PAGE = 1000;
+const CHUNK_IDS_FOTOS = 80;
 
 function errorPorColumnaCodigo(msg: string | undefined): boolean {
   const m = (msg ?? '').toLowerCase();
   return m.includes('codigo') && (m.includes('does not exist') || m.includes('column'));
+}
+
+function mensajeDeErrorDesconocido(e: unknown, fallback: string): string {
+  if (e instanceof Error && e.message.trim()) return e.message.trim();
+  if (e && typeof e === 'object' && 'message' in e) {
+    const m = String((e as { message?: unknown }).message ?? '').trim();
+    if (m) return m;
+  }
+  if (typeof e === 'string' && e.trim()) return e.trim();
+  return fallback;
+}
+
+/** Foto principal o extras apuntan fuera de Supabase Storage (imgbb, ibb.co, etc.). */
+function productoConEnlaceFotoExterno(p: ProductoFotoAdmin): boolean {
+  const urls: string[] = [];
+  if (typeof p.imagen_url === 'string' && p.imagen_url.trim()) urls.push(p.imagen_url.trim());
+  if (Array.isArray(p.imagenes_extra)) {
+    for (const u of p.imagenes_extra) {
+      if (typeof u === 'string' && u.trim()) urls.push(u.trim());
+    }
+  }
+  if (!urls.length) return false;
+  return urls.some((u) => {
+    if (esUrlObjectPublicSupabase(u)) return false;
+    return /^https?:\/\//i.test(u);
+  });
 }
 
 async function fetchProductosDeTienda(
@@ -157,6 +185,9 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
     if (alcance === 'sin_foto') {
       return porBusqueda.filter((p) => !p.imagen_url || !String(p.imagen_url).trim());
     }
+    if (alcance === 'enlaces_externos') {
+      return porBusqueda.filter((p) => productoConEnlaceFotoExterno(p));
+    }
     return porBusqueda;
   }, [porBusqueda, alcance, seleccionados]);
 
@@ -208,29 +239,70 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
       for (let i = 0; i < archivos.length; i += 1) {
         const raw = archivos[i];
         if (!raw) continue;
-        const lista = await optimizarImagenProductoParaStorage(raw, {
-          maxBytes: MAX_BYTES_FOTO_PRODUCTO,
-        });
+        let lista: File;
+        try {
+          lista = await optimizarImagenProductoParaStorage(raw, {
+            maxBytes: MAX_BYTES_FOTO_PRODUCTO,
+          });
+        } catch (optErr) {
+          if (raw.size <= MAX_BYTES_FOTO_PRODUCTO) {
+            lista = raw;
+          } else {
+            throw new Error(
+              `No se pudo preparar la foto ${i + 1}: ${mensajeDeErrorDesconocido(optErr, 'error al comprimir')}`
+            );
+          }
+        }
         if (lista.size > MAX_BYTES_FOTO_PRODUCTO) {
           throw new Error(`La foto ${i + 1} no debe superar ${MAX_MB_FOTO_PRODUCTO} MB.`);
         }
         const ext = lista.name.split('.').pop() || 'jpg';
         const path = `admin-fotos-masivas/${tiendaId}/${lote}/foto-${i + 1}.${ext}`;
-        const subida = await subirImagenProductoConMiniatura(bucket, path, lista);
-        urls[i] = subida.urlOriginal;
+        try {
+          const subida = await subirImagenProductoConMiniatura(bucket, path, lista);
+          urls[i] = subida.urlOriginal;
+        } catch (upErr) {
+          throw new Error(
+            `Error al subir la foto ${i + 1} a Storage: ${mensajeDeErrorDesconocido(upErr, 'fallo de subida')}`
+          );
+        }
       }
 
       const imagenUrl = urls[0];
+      if (!imagenUrl) {
+        throw new Error('No se obtuvo URL pública de la foto principal tras subirla.');
+      }
       const extras = urls.slice(1).filter((u): u is string => typeof u === 'string' && Boolean(u));
       const ids = objetivos.map((p) => p.id);
-      const { data, error: rpcError } = await supabase.rpc('admin_set_productos_fotos_masivas', {
-        p_producto_ids: ids,
-        p_imagen_url: imagenUrl,
-        p_imagenes_extra: extras.length ? extras : null,
-      });
-      if (rpcError) throw rpcError;
+      let actualizados = 0;
 
-      const actualizados = typeof data === 'number' ? data : ids.length;
+      for (let offset = 0; offset < ids.length; offset += CHUNK_IDS_FOTOS) {
+        const chunk = ids.slice(offset, offset + CHUNK_IDS_FOTOS);
+        const { data, error: rpcError } = await supabase.rpc('admin_set_productos_fotos_masivas', {
+          p_producto_ids: chunk,
+          p_imagen_url: imagenUrl,
+          p_imagenes_extra: extras.length ? extras : null,
+        });
+        if (rpcError) {
+          const { error: updErr } = await supabase
+            .from('productos')
+            .update({
+              imagen_url: imagenUrl,
+              imagenes_extra: extras.length ? extras : null,
+            })
+            .in('id', chunk);
+          if (updErr) {
+            throw new Error(
+              `No se pudo asignar fotos (lote ${offset + 1}–${offset + chunk.length}). ` +
+                `RPC: ${rpcError.message}. Update: ${updErr.message}`
+            );
+          }
+          actualizados += chunk.length;
+        } else {
+          actualizados += typeof data === 'number' ? data : chunk.length;
+        }
+      }
+
       setProductos((prev) =>
         prev.map((p) =>
           ids.includes(p.id)
@@ -243,9 +315,14 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
       setInputKey((k) => k + 1);
       onFotosAplicadas?.();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'No se pudieron aplicar las fotos.';
+      const msg = mensajeDeErrorDesconocido(e, 'No se pudieron aplicar las fotos.');
       setMensaje(msg);
       setError(msg);
+      try {
+        window.alert(`No se pudieron aplicar las fotos:\n\n${msg}`);
+      } catch {
+        /* ignore */
+      }
     } finally {
       setAplicando(false);
     }
@@ -323,6 +400,7 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
               disabled={aplicando || !tiendaId}
             >
               <option value="sin_foto">Solo sin foto principal</option>
+              <option value="enlaces_externos">Sustituir fotos con enlaces externos (imgbb, etc.)</option>
               <option value="todos">Todos los de la búsqueda</option>
               <option value="seleccionados">Solo seleccionados manualmente</option>
             </select>
@@ -337,8 +415,10 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
               : busqueda.trim()
                 ? `Búsqueda «${busqueda.trim()}»: ${porBusqueda.length} de ${productos.length}. Alcance → ${objetivos.length} objetivo(s)${
                     alcance === 'sin_foto' && porBusqueda.length > 0 && objetivos.length === 0
-                      ? '. Todos ya tienen foto; cambia a «Todos» para reemplazarlas.'
-                      : '.'
+                      ? '. Todos ya tienen foto; usa «enlaces externos» o «Todos» para reemplazarlas.'
+                      : alcance === 'enlaces_externos' && porBusqueda.length > 0 && objetivos.length === 0
+                        ? '. No hay enlaces externos en esta búsqueda.'
+                        : '.'
                   }`
                 : `Catálogo del vendedor: ${productos.length} producto(s). Alcance → ${objetivos.length} objetivo(s).`}
         </p>
