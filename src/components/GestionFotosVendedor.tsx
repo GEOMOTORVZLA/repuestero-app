@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../supabaseClient';
 import { ImagenProducto } from './ImagenProducto';
 import {
   EditorFotosProductoModal,
@@ -12,8 +12,12 @@ import {
   optimizarImagenProductoParaStorage,
   subirImagenProductoConMiniatura,
 } from '../utils/imagenProducto';
-import { productoCoincideTextoFlexible } from '../utils/busquedaProductosTexto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
+import {
+  PRODUCTOS_VENDEDOR_LISTA_PAGE,
+  fetchPaginaProductosVendedorLista,
+  fetchTiendaIdsUsuario,
+} from '../utils/productosVendedorConsulta';
 import './MisProductos.css';
 
 type AlcanceFotos = 'sin_foto' | 'todos' | 'seleccionados';
@@ -33,65 +37,7 @@ type GestionFotosVendedorProps = {
   refreshTrigger?: number;
 };
 
-const SELECT_CON_CODIGO =
-  'id, nombre, codigo, imagen_url, imagenes_extra, vertical, activo';
-const SELECT_SIN_CODIGO = 'id, nombre, imagen_url, imagenes_extra, vertical, activo';
-const PAGE = 1000;
-
-function errorPorColumnaCodigo(msg: string | undefined): boolean {
-  const m = (msg ?? '').toLowerCase();
-  return m.includes('codigo') && (m.includes('does not exist') || m.includes('column'));
-}
-
-async function fetchProductosTiendasUsuario(
-  userId: string,
-  vertical?: VerticalVehiculo
-): Promise<{ productos: ProductoFoto[]; error: string | null }> {
-  const { data: tiendas, error: errTiendas } = await supabase
-    .from('tiendas')
-    .select('id')
-    .eq('user_id', userId);
-
-  if (errTiendas) {
-    return { productos: [], error: errTiendas.message || 'Error al cargar tus tiendas.' };
-  }
-  if (!tiendas?.length) {
-    return { productos: [], error: null };
-  }
-
-  const tiendaIds = tiendas.map((t) => t.id);
-  const acumulado: ProductoFoto[] = [];
-  let from = 0;
-  let selectCols = SELECT_CON_CODIGO;
-
-  while (true) {
-    let q = supabase
-      .from('productos')
-      .select(selectCols)
-      .in('tienda_id', tiendaIds)
-      .order('nombre')
-      .range(from, from + PAGE - 1);
-    if (vertical === 'auto' || vertical === 'moto') {
-      q = q.eq('vertical', vertical);
-    }
-    const { data, error } = await q;
-    if (error) {
-      if (selectCols === SELECT_CON_CODIGO && errorPorColumnaCodigo(error.message)) {
-        selectCols = SELECT_SIN_CODIGO;
-        from = 0;
-        acumulado.length = 0;
-        continue;
-      }
-      return { productos: [], error: error.message || 'Error al cargar productos.' };
-    }
-    const batch = (data ?? []) as unknown as ProductoFoto[];
-    acumulado.push(...batch);
-    if (batch.length < PAGE) break;
-    from += PAGE;
-  }
-
-  return { productos: acumulado, error: null };
-}
+const SELECT = 'id, nombre, codigo, imagen_url, imagenes_extra, vertical, activo';
 
 /**
  * Sección independiente: solo asignación masiva de fotos.
@@ -101,8 +47,14 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
   const { user } = useAuth();
   const [productos, setProductos] = useState<ProductoFoto[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [cargandoMas, setCargandoMas] = useState(false);
+  const [hayMas, setHayMas] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [tiendaIds, setTiendaIds] = useState<string[]>([]);
+  const [conCodigo, setConCodigo] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState('');
+  const [busquedaAplicada, setBusquedaAplicada] = useState('');
   const [alcance, setAlcance] = useState<AlcanceFotos>('sin_foto');
   const [seleccionados, setSeleccionados] = useState<string[]>([]);
   const [archivos, setArchivos] = useState<(File | null)[]>([null, null, null, null]);
@@ -110,6 +62,48 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
   const [aplicando, setAplicando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [productoEditando, setProductoEditando] = useState<ProductoFotosEditable | null>(null);
+  const [catalogoVacio, setCatalogoVacio] = useState(false);
+
+  const verticalFiltro = vertical === 'auto' || vertical === 'moto' ? vertical : null;
+
+  const cargarPrimeraPagina = async (opts: {
+    texto: string;
+    alcanceActual: AlcanceFotos;
+    ids?: string[];
+  }) => {
+    if (!user) return;
+    const ids =
+      opts.ids ??
+      (tiendaIds.length ? tiendaIds : (await fetchTiendaIdsUsuario(user.id)).tiendaIds);
+    if (!tiendaIds.length && ids.length) setTiendaIds(ids);
+
+    const pagina = await fetchPaginaProductosVendedorLista({
+      tiendaIds: ids,
+      select: SELECT,
+      offset: 0,
+      vertical: verticalFiltro,
+      texto: opts.texto,
+      soloSinFoto: opts.alcanceActual === 'sin_foto',
+      conCodigo,
+    });
+
+    if (pagina.error) {
+      setError(pagina.error);
+      setProductos([]);
+      setHayMas(false);
+      setOffset(0);
+      return;
+    }
+
+    setConCodigo(pagina.conCodigo);
+    setError(null);
+    const filas = pagina.filas as ProductoFoto[];
+    setProductos(filas);
+    setOffset(filas.length);
+    setHayMas(pagina.hayMas);
+    setSeleccionados([]);
+    setBusquedaAplicada(opts.texto);
+  };
 
   useEffect(() => {
     let cancelado = false;
@@ -117,18 +111,45 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
       if (!user) return;
       setCargando(true);
       setError(null);
+      setBusqueda('');
+      setBusquedaAplicada('');
       try {
-        const { productos: lista, error: errMsg } = await fetchProductosTiendasUsuario(
-          user.id,
-          vertical === 'auto' || vertical === 'moto' ? vertical : undefined
-        );
+        const { tiendaIds: ids, error: errIds } = await fetchTiendaIdsUsuario(user.id);
         if (cancelado) return;
-        if (errMsg) {
+        if (errIds) {
+          setError(errIds);
           setProductos([]);
-          setError(errMsg);
           return;
         }
-        setProductos(lista);
+        setTiendaIds(ids);
+        setConCodigo(true);
+        const check = await fetchPaginaProductosVendedorLista({
+          tiendaIds: ids,
+          select: SELECT,
+          offset: 0,
+          vertical: verticalFiltro,
+          texto: '',
+          soloSinFoto: false,
+          conCodigo: true,
+        });
+        if (cancelado) return;
+        if (check.error) {
+          setError(check.error);
+          setProductos([]);
+          return;
+        }
+        if (check.filas.length === 0 && !check.hayMas) {
+          setCatalogoVacio(true);
+          setProductos([]);
+          return;
+        }
+        setCatalogoVacio(false);
+        setAlcance('sin_foto');
+        await cargarPrimeraPagina({
+          texto: '',
+          alcanceActual: 'sin_foto',
+          ids,
+        });
       } catch (e) {
         if (!cancelado) {
           setProductos([]);
@@ -142,25 +163,69 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
     return () => {
       cancelado = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, refreshTrigger, vertical]);
 
-  const porBusqueda = useMemo(
-    () =>
-      productos.filter((p) => productoCoincideTextoFlexible([p.nombre, p.codigo], busqueda)),
-    [productos, busqueda]
-  );
+  const aplicarBusqueda = async () => {
+    setCargando(true);
+    setMensaje(null);
+    try {
+      await cargarPrimeraPagina({ texto: busqueda, alcanceActual: alcance });
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const onCambiarAlcance = async (nuevo: AlcanceFotos) => {
+    setAlcance(nuevo);
+    setMensaje(null);
+    setCargando(true);
+    try {
+      await cargarPrimeraPagina({ texto: busquedaAplicada, alcanceActual: nuevo });
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const cargarMas = async () => {
+    if (!user || cargandoMas || !hayMas || tiendaIds.length === 0) return;
+    setCargandoMas(true);
+    try {
+      const pagina = await fetchPaginaProductosVendedorLista({
+        tiendaIds,
+        select: SELECT,
+        offset,
+        vertical: verticalFiltro,
+        texto: busquedaAplicada,
+        soloSinFoto: alcance === 'sin_foto',
+        conCodigo,
+      });
+      if (pagina.error) {
+        setError(pagina.error);
+        return;
+      }
+      setConCodigo(pagina.conCodigo);
+      const filas = pagina.filas as ProductoFoto[];
+      setProductos((prev) => {
+        const vistos = new Set(prev.map((p) => p.id));
+        return [...prev, ...filas.filter((p) => !vistos.has(p.id))];
+      });
+      setOffset((prev) => prev + filas.length);
+      setHayMas(pagina.hayMas);
+    } finally {
+      setCargandoMas(false);
+    }
+  };
 
   const objetivos = useMemo(() => {
     if (alcance === 'seleccionados') {
-      return porBusqueda.filter((p) => seleccionados.includes(p.id));
+      return productos.filter((p) => seleccionados.includes(p.id));
     }
-    if (alcance === 'sin_foto') {
-      return porBusqueda.filter((p) => !p.imagen_url || !String(p.imagen_url).trim());
-    }
-    return porBusqueda;
-  }, [porBusqueda, alcance, seleccionados]);
+    // sin_foto y todos: ya filtrados en servidor sobre lo cargado
+    return productos;
+  }, [productos, alcance, seleccionados]);
 
-  const listaVisible = porBusqueda;
+  const listaVisible = productos;
 
   const toggleSeleccionado = (id: string, checked: boolean) => {
     setSeleccionados((prev) => {
@@ -178,24 +243,16 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
       setMensaje('Sube al menos la foto 1 (principal).');
       return;
     }
-    if (!objetivos.length) {
-      setMensaje('No hay productos objetivo con el alcance y búsqueda actuales.');
-      return;
-    }
-    if (
-      !window.confirm(
-        `¿Aplicar estas fotos a ${objetivos.length} producto(s)?\n\n` +
-          'La foto 1 será principal. Se reemplazan las fotos actuales de esos productos.'
-      )
-    ) {
+    if (objetivos.length === 0) {
+      setMensaje('No hay productos en el alcance. Busca, carga más o selecciona.');
       return;
     }
 
     setAplicando(true);
     try {
-      const bucket = supabase.storage.from('productos');
-      const urls: string[] = [];
+      const bucket = 'productos';
       const lote = `${Date.now()}`;
+      const urls: (string | null)[] = [null, null, null, null];
 
       for (let i = 0; i < archivos.length; i += 1) {
         const raw = archivos[i];
@@ -234,7 +291,7 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
             : p
         )
       );
-      setMensaje(`Fotos aplicadas a ${ids.length} producto(s).`);
+      setMensaje(`Fotos aplicadas a ${ids.length} producto(s) de esta lista.`);
       setArchivos([null, null, null, null]);
       setInputKey((k) => k + 1);
     } catch (e) {
@@ -248,7 +305,7 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
 
   if (!user) return null;
 
-  if (cargando) {
+  if (cargando && productos.length === 0) {
     return (
       <div className="mis-productos">
         <p className="mis-productos-mensaje">Cargando productos para fotos…</p>
@@ -256,7 +313,7 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
     );
   }
 
-  if (error && !productos.length) {
+  if (error && !productos.length && catalogoVacio === false && tiendaIds.length === 0) {
     return (
       <div className="mis-productos">
         <p className="mis-productos-mensaje mis-productos-error">{error}</p>
@@ -264,7 +321,7 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
     );
   }
 
-  if (!productos.length) {
+  if (catalogoVacio) {
     return (
       <div className="mis-productos">
         <p className="mis-productos-mensaje">
@@ -282,12 +339,14 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
           <div>
             <p className="mis-productos-ajuste-masivo-titulo">Gestión de fotos</p>
             <p className="mis-productos-ajuste-masivo-descripcion">
-              Sección solo para fotos. Busca por nombre o código (plural/typos OK), elige el alcance y
-              aplica hasta 4 fotos. No afecta filtros de Editar productos.
+              Busca por nombre o código y pulsa <strong>Buscar</strong>. Se muestran{' '}
+              {PRODUCTOS_VENDEDOR_LISTA_PAGE} por vez; usa <strong>Cargar más</strong> si hace falta. El
+              alcance masivo aplica solo a lo cargado en esta lista.
             </p>
           </div>
           <span className="mis-productos-fotos-masivas-contador">
-            Productos objetivo: {objetivos.length}
+            Objetivo masivo: {objetivos.length}
+            {hayMas ? '+' : ''}
           </span>
         </div>
 
@@ -300,8 +359,14 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
                 type="search"
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void aplicarBusqueda();
+                  }
+                }}
                 placeholder="Ej: camara, amortiguadores…"
-                disabled={aplicando}
+                disabled={aplicando || cargando}
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -311,17 +376,24 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
               <select
                 id="gestion-fotos-alcance"
                 value={alcance}
-                onChange={(e) => {
-                  setAlcance(e.target.value as AlcanceFotos);
-                  setMensaje(null);
-                }}
-                disabled={aplicando}
+                onChange={(e) => void onCambiarAlcance(e.target.value as AlcanceFotos)}
+                disabled={aplicando || cargando}
               >
                 <option value="sin_foto">Solo sin foto principal</option>
-                <option value="todos">Todos los de la búsqueda</option>
+                <option value="todos">Todos los de la búsqueda (esta lista)</option>
                 <option value="seleccionados">Solo seleccionados manualmente</option>
               </select>
             </label>
+          </div>
+          <div className="mis-productos-fotos-masivas-acciones" style={{ marginTop: '0.5rem' }}>
+            <button
+              type="button"
+              className="mis-productos-btn-primario"
+              disabled={aplicando || cargando}
+              onClick={() => void aplicarBusqueda()}
+            >
+              {cargando ? 'Buscando…' : 'Buscar'}
+            </button>
           </div>
         </div>
 
@@ -332,10 +404,10 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
               <button
                 type="button"
                 className="mis-productos-btn-secundario"
-                disabled={aplicando || !porBusqueda.length}
-                onClick={() => setSeleccionados(porBusqueda.map((p) => p.id))}
+                disabled={aplicando || !listaVisible.length}
+                onClick={() => setSeleccionados(listaVisible.map((p) => p.id))}
               >
-                Seleccionar visibles ({porBusqueda.length})
+                Seleccionar visibles ({listaVisible.length})
               </button>
               <button
                 type="button"
@@ -394,18 +466,26 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
             {aplicando ? 'Aplicando…' : `Aplicar fotos a ${objetivos.length} producto(s)`}
           </button>
         </div>
+        {error && <p className="mis-productos-mensaje mis-productos-error">{error}</p>}
         {mensaje && <p className="mis-productos-ajuste-masivo-mensaje">{mensaje}</p>}
+        <p className="mis-productos-filtros-resumen" role="status">
+          {busquedaAplicada.trim()
+            ? `Búsqueda «${busquedaAplicada.trim()}»: ${listaVisible.length} en esta vista${
+                hayMas ? ' (hay más)' : ''
+              }.`
+            : `Mostrando ${listaVisible.length}${hayMas ? '+' : ''} producto(s).`}
+        </p>
       </section>
 
       <div className="mis-productos-grid gestion-fotos-lista" aria-label="Productos para fotos">
         {listaVisible.length === 0 ? (
           <div className="mis-productos-mensaje mis-productos-mensaje--bloque">
             <p>
-              {!busqueda.trim()
-                ? 'Escribe en el buscador para filtrar el catálogo.'
-                : porBusqueda.length === 0
-                  ? `Ningún producto coincide con «${busqueda.trim()}» (nombre o código).`
-                  : 'No hay productos para mostrar.'}
+              {busquedaAplicada.trim()
+                ? `Ningún producto coincide con «${busquedaAplicada.trim()}».`
+                : alcance === 'sin_foto'
+                  ? 'No hay productos sin foto principal en esta página. Prueba Buscar o Cargar más.'
+                  : 'No hay productos para mostrar. Pulsa Buscar o Cargar más.'}
             </p>
           </div>
         ) : (
@@ -479,6 +559,19 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
           })
         )}
       </div>
+
+      {hayMas && (
+        <div className="mis-productos-cargar-mas">
+          <button
+            type="button"
+            className="mis-productos-btn-primario"
+            disabled={cargandoMas || cargando || aplicando}
+            onClick={() => void cargarMas()}
+          >
+            {cargandoMas ? 'Cargando…' : `Cargar más (${PRODUCTOS_VENDEDOR_LISTA_PAGE})`}
+          </button>
+        </div>
+      )}
 
       {productoEditando && (
         <EditorFotosProductoModal

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../supabaseClient';
 import { etiquetaMoneda } from '../utils/monedaProducto';
@@ -9,6 +9,13 @@ import {
   claseSemaforoStockPorDias,
   diasDesdeFechaISO,
 } from '../utils/stockActualInventario';
+import {
+  PRODUCTOS_VENDEDOR_LISTA_PAGE,
+  contarProductosVendedor,
+  fetchPaginaProductosVendedorLista,
+  fetchTiendaIdsUsuario,
+  type FiltroEstadoListaVendedor,
+} from '../utils/productosVendedorConsulta';
 
 type ProductoResumen = {
   id: string;
@@ -26,41 +33,16 @@ type ProductoResumen = {
 
 type KpiId = 'publicados' | 'activos' | 'pausados' | 'proximos' | 'membresia';
 
-const SELECT =
+const SELECT_DETALLE =
   'id, nombre, marca, modelo, anio, precio_usd, moneda, activo, created_at, stock_confirmado_at, vertical';
-const PAGE = 1000;
 
-async function cargarProductosVendedor(
-  userId: string
-): Promise<{ productos: ProductoResumen[]; error: string | null }> {
-  const { data: tiendas, error: errTiendas } = await supabase
-    .from('tiendas')
-    .select('id')
-    .eq('user_id', userId);
-
-  if (errTiendas) return { productos: [], error: errTiendas.message || 'Error al cargar tus tiendas.' };
-  if (!tiendas?.length) return { productos: [], error: null };
-
-  const tiendaIds = tiendas.map((t) => t.id);
-  const acumulado: ProductoResumen[] = [];
-  let from = 0;
-  while (true) {
-    const { data, error } = await supabase
-      .from('productos')
-      .select(SELECT)
-      .in('tienda_id', tiendaIds)
-      .order('nombre')
-      .range(from, from + PAGE - 1);
-    if (error) return { productos: [], error: error.message || 'Error al cargar productos.' };
-    const batch = (data ?? []) as ProductoResumen[];
-    acumulado.push(...batch);
-    if (batch.length < PAGE) break;
-    from += PAGE;
-  }
-  return { productos: acumulado, error: null };
+function estadoDesdeKpi(kpi: KpiId): FiltroEstadoListaVendedor {
+  if (kpi === 'activos') return 'activos';
+  if (kpi === 'pausados') return 'pausados';
+  if (kpi === 'proximos') return 'proximos_stock';
+  return 'todos';
 }
 
-/** Misma lógica de semáforo que MisProductos (amarillo/rojo = próximos a pausarse). */
 function semaforoStockProducto(p: ProductoResumen): 'verde' | 'amarillo' | 'rojo' | 'vencido' | 'sin-fecha' {
   const base = p.stock_confirmado_at ?? p.created_at ?? null;
   return claseSemaforoStockPorDias(diasDesdeFechaISO(base));
@@ -78,7 +60,6 @@ function formatearFechaMembresia(iso: string | null): string {
   });
 }
 
-/** Formato corto venezolano para la tarjeta KPI: DD/MM/YYYY */
 function formatearFechaMembresiaCorta(iso: string | null): string {
   if (!iso) return '—';
   const solo = iso.slice(0, 10);
@@ -102,11 +83,19 @@ type ResumenVendedorProps = {
 
 export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedorProps) {
   const { user } = useAuth();
-  const [productos, setProductos] = useState<ProductoResumen[]>([]);
+  const [countPublicados, setCountPublicados] = useState(0);
+  const [countActivos, setCountActivos] = useState(0);
+  const [countPausados, setCountPausados] = useState(0);
+  const [countProximos, setCountProximos] = useState(0);
   const [membresiaHasta, setMembresiaHasta] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<KpiId | null>(null);
+  const [listaDetalle, setListaDetalle] = useState<ProductoResumen[]>([]);
+  const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  const [hayMasDetalle, setHayMasDetalle] = useState(false);
+  const [offsetDetalle, setOffsetDetalle] = useState(0);
+  const [tiendaIds, setTiendaIds] = useState<string[]>([]);
 
   const esMoto = vertical === VERTICAL_MOTO;
   const etiquetaVertical = esMoto ? 'motocicleta' : 'automóvil';
@@ -116,8 +105,8 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
     setCargando(true);
     setError(null);
     try {
-      const [{ productos: lista, error: errProd }, tiendaRes] = await Promise.all([
-        cargarProductosVendedor(user.id),
+      const [{ tiendaIds: ids, error: errIds }, tiendaRes] = await Promise.all([
+        fetchTiendaIdsUsuario(user.id),
         supabase
           .from('tiendas')
           .select('membresia_hasta')
@@ -127,14 +116,30 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
           .maybeSingle(),
       ]);
 
-      if (errProd) {
-        setProductos([]);
-        setError(errProd);
+      if (errIds) {
+        setError(errIds);
+        setCountPublicados(0);
+        setCountActivos(0);
+        setCountPausados(0);
+        setCountProximos(0);
         return;
       }
+      setTiendaIds(ids);
 
-      const deVertical = lista.filter((p) => (p.vertical ?? 'auto') === vertical);
-      setProductos(deVertical);
+      const [pub, act, pau, prox] = await Promise.all([
+        contarProductosVendedor({ tiendaIds: ids, vertical, estado: 'todos' }),
+        contarProductosVendedor({ tiendaIds: ids, vertical, estado: 'activos' }),
+        contarProductosVendedor({ tiendaIds: ids, vertical, estado: 'pausados' }),
+        contarProductosVendedor({ tiendaIds: ids, vertical, estado: 'proximos_stock' }),
+      ]);
+
+      const errCount = pub.error || act.error || pau.error || prox.error;
+      if (errCount) setError(errCount);
+
+      setCountPublicados(pub.count);
+      setCountActivos(act.count);
+      setCountPausados(pau.count);
+      setCountProximos(prox.count);
 
       if (tiendaRes.error) {
         setMembresiaHasta(null);
@@ -143,7 +148,6 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
         setMembresiaHasta(raw != null ? String(raw).slice(0, 10) : null);
       }
     } catch (e) {
-      setProductos([]);
       setError(e instanceof Error ? e.message : 'No se pudo cargar el resumen.');
     } finally {
       setCargando(false);
@@ -154,28 +158,67 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
     void cargar();
   }, [cargar, refreshTrigger]);
 
-  const activos = useMemo(() => productos.filter((p) => p.activo !== false), [productos]);
-  const pausados = useMemo(() => productos.filter((p) => p.activo === false), [productos]);
-  const proximos = useMemo(
-    () =>
-      productos.filter((p) => {
-        if (p.activo === false) return false;
-        const s = semaforoStockProducto(p);
-        return s === 'amarillo' || s === 'rojo';
-      }),
-    [productos]
-  );
+  useEffect(() => {
+    if (!detalle || detalle === 'membresia' || !user) {
+      setListaDetalle([]);
+      setHayMasDetalle(false);
+      setOffsetDetalle(0);
+      return;
+    }
+    let cancelado = false;
+    void (async () => {
+      setCargandoDetalle(true);
+      const ids =
+        tiendaIds.length > 0 ? tiendaIds : (await fetchTiendaIdsUsuario(user.id)).tiendaIds;
+      const pagina = await fetchPaginaProductosVendedorLista({
+        tiendaIds: ids,
+        select: SELECT_DETALLE,
+        offset: 0,
+        vertical,
+        estado: estadoDesdeKpi(detalle),
+      });
+      if (cancelado) return;
+      if (pagina.error) {
+        setListaDetalle([]);
+        setHayMasDetalle(false);
+      } else {
+        setListaDetalle(pagina.filas as ProductoResumen[]);
+        setOffsetDetalle(pagina.filas.length);
+        setHayMasDetalle(pagina.hayMas);
+      }
+      setCargandoDetalle(false);
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [detalle, user, vertical, tiendaIds]);
+
+  const cargarMasDetalle = async () => {
+    if (!detalle || detalle === 'membresia' || !user || !hayMasDetalle) return;
+    setCargandoDetalle(true);
+    try {
+      const pagina = await fetchPaginaProductosVendedorLista({
+        tiendaIds,
+        select: SELECT_DETALLE,
+        offset: offsetDetalle,
+        vertical,
+        estado: estadoDesdeKpi(detalle),
+      });
+      if (pagina.error) return;
+      const filas = pagina.filas as ProductoResumen[];
+      setListaDetalle((prev) => {
+        const vistos = new Set(prev.map((p) => p.id));
+        return [...prev, ...filas.filter((p) => !vistos.has(p.id))];
+      });
+      setOffsetDetalle((prev) => prev + filas.length);
+      setHayMasDetalle(pagina.hayMas);
+    } finally {
+      setCargandoDetalle(false);
+    }
+  };
 
   const diasMemb = diasHastaMembresia(membresiaHasta);
   const membresiaAlerta = diasMemb != null && diasMemb <= 7;
-
-  const listaDetalle: ProductoResumen[] = useMemo(() => {
-    if (detalle === 'publicados') return productos;
-    if (detalle === 'activos') return activos;
-    if (detalle === 'pausados') return pausados;
-    if (detalle === 'proximos') return proximos;
-    return [];
-  }, [detalle, productos, activos, pausados, proximos]);
 
   const tituloDetalle =
     detalle === 'publicados'
@@ -209,7 +252,7 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
           disabled={cargando}
         >
           <p className="dashboard-kpi-label">Productos publicados</p>
-          <p className="dashboard-kpi-valor">{cargando ? '…' : productos.length}</p>
+          <p className="dashboard-kpi-valor">{cargando ? '…' : countPublicados}</p>
           <p className="dashboard-kpi-hint">Todos los de tu vertical {etiquetaVertical}.</p>
         </button>
 
@@ -220,7 +263,7 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
           disabled={cargando}
         >
           <p className="dashboard-kpi-label">Productos activos</p>
-          <p className="dashboard-kpi-valor">{cargando ? '…' : activos.length}</p>
+          <p className="dashboard-kpi-valor">{cargando ? '…' : countActivos}</p>
           <p className="dashboard-kpi-hint">Visibles en el buscador (si tienen aprobación).</p>
         </button>
 
@@ -231,7 +274,7 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
           disabled={cargando}
         >
           <p className="dashboard-kpi-label">Productos pausados</p>
-          <p className="dashboard-kpi-valor">{cargando ? '…' : pausados.length}</p>
+          <p className="dashboard-kpi-valor">{cargando ? '…' : countPausados}</p>
           <p className="dashboard-kpi-hint">No se muestran en el buscador público.</p>
         </button>
 
@@ -239,13 +282,13 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
           type="button"
           className={
             'dashboard-kpi-card dashboard-kpi-card--clickable' +
-            (proximos.length > 0 ? ' dashboard-kpi-card--alerta' : '')
+            (countProximos > 0 ? ' dashboard-kpi-card--alerta' : '')
           }
           onClick={() => setDetalle('proximos')}
           disabled={cargando}
         >
           <p className="dashboard-kpi-label">Próximos a pausarse</p>
-          <p className="dashboard-kpi-valor">{cargando ? '…' : proximos.length}</p>
+          <p className="dashboard-kpi-valor">{cargando ? '…' : countProximos}</p>
           <p className="dashboard-kpi-hint">Semáforo amarillo o rojo por fecha de stock.</p>
         </button>
 
@@ -313,12 +356,15 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
                       : 'Aún no hay una fecha de membresía registrada en tu tienda. Si acabas de pagar, puede tardar en actualizarse.'}
                   </p>
                 </>
+              ) : cargandoDetalle && listaDetalle.length === 0 ? (
+                <p className="dashboard-texto-placeholder">Cargando listado…</p>
               ) : listaDetalle.length === 0 ? (
                 <p className="dashboard-texto-placeholder">No hay productos en esta categoría.</p>
               ) : (
                 <>
                   <p className="dashboard-kpi-modal-meta" style={{ marginTop: 0 }}>
                     {listaDetalle.length} producto{listaDetalle.length === 1 ? '' : 's'}
+                    {hayMasDetalle ? ' (hay más)' : ''}
                   </p>
                   <div className="dashboard-kpi-modal-table-wrap">
                     <table className="dashboard-admin-table">
@@ -361,6 +407,20 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
                       </tbody>
                     </table>
                   </div>
+                  {hayMasDetalle && (
+                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.75rem' }}>
+                      <button
+                        type="button"
+                        className="dashboard-admin-btn ok"
+                        disabled={cargandoDetalle}
+                        onClick={() => void cargarMasDetalle()}
+                      >
+                        {cargandoDetalle
+                          ? 'Cargando…'
+                          : `Cargar más (${PRODUCTOS_VENDEDOR_LISTA_PAGE})`}
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </div>

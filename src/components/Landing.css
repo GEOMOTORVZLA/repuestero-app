@@ -1382,3 +1382,11 @@
     margin-bottom: 1.75rem;
   }
 }
+
+.landing-lazy-fallback {
+  margin: 0.75rem 1rem;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.88rem;
+  color: #64748b;
+  text-align: center;
+}

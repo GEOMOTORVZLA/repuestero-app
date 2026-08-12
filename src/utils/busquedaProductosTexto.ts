@@ -107,30 +107,62 @@ type QueryConOr = {
   or: (filtro: string) => QueryConOr;
 };
 
+/** Campos públicos: prioriza columnas con índice trigram (ver supabase-indices-escala.sql). */
 const CAMPOS_TEXTO_PRODUCTO = [
   'nombre',
-  'descripcion',
-  'comentarios',
   'marca',
   'modelo',
   'categoria',
+  'descripcion',
+  'comentarios',
 ] as const;
 
 const CAMPOS_TEXTO_TIENDA = ['nombre', 'nombre_comercial'] as const;
 
-function aplicarTerminosImatchEnCampos<T extends QueryConOr>(
+/**
+ * Variantes con tilde a partir del término ya normalizado (sin acento),
+ * para que ILIKE encuentre "BUJÍA" al buscar "bujia" (pg_trgm sí acelera ILIKE).
+ */
+export function variantesAcentoParaIlike(termino: string): string[] {
+  const norm = normalizarTextoBusqueda(termino).replace(/[%_]/g, '');
+  if (norm.length < 2) return norm ? [norm] : [];
+  const map: Record<string, string> = { a: 'á', e: 'é', i: 'í', o: 'ó', u: 'ú', n: 'ñ' };
+  const out = new Set<string>([norm]);
+  for (let i = 0; i < norm.length; i += 1) {
+    const acc = map[norm[i]];
+    if (acc) out.add(norm.slice(0, i) + acc + norm.slice(i + 1));
+  }
+  if (norm.length <= 10) {
+    let todas = '';
+    for (const ch of norm) todas += map[ch] ?? ch;
+    out.add(todas);
+  }
+  return [...out].filter((v) => v.length >= 2);
+}
+
+/**
+ * ILIKE + plural/singular + tildes leves.
+ * Usa índices GIN pg_trgm (imatch/regex no los aprovecha bien).
+ */
+function aplicarTerminosIlikeEnCampos<T extends QueryConOr>(
   query: T,
   texto: string,
   campos: readonly string[]
 ): T {
   let q = query;
   for (const termino of terminosBusquedaProducto(texto)) {
-    const variantes = variantesFormaPalabra(termino);
+    const formas = variantesFormaPalabra(termino);
+    const base = formas.length > 0 ? formas : [termino];
     const partes: string[] = [];
-    for (const v of variantes.length > 0 ? variantes : [termino]) {
-      const pat = patronImatchTerminoProductoSinAcento(v);
-      for (const campo of campos) {
-        partes.push(`${campo}.imatch.${pat}`);
+    const vistosPat = new Set<string>();
+    for (const forma of base) {
+      for (const v of variantesAcentoParaIlike(forma)) {
+        const pat = patronIlikeTerminoProducto(v);
+        if (vistosPat.has(pat)) continue;
+        vistosPat.add(pat);
+        for (const campo of campos) {
+          partes.push(`${campo}.ilike.${pat}`);
+        }
       }
     }
     if (partes.length === 0) continue;
@@ -139,12 +171,12 @@ function aplicarTerminosImatchEnCampos<T extends QueryConOr>(
   return q;
 }
 
-/** Cada termino (o su singular/plural) debe coincidir en al menos un campo; sin exigir acentos. */
+/** Cada termino (o su singular/plural) debe coincidir en al menos un campo; tildes aproximadas vía variantes. */
 export function aplicarTerminosTextoABusquedaProductos<T extends QueryConOr>(
   query: T,
   texto: string
 ): T {
-  return aplicarTerminosImatchEnCampos(query, texto, CAMPOS_TEXTO_PRODUCTO);
+  return aplicarTerminosIlikeEnCampos(query, texto, CAMPOS_TEXTO_PRODUCTO);
 }
 
 /** Búsqueda flexible de vendedores/tiendas por nombre (servidor, misma lógica de términos). */
@@ -152,7 +184,20 @@ export function aplicarTerminosTextoABusquedaTiendas<T extends QueryConOr>(
   query: T,
   texto: string
 ): T {
-  return aplicarTerminosImatchEnCampos(query, texto, CAMPOS_TEXTO_TIENDA);
+  return aplicarTerminosIlikeEnCampos(query, texto, CAMPOS_TEXTO_TIENDA);
+}
+
+/** Mis productos: solo nombre (+ código si la columna existe). */
+export function aplicarTerminosTextoAMisProductos<T extends QueryConOr>(
+  query: T,
+  texto: string,
+  conCodigo = true
+): T {
+  return aplicarTerminosIlikeEnCampos(
+    query,
+    texto,
+    conCodigo ? (['nombre', 'codigo'] as const) : (['nombre'] as const)
+  );
 }
 
 /** Quita acentos para comparar (es/ES). */

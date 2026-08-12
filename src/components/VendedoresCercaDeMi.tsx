@@ -17,14 +17,15 @@ import {
   construirUrlTiendaCompartida,
   mensajeWhatsappCompartirCatalogoVendedor,
 } from '../utils/enlaceCompartirProducto';
-import { productoCoincideTextoFlexible, terminosBusquedaProducto, aplicarTerminosTextoABusquedaTiendas } from '../utils/busquedaProductosTexto';
+import { productoCoincideTextoFlexible, terminosBusquedaProducto, aplicarTerminosTextoABusquedaTiendas, aplicarTerminosTextoABusquedaProductos } from '../utils/busquedaProductosTexto';
+import { aplicarFiltroStockPublico } from '../utils/stockActualInventario';
 import './VendedoresCercaDeMi.css';
 import './avisoSeleccionarEstado.css';
 import './BusquedaRepuestos.css';
 
 const PAGE_SIZE_VENDEDORES = 30;
-/** PostgREST devuelve como máximo ~1000 filas por solicitud. */
-const PRODUCTOS_VENDEDOR_CERCA_PAGE = 1000;
+/** Catálogo de una tienda: lotes pequeños (el comprador busca algo concreto). */
+const PRODUCTOS_VENDEDOR_CERCA_PAGE = 20;
 
 export interface VendedoresCercaDeMiProps {
   vertical?: VerticalVehiculo;
@@ -57,6 +58,9 @@ type ProductoVendedorCerca = ProductoTarjetaBusqueda;
 type EstadoProductosVendedor = {
   productos: ProductoVendedorCerca[];
   cargando: boolean;
+  cargandoMas: boolean;
+  hayMas: boolean;
+  offset: number;
   error: string | null;
 };
 
@@ -109,48 +113,64 @@ function claveCacheProductosTienda(tiendaId: string): string {
   return tiendaId;
 }
 
-/** Catálogo público de una tienda concreta, paginado (PostgREST limita ~1000 filas por request). */
-async function fetchProductosPublicosTienda(
-  tiendaId: string,
-  vertical: VerticalVehiculo
-): Promise<{ productos: ProductoVendedorCerca[]; error: string | null }> {
-  const acumulado: ProductoVendedorCerca[] = [];
-  const vistos = new Set<string>();
-  let from = 0;
+function estadoProductosVacio(parcial?: Partial<EstadoProductosVendedor>): EstadoProductosVendedor {
+  return {
+    productos: [],
+    cargando: false,
+    cargandoMas: false,
+    hayMas: false,
+    offset: 0,
+    error: null,
+    ...parcial,
+  };
+}
 
-  while (true) {
-    const { data, error } = await supabase
-      .from('productos')
-      .select(SELECT_PRODUCTOS_VENDEDOR_CERCA)
-      .eq('tienda_id', tiendaId)
-      .eq('activo', true)
-      .eq('aprobacion_publica', 'aprobado')
-      .eq('vertical', vertical)
-      .or('stock_actual.is.null,stock_actual.gt.0')
-      .order('nombre', { ascending: true })
-      .order('id', { ascending: true })
-      .range(from, from + PRODUCTOS_VENDEDOR_CERCA_PAGE - 1);
+/** Una página del catálogo público de una tienda (filtros de stock/activo + texto opcional). */
+async function fetchPaginaProductosPublicosTienda(opts: {
+  tiendaId: string;
+  vertical: VerticalVehiculo;
+  offset: number;
+  texto?: string;
+}): Promise<{ productos: ProductoVendedorCerca[]; hayMas: boolean; error: string | null }> {
+  const { tiendaId, vertical, offset } = opts;
+  const texto = (opts.texto ?? '').trim();
 
-    if (error) {
-      return {
-        productos: [],
-        error: error.message || 'No se pudieron cargar los productos de este vendedor.',
-      };
-    }
+  let query = supabase
+    .from('productos')
+    .select(SELECT_PRODUCTOS_VENDEDOR_CERCA)
+    .eq('tienda_id', tiendaId)
+    .eq('activo', true)
+    .eq('aprobacion_publica', 'aprobado')
+    .eq('vertical', vertical);
 
-    const batch = ((data ?? []) as ProductoVendedorCerca[]).filter(
-      (p) => p && typeof p.id === 'string'
-    );
-    for (const p of batch) {
-      if (vistos.has(p.id)) continue;
-      vistos.add(p.id);
-      acumulado.push(p);
-    }
-    if (batch.length < PRODUCTOS_VENDEDOR_CERCA_PAGE) break;
-    from += PRODUCTOS_VENDEDOR_CERCA_PAGE;
+  query = aplicarFiltroStockPublico(query);
+
+  if (texto) {
+    query = aplicarTerminosTextoABusquedaProductos(query, texto);
   }
 
-  return { productos: acumulado, error: null };
+  const { data, error } = await query
+    .order('nombre', { ascending: true })
+    .order('id', { ascending: true })
+    .range(offset, offset + PRODUCTOS_VENDEDOR_CERCA_PAGE);
+
+  if (error) {
+    return {
+      productos: [],
+      hayMas: false,
+      error: error.message || 'No se pudieron cargar los productos de este vendedor.',
+    };
+  }
+
+  const filas = ((data ?? []) as ProductoVendedorCerca[]).filter(
+    (p) => p && typeof p.id === 'string'
+  );
+  const hayMas = filas.length > PRODUCTOS_VENDEDOR_CERCA_PAGE;
+  return {
+    productos: hayMas ? filas.slice(0, PRODUCTOS_VENDEDOR_CERCA_PAGE) : filas,
+    hayMas,
+    error: null,
+  };
 }
 
 /** Distancia aproximada en km entre dos puntos (fórmula de Haversine) */
@@ -486,21 +506,30 @@ export function VendedoresCercaDeMi({
       const cacheKey = claveCacheProductosTienda(t.id);
       setProductosPorTienda((prev) => ({
         ...prev,
-        [cacheKey]: { productos: [], cargando: true, error: null },
+        [cacheKey]: estadoProductosVacio({ cargando: true }),
       }));
 
-      const res = await fetchProductosPublicosTienda(t.id, vertical);
+      const res = await fetchPaginaProductosPublicosTienda({
+        tiendaId: t.id,
+        vertical,
+        offset: 0,
+        texto: '',
+      });
       if (cancelled) return;
       if (res.error) {
         setProductosPorTienda((prev) => ({
           ...prev,
-          [cacheKey]: { productos: [], cargando: false, error: res.error },
+          [cacheKey]: estadoProductosVacio({ error: res.error }),
         }));
         return;
       }
       setProductosPorTienda((prev) => ({
         ...prev,
-        [cacheKey]: { productos: res.productos, cargando: false, error: null },
+        [cacheKey]: estadoProductosVacio({
+          productos: res.productos,
+          hayMas: res.hayMas,
+          offset: res.productos.length,
+        }),
       }));
       document.getElementById('vendedores-cerca')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     })();
@@ -572,6 +601,8 @@ export function VendedoresCercaDeMi({
     : undefined;
 
   const productosTiendaAbierta = estadoProductosVendedorAbierto?.productos ?? [];
+  const hayMasProductosTienda = estadoProductosVendedorAbierto?.hayMas === true;
+  const cargandoMasProductosTienda = estadoProductosVendedorAbierto?.cargandoMas === true;
 
   const sugerenciasVendedor = useMemo(() => {
     const texto = busquedaVendedorInput.trim();
@@ -586,12 +617,8 @@ export function VendedoresCercaDeMi({
     }));
   }, [busquedaVendedorInput, productosTiendaAbierta]);
 
-  const productosVendedorVisibles = useMemo(() => {
-    if (!busquedaVendedorAplicada.trim()) return productosTiendaAbierta;
-    return productosTiendaAbierta.filter((p) =>
-      productoCoincideBusquedaVendedor(p, busquedaVendedorAplicada)
-    );
-  }, [productosTiendaAbierta, busquedaVendedorAplicada]);
+  /** Lista ya filtrada en servidor al buscar; sin búsqueda es la página cargada. */
+  const productosVendedorVisibles = productosTiendaAbierta;
 
   useEffect(() => {
     if (!tiendaProductosAbiertaId) return;
@@ -604,14 +631,85 @@ export function VendedoresCercaDeMi({
     return () => document.removeEventListener('mousedown', cerrar);
   }, [tiendaProductosAbiertaId]);
 
+  const cargarPaginaCatalogoTienda = async (opts: {
+    tiendaId: string;
+    texto: string;
+    reset: boolean;
+  }) => {
+    const cacheKey = claveCacheProductosTienda(opts.tiendaId);
+    let offsetToUse = 0;
+    let productosPrev: ProductoVendedorCerca[] = [];
+
+    setProductosPorTienda((p) => {
+      const prev = p[cacheKey];
+      offsetToUse = opts.reset ? 0 : (prev?.offset ?? 0);
+      productosPrev = opts.reset ? [] : (prev?.productos ?? []);
+      return {
+        ...p,
+        [cacheKey]: estadoProductosVacio({
+          productos: productosPrev,
+          cargando: opts.reset,
+          cargandoMas: !opts.reset,
+          hayMas: opts.reset ? false : (prev?.hayMas ?? false),
+          offset: offsetToUse,
+          error: null,
+        }),
+      };
+    });
+
+    const res = await fetchPaginaProductosPublicosTienda({
+      tiendaId: opts.tiendaId,
+      vertical,
+      offset: offsetToUse,
+      texto: opts.texto,
+    });
+
+    if (res.error) {
+      setProductosPorTienda((p) => ({
+        ...p,
+        [cacheKey]: estadoProductosVacio({
+          productos: opts.reset ? [] : productosPrev,
+          error: res.error,
+          offset: opts.reset ? 0 : offsetToUse,
+          hayMas: false,
+        }),
+      }));
+      return;
+    }
+
+    setProductosPorTienda((p) => {
+      const actual = p[cacheKey];
+      const base = opts.reset ? [] : (actual?.productos ?? productosPrev);
+      const vistos = new Set(base.map((x) => x.id));
+      const nuevos = res.productos.filter((x) => !vistos.has(x.id));
+      const productos = [...base, ...nuevos];
+      return {
+        ...p,
+        [cacheKey]: estadoProductosVacio({
+          productos,
+          hayMas: res.hayMas,
+          offset: productos.length,
+        }),
+      };
+    });
+  };
+
   const aplicarBusquedaVendedor = (textoOverride?: string) => {
     const texto = (textoOverride !== undefined ? textoOverride : busquedaVendedorInput).trim();
+    if (!tiendaProductosAbiertaId) return;
+
     if (!texto) {
       setBusquedaVendedorInput('');
       setBusquedaVendedorAplicada('');
       setMensajeBusquedaVendedor('');
       setSugerenciasVendedorAbiertas(false);
       setIndiceSugerenciaVendedor(-1);
+      setProductoExpandidoId(null);
+      void cargarPaginaCatalogoTienda({
+        tiendaId: tiendaProductosAbiertaId,
+        texto: '',
+        reset: true,
+      });
       return;
     }
     if (terminosBusquedaProducto(texto).length === 0) {
@@ -626,6 +724,11 @@ export function VendedoresCercaDeMi({
     setSugerenciasVendedorAbiertas(false);
     setIndiceSugerenciaVendedor(-1);
     setProductoExpandidoId(null);
+    void cargarPaginaCatalogoTienda({
+      tiendaId: tiendaProductosAbiertaId,
+      texto,
+      reset: true,
+    });
   };
 
   const onTecladoBusquedaVendedor = (e: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -665,36 +768,16 @@ export function VendedoresCercaDeMi({
     setTiendaProductosAbiertaId(t.id);
     setTiendaProductosAbiertaSnap(t);
     setProductoExpandidoId(null);
+    await cargarPaginaCatalogoTienda({ tiendaId: t.id, texto: '', reset: true });
+  };
 
-    const cacheKey = claveCacheProductosTienda(t.id);
-
-    setProductosPorTienda((prev) => ({
-      ...prev,
-      [cacheKey]: { productos: [], cargando: true, error: null },
-    }));
-
-    const { productos, error } = await fetchProductosPublicosTienda(t.id, vertical);
-
-    if (error) {
-      setProductosPorTienda((prev) => ({
-        ...prev,
-        [cacheKey]: {
-          productos: [],
-          cargando: false,
-          error,
-        },
-      }));
-      return;
-    }
-
-    setProductosPorTienda((prev) => ({
-      ...prev,
-      [cacheKey]: {
-        productos,
-        cargando: false,
-        error: null,
-      },
-    }));
+  const cargarMasProductosTienda = async () => {
+    if (!tiendaProductosAbiertaId || !hayMasProductosTienda || cargandoMasProductosTienda) return;
+    await cargarPaginaCatalogoTienda({
+      tiendaId: tiendaProductosAbiertaId,
+      texto: busquedaVendedorAplicada,
+      reset: false,
+    });
   };
 
   const cargarProductosDeVendedor = async (t: TiendaCerca) => {
@@ -1007,10 +1090,8 @@ export function VendedoresCercaDeMi({
                           <span className="vendedores-cerca-productos-contador">
                             {' '}
                             ({productosVendedorVisibles.length}
-                            {busquedaVendedorAplicada.trim()
-                              ? ` de ${productosTiendaAbierta.length}`
-                              : ''}{' '}
-                            producto{productosTiendaAbierta.length === 1 ? '' : 's'})
+                            {hayMasProductosTienda ? '+' : ''} producto
+                            {productosVendedorVisibles.length === 1 ? '' : 's'})
                           </span>
                         )}
                     </h4>
@@ -1023,8 +1104,7 @@ export function VendedoresCercaDeMi({
                     </button>
                   </div>
                   {!estadoProductosVendedorAbierto?.cargando &&
-                    !estadoProductosVendedorAbierto?.error &&
-                    productosTiendaAbierta.length > 0 && (
+                    !estadoProductosVendedorAbierto?.error && (
                       <div className="vendedores-cerca-productos-panel-busqueda-wrap">
                         <div className="vendedores-cerca-productos-busqueda">
                           <h5 className="vendedores-cerca-productos-busqueda-titulo">
@@ -1135,7 +1215,9 @@ export function VendedoresCercaDeMi({
                             <p className="vendedores-cerca-productos-busqueda-resultados" role="status">
                               {productosVendedorVisibles.length === 0
                                 ? 'No hay productos de este vendedor que coincidan con tu búsqueda.'
-                                : `${productosVendedorVisibles.length} producto${
+                                : `${productosVendedorVisibles.length}${
+                                    hayMasProductosTienda ? '+' : ''
+                                  } producto${
                                     productosVendedorVisibles.length === 1 ? '' : 's'
                                   } encontrado${productosVendedorVisibles.length === 1 ? '' : 's'}.`}
                               {' '}
@@ -1160,20 +1242,23 @@ export function VendedoresCercaDeMi({
                       </p>
                     ) : productosTiendaAbierta.length === 0 ? (
                       <p className="vendedores-cerca-productos-mensaje">
-                        Este vendedor no tiene productos publicados en este momento.
-                      </p>
-                    ) : productosVendedorVisibles.length === 0 ? (
-                      <p className="vendedores-cerca-productos-mensaje">
-                        Ningún producto coincide con tu búsqueda.{' '}
-                        <button
-                          type="button"
-                          className="vendedores-cerca-productos-busqueda-limpiar"
-                          onClick={() => aplicarBusquedaVendedor('')}
-                        >
-                          Ver todos los productos
-                        </button>
+                        {busquedaVendedorAplicada.trim() ? (
+                          <>
+                            Ningún producto coincide con tu búsqueda.{' '}
+                            <button
+                              type="button"
+                              className="vendedores-cerca-productos-busqueda-limpiar"
+                              onClick={() => aplicarBusquedaVendedor('')}
+                            >
+                              Ver todos los productos
+                            </button>
+                          </>
+                        ) : (
+                          'Este vendedor no tiene productos publicados en este momento.'
+                        )}
                       </p>
                     ) : (
+                      <>
                       <div className="vendedores-cerca-productos-grid">
                         {productosVendedorVisibles.map((p) => (
                           <TarjetaProductoBusqueda
@@ -1187,6 +1272,21 @@ export function VendedoresCercaDeMi({
                           />
                         ))}
                       </div>
+                      {hayMasProductosTienda && (
+                        <div className="vendedores-cerca-productos-cargar-mas">
+                          <button
+                            type="button"
+                            className="busqueda-repuestos-btn"
+                            disabled={cargandoMasProductosTienda}
+                            onClick={() => void cargarMasProductosTienda()}
+                          >
+                            {cargandoMasProductosTienda
+                              ? 'Cargando…'
+                              : `Cargar más (${PRODUCTOS_VENDEDOR_CERCA_PAGE})`}
+                          </button>
+                        </div>
+                      )}
+                      </>
                     )}
                   </div>
                 </div>

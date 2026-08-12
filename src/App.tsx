@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
@@ -10,12 +10,15 @@ import type { TipoRegistro } from './components/SelectorTipoRegistro';
 import { FormRegistro } from './components/FormRegistro';
 import { PoliticaDivulgacionDatos } from './components/PoliticaDivulgacionDatos';
 import { EliminacionCuenta } from './components/EliminacionCuenta';
-import { Dashboard } from './components/Dashboard';
 import { verticalDesdePathname, rutaInicioVertical } from './utils/verticalVehiculo';
 import { leerYConsumirMensajeAuthFlash } from './services/ensureNegocioTrasRegistro';
 import { AvisoSinConexion } from './components/AvisoSinConexion';
 import { AvisoActualizacionApp } from './components/AvisoActualizacionApp';
 import './App.css';
+
+const Dashboard = lazy(() =>
+  import('./components/Dashboard').then((m) => ({ default: m.Dashboard }))
+);
 
 function esElementoVisible(el: Element): boolean {
   const rect = el.getBoundingClientRect();
@@ -161,13 +164,15 @@ function AppShell() {
   if (user) {
     if (mostrarPanel) {
       return (
-        <Dashboard
-          vertical={vertical}
-          onVolverInicio={() => {
-            setMostrarPanel(false);
-            irAlInicioVertical();
-          }}
-        />
+        <Suspense fallback={<p className="app-loading">Cargando panel…</p>}>
+          <Dashboard
+            vertical={vertical}
+            onVolverInicio={() => {
+              setMostrarPanel(false);
+              irAlInicioVertical();
+            }}
+          />
+        </Suspense>
       );
     }
     return (

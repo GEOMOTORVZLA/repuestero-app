@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
 import { CATEGORIAS_MOTO_MAS_BUSCADAS, imagenPinCategoriaMoto } from '../data/categoriasProductoMoto';
@@ -6,11 +6,6 @@ import { getUserAvatarUrl } from '../utils/userAvatar';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import { BusquedaRepuestos } from './BusquedaRepuestos';
-import { MecanicoVirtualMoto } from './MecanicoVirtualMoto';
-import MecanicoVirtualObd from './MecanicoVirtualObd';
-import { IdentificarRepuestoVision } from './IdentificarRepuestoVision';
-import { VendedoresCercaDeMi } from './VendedoresCercaDeMi';
-import { ListaRepuestosPorCategoria } from './ListaRepuestosPorCategoria';
 import { IconoCategoria } from './IconosCategorias';
 import imgBaterias from '../assets/categoria-baterias.png';
 import imgCauchos from '../assets/categoria-cauchos.png';
@@ -18,7 +13,6 @@ import imgAmortiguadores from '../assets/categoria-amortiguadores.png';
 import imgCorreasBandas from '../assets/categoria-correas-bandas.png';
 import imgBujiasEncendido from '../assets/categoria-bujias-encendido.png';
 import imgLucesFaros from '../assets/categoria-luces-faros.png';
-import { BusquedaTalleres } from './BusquedaTalleres';
 import {
   PARAM_REPUESTO_COMPARTIDO,
   PARAM_TIENDA_COMPARTIDA,
@@ -34,6 +28,23 @@ import {
   urlWhatsAppGeomotor,
 } from '../utils/linkWhatsAppGeomotor';
 import './Landing.css';
+
+const MecanicoVirtualMoto = lazy(() =>
+  import('./MecanicoVirtualMoto').then((m) => ({ default: m.MecanicoVirtualMoto }))
+);
+const MecanicoVirtualObd = lazy(() => import('./MecanicoVirtualObd'));
+const IdentificarRepuestoVision = lazy(() =>
+  import('./IdentificarRepuestoVision').then((m) => ({ default: m.IdentificarRepuestoVision }))
+);
+const VendedoresCercaDeMi = lazy(() =>
+  import('./VendedoresCercaDeMi').then((m) => ({ default: m.VendedoresCercaDeMi }))
+);
+const ListaRepuestosPorCategoria = lazy(() =>
+  import('./ListaRepuestosPorCategoria').then((m) => ({ default: m.ListaRepuestosPorCategoria }))
+);
+const BusquedaTalleres = lazy(() =>
+  import('./BusquedaTalleres').then((m) => ({ default: m.BusquedaTalleres }))
+);
 
 interface LandingProps {
   vertical?: VerticalVehiculo;
@@ -312,22 +323,26 @@ export function Landing({
       )}
 
       {!vistaBusquedaRepuestos.activa && (
-        <div className="landing-ia-doble" key={vertical}>
-          {esMoto ? (
-            <MecanicoVirtualMoto onIaModalCapaDelta={iaModalCapaDelta} />
-          ) : (
-            <MecanicoVirtualObd vertical={vertical} onIaModalCapaDelta={iaModalCapaDelta} />
-          )}
-          <IdentificarRepuestoVision vertical={vertical} onIaModalCapaDelta={iaModalCapaDelta} />
-        </div>
+        <Suspense fallback={<p className="landing-lazy-fallback">Cargando herramientas…</p>}>
+          <div className="landing-ia-doble" key={vertical}>
+            {esMoto ? (
+              <MecanicoVirtualMoto onIaModalCapaDelta={iaModalCapaDelta} />
+            ) : (
+              <MecanicoVirtualObd vertical={vertical} onIaModalCapaDelta={iaModalCapaDelta} />
+            )}
+            <IdentificarRepuestoVision vertical={vertical} onIaModalCapaDelta={iaModalCapaDelta} />
+          </div>
+        </Suspense>
       )}
 
-      <VendedoresCercaDeMi
-        vertical={vertical}
-        tiendaIdDesdeEnlace={tiendaIdDesdeUrl}
-        onLimpiarEnlaceTienda={limpiarEnlaceTiendaUrl}
-        onRequiereLoginParaCatalogo={pedirLoginParaCatalogoCompartido}
-      />
+      <Suspense fallback={<p className="landing-lazy-fallback">Cargando vendedores…</p>}>
+        <VendedoresCercaDeMi
+          vertical={vertical}
+          tiendaIdDesdeEnlace={tiendaIdDesdeUrl}
+          onLimpiarEnlaceTienda={limpiarEnlaceTiendaUrl}
+          onRequiereLoginParaCatalogo={pedirLoginParaCatalogoCompartido}
+        />
+      </Suspense>
 
       <section className="landing-categorias">
         <h2 className="landing-seccion-titulo">
@@ -484,7 +499,9 @@ export function Landing({
             <p>
               Porque sabemos que necesitas saber dónde puedes instalar ese repuesto que vas a comprar o hacer esa reparación que tu vehículo necesita, aquí te ofrecemos una lista de los talleres por categoría y ramo que se encuentran en tu ciudad, no dejes de consultarlo.
             </p>
-            <BusquedaTalleres vertical={vertical} />
+            <Suspense fallback={<p className="landing-lazy-fallback">Cargando talleres…</p>}>
+              <BusquedaTalleres vertical={vertical} />
+            </Suspense>
           </div>
         </div>
       </section>
@@ -601,12 +618,14 @@ export function Landing({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="resultados-busqueda-pagina-panel-scroll">
-              <ListaRepuestosPorCategoria
-                key={categoriaSeleccionada}
-                vertical={vertical}
-                categoria={categoriaSeleccionada}
-                onCerrar={cerrarOverlayCategoria}
-              />
+              <Suspense fallback={<p className="landing-lazy-fallback">Cargando categoría…</p>}>
+                <ListaRepuestosPorCategoria
+                  key={categoriaSeleccionada}
+                  vertical={vertical}
+                  categoria={categoriaSeleccionada}
+                  onCerrar={cerrarOverlayCategoria}
+                />
+              </Suspense>
             </div>
           </div>
         </div>

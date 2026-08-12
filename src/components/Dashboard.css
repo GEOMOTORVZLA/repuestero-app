@@ -758,6 +758,12 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   margin-bottom: 0.5rem;
 }
 
+.dashboard-admin-cargar-mas {
+  display: flex;
+  justify-content: center;
+  margin: 0.85rem 0 0.25rem;
+}
+
 .dashboard-admin-filtro-vertical {
   display: flex;
   flex-direction: column;

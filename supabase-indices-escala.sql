@@ -2,10 +2,11 @@
 -- Ejecutar UNA VEZ en Supabase -> SQL Editor (produccion).
 -- Seguro: solo CREATE INDEX IF NOT EXISTS / extension; no altera datos ni RLS.
 --
--- Mejora: busquedas ILIKE en productos, filtros publicos, mapa y talleres.
+-- Mejora: busquedas ILIKE en productos (el front usa .ilike, no imatch/regex),
+-- filtros publicos, mapa y talleres.
 -- Tras ejecutar, revisa Database -> Query performance en picos de trafico.
 
--- 1) Extension para acelerar ILIKE %termino% (BusquedaRepuestos, sugerencias)
+-- 1) Extension para acelerar ILIKE %termino% (BusquedaRepuestos, Mis productos, Visor)
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- 2) PRODUCTOS: listados publicos y joins por tienda
@@ -43,6 +44,23 @@ CREATE INDEX IF NOT EXISTS idx_productos_modelo_trgm
 CREATE INDEX IF NOT EXISTS idx_productos_categoria_trgm
   ON public.productos USING gin (categoria gin_trgm_ops);
 
+-- Codigo SKU (Mis productos / admin); solo si existe la columna.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'productos'
+      AND column_name = 'codigo'
+  ) THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_productos_codigo_trgm ON public.productos USING gin (codigo gin_trgm_ops)';
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_productos_activo
+  ON public.productos (activo);
+
 -- 3) TIENDAS: vendedores publicos y filtros estado/ciudad
 CREATE INDEX IF NOT EXISTS idx_tiendas_publico_vertical
   ON public.tiendas (vertical, aprobacion_estado, membresia_hasta)
@@ -53,6 +71,12 @@ CREATE INDEX IF NOT EXISTS idx_tiendas_vertical_estado_ciudad
 
 CREATE INDEX IF NOT EXISTS idx_tiendas_user_id
   ON public.tiendas (user_id);
+
+CREATE INDEX IF NOT EXISTS idx_tiendas_nombre_trgm
+  ON public.tiendas USING gin (nombre gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS idx_tiendas_nombre_comercial_trgm
+  ON public.tiendas USING gin (nombre_comercial gin_trgm_ops);
 
 -- 4) TALLERES: busqueda por estado/ciudad y especialidad (array)
 CREATE INDEX IF NOT EXISTS idx_talleres_busqueda_geo

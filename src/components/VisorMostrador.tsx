@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../supabaseClient';
-import { productoCoincideTextoFlexible } from '../utils/busquedaProductosTexto';
 import { urlsFotosProducto } from '../utils/productoImagenesExtra';
 import { etiquetaMoneda } from '../utils/monedaProducto';
 import { formatearPrecioProducto } from '../utils/precioProducto';
 import { etiquetaDisponibilidadAviso } from '../utils/avisoProductoPublicacion';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { etiquetaStockActual } from '../utils/stockActualInventario';
+import {
+  PRODUCTOS_VENDEDOR_LISTA_PAGE,
+  fetchPaginaProductosVendedorLista,
+  fetchTiendaIdsUsuario,
+} from '../utils/productosVendedorConsulta';
 import { ImagenProducto } from './ImagenProducto';
 import { VisorFotoProducto } from './VisorFotoProducto';
 import './VisorMostrador.css';
@@ -35,46 +38,6 @@ type ProductoMostrador = {
 
 const SELECT =
   'id, nombre, codigo, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, vertical, disponibilidad_aviso, es_oferta, stock_actual';
-const PAGE = 1000;
-
-async function cargarProductosVendedor(
-  userId: string
-): Promise<{ productos: ProductoMostrador[]; error: string | null }> {
-  const { data: tiendas, error: errTiendas } = await supabase
-    .from('tiendas')
-    .select('id')
-    .eq('user_id', userId);
-
-  if (errTiendas) return { productos: [], error: errTiendas.message || 'Error al cargar tus tiendas.' };
-  if (!tiendas?.length) return { productos: [], error: null };
-
-  const tiendaIds = tiendas.map((t) => t.id);
-  const acumulado: ProductoMostrador[] = [];
-  let from = 0;
-  while (true) {
-    const { data, error } = await supabase
-      .from('productos')
-      .select(SELECT)
-      .in('tienda_id', tiendaIds)
-      .order('nombre')
-      .range(from, from + PAGE - 1);
-    if (error) return { productos: [], error: error.message || 'Error al cargar productos.' };
-    const batch = (data ?? []) as ProductoMostrador[];
-    acumulado.push(...batch);
-    if (batch.length < PAGE) break;
-    from += PAGE;
-  }
-  return { productos: acumulado, error: null };
-}
-
-/**
- * Visor (mostrador): solo nombre + código con match flexible (plural/typos).
- * No usa descripción/comentarios: plantillas o textos tipo «cámara de combustión»
- * devolvían casi todo el catálogo (ej. buscar CAMARA → cientos de anillos).
- */
-function coincideBusquedaVisor(p: ProductoMostrador, texto: string): boolean {
-  return productoCoincideTextoFlexible([p.nombre, p.codigo], texto);
-}
 
 type VisorMostradorProps = {
   vertical: VerticalVehiculo;
@@ -86,54 +49,151 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
   const inputRef = useRef<HTMLInputElement>(null);
   const [productos, setProductos] = useState<ProductoMostrador[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [cargandoMas, setCargandoMas] = useState(false);
+  const [hayMas, setHayMas] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [tiendaIds, setTiendaIds] = useState<string[]>([]);
+  const [conCodigo, setConCodigo] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState('');
+  const [busquedaAplicada, setBusquedaAplicada] = useState('');
   const [soloActivos, setSoloActivos] = useState(true);
   const [visorFotos, setVisorFotos] = useState<{ fotos: string[]; indice: number; nombre: string } | null>(
     null
   );
 
-  const cargar = useCallback(async () => {
-    if (!user) return;
-    setCargando(true);
-    setError(null);
-    try {
-      const { productos: lista, error: errMsg } = await cargarProductosVendedor(user.id);
-      if (errMsg) {
-        setProductos([]);
-        setError(errMsg);
-        return;
-      }
-      const deVertical = lista.filter((p) => (p.vertical ?? 'auto') === vertical);
-      setProductos(deVertical);
-    } catch (e) {
-      setProductos([]);
-      setError(e instanceof Error ? e.message : 'No se pudo cargar el catálogo.');
-    } finally {
-      setCargando(false);
-    }
-  }, [user, vertical]);
-
   useEffect(() => {
-    void cargar();
-  }, [cargar, refreshTrigger]);
+    let cancelado = false;
+    const init = async () => {
+      if (!user) return;
+      setCargando(true);
+      setError(null);
+      setProductos([]);
+      setHayMas(false);
+      setOffset(0);
+      setBusqueda('');
+      setBusquedaAplicada('');
+      try {
+        const { tiendaIds: ids, error: errIds } = await fetchTiendaIdsUsuario(user.id);
+        if (cancelado) return;
+        if (errIds) {
+          setError(errIds);
+          setTiendaIds([]);
+          setCargando(false);
+          return;
+        }
+        setTiendaIds(ids);
+        setConCodigo(true);
+        if (ids.length === 0) {
+          setCargando(false);
+          setProductos([]);
+        }
+        // La carga de la 1.ª página la dispara el efecto de búsqueda al tener tiendaIds.
+      } catch (e) {
+        if (!cancelado) {
+          setError(e instanceof Error ? e.message : 'No se pudo cargar el catálogo.');
+          setCargando(false);
+        }
+      }
+    };
+    void init();
+    return () => {
+      cancelado = true;
+    };
+  }, [user, vertical, refreshTrigger]);
 
   useEffect(() => {
     const t = window.setTimeout(() => inputRef.current?.focus(), 150);
     return () => window.clearTimeout(t);
   }, []);
 
-  const visibles = useMemo(() => {
-    return productos
-      .filter((p) => (soloActivos ? p.activo !== false : true))
-      .filter((p) => coincideBusquedaVisor(p, busqueda))
-      .sort((a, b) => {
-        const aAct = a.activo !== false ? 0 : 1;
-        const bAct = b.activo !== false ? 0 : 1;
-        if (aAct !== bAct) return aAct - bAct;
-        return (a.nombre || '').localeCompare(b.nombre || '', 'es');
+  // Consulta al servidor (debounce al escribir; inmediato al cambiar filtro o tiendas).
+  useEffect(() => {
+    if (!user || tiendaIds.length === 0) {
+      if (user && tiendaIds.length === 0 && !cargando) {
+        /* sin tiendas */
+      }
+      return;
+    }
+    const texto = busqueda;
+    const inmediato = texto === busquedaAplicada && texto === '';
+    const delay = inmediato ? 0 : 350;
+    let cancelado = false;
+    const handle = window.setTimeout(() => {
+      void (async () => {
+        setCargando(true);
+        try {
+          const ids = tiendaIds;
+          const pagina = await fetchPaginaProductosVendedorLista({
+            tiendaIds: ids,
+            select: SELECT,
+            offset: 0,
+            vertical,
+            texto,
+            estado: soloActivos ? 'activos' : 'todos',
+            conCodigo,
+          });
+          if (cancelado) return;
+          if (pagina.error) {
+            setError(pagina.error);
+            setProductos([]);
+            setHayMas(false);
+            setOffset(0);
+            return;
+          }
+          setConCodigo(pagina.conCodigo);
+          setError(null);
+          setBusquedaAplicada(texto);
+          const filas = pagina.filas as ProductoMostrador[];
+          setProductos(filas);
+          setOffset(filas.length);
+          setHayMas(pagina.hayMas);
+        } catch (e) {
+          if (!cancelado) {
+            setError(e instanceof Error ? e.message : 'No se pudo cargar el catálogo.');
+            setProductos([]);
+          }
+        } finally {
+          if (!cancelado) setCargando(false);
+        }
+      })();
+    }, delay);
+    return () => {
+      cancelado = true;
+      window.clearTimeout(handle);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busqueda, soloActivos, tiendaIds, user, vertical]);
+
+  const cargarMas = async () => {
+    if (!user || cargandoMas || !hayMas || tiendaIds.length === 0) return;
+    setCargandoMas(true);
+    try {
+      const pagina = await fetchPaginaProductosVendedorLista({
+        tiendaIds,
+        select: SELECT,
+        offset,
+        vertical,
+        texto: busquedaAplicada,
+        estado: soloActivos ? 'activos' : 'todos',
+        conCodigo,
       });
-  }, [productos, soloActivos, busqueda]);
+      if (pagina.error) {
+        setError(pagina.error);
+        return;
+      }
+      setConCodigo(pagina.conCodigo);
+      const filas = pagina.filas as ProductoMostrador[];
+      setProductos((prev) => {
+        const vistos = new Set(prev.map((p) => p.id));
+        return [...prev, ...filas.filter((p) => !vistos.has(p.id))];
+      });
+      setOffset((prev) => prev + filas.length);
+      setHayMas(pagina.hayMas);
+    } finally {
+      setCargandoMas(false);
+    }
+  };
 
   const abrirFoto = (p: ProductoMostrador) => {
     const fotos = urlsFotosProducto({
@@ -165,29 +225,35 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
         />
         <div className="visor-mostrador-meta">
           <label className="visor-mostrador-toggle">
-            <input type="checkbox" checked={soloActivos} onChange={(e) => setSoloActivos(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={soloActivos}
+              onChange={(e) => setSoloActivos(e.target.checked)}
+            />
             Solo activos
           </label>
           <span className="visor-mostrador-contador" role="status">
             {cargando
-              ? 'Cargando…'
-              : `${visibles.length} resultado${visibles.length === 1 ? '' : 's'}`}
+              ? 'Buscando…'
+              : `${productos.length} resultado${productos.length === 1 ? '' : 's'}${
+                  hayMas ? '+' : ''
+                }`}
           </span>
         </div>
       </header>
 
       {error && <p className="visor-mostrador-error">{error}</p>}
 
-      {!cargando && !error && visibles.length === 0 && (
+      {!cargando && !error && productos.length === 0 && (
         <p className="visor-mostrador-vacio">
-          {busqueda.trim()
-            ? 'No hay productos publicados que coincidan (o están pausados). Prueba otras palabras.'
+          {busquedaAplicada.trim()
+            ? 'No hay productos que coincidan (o están pausados). Prueba otras palabras.'
             : 'No hay productos para mostrar en este catálogo.'}
         </p>
       )}
 
       <ul className="visor-mostrador-lista">
-        {visibles.map((p) => {
+        {productos.map((p) => {
           const fotos = urlsFotosProducto({
             imagen_url: p.imagen_url ?? null,
             imagenes_extra: p.imagenes_extra ?? null,
@@ -257,6 +323,19 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
           );
         })}
       </ul>
+
+      {hayMas && (
+        <div className="visor-mostrador-cargar-mas">
+          <button
+            type="button"
+            className="visor-mostrador-btn-mas"
+            disabled={cargandoMas || cargando}
+            onClick={() => void cargarMas()}
+          >
+            {cargandoMas ? 'Cargando…' : `Cargar más (${PRODUCTOS_VENDEDOR_LISTA_PAGE})`}
+          </button>
+        </div>
+      )}
 
       {visorFotos && (
         <VisorFotoProducto

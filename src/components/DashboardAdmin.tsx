@@ -20,7 +20,13 @@ import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO, VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import { mensajeNegocioNoListoParaAprobar } from '../utils/validarDatosNegocio';
 import { ImportarProductosCSV } from './ImportarProductosCSV';
-import { productoCoincideTextoFlexible } from '../utils/busquedaProductosTexto';
+import {
+  aplicarTerminosTextoAMisProductos,
+} from '../utils/busquedaProductosTexto';
+import {
+  DIAS_PAUSA_STOCK_VENCIDO,
+  DIAS_STOCK_SEMAFORO_VERDE,
+} from '../utils/stockActualInventario';
 import {
   claseSemaforoStockPorDias,
   diasDesdeFechaISO,
@@ -623,11 +629,113 @@ const ADMIN_PRODUCTOS_SELECT =
 const ADMIN_PRODUCTOS_SELECT_SIN_CODIGO =
   'id, nombre, descripcion, comentarios, tienda_id, categoria, marca, modelo, anio, precio_usd, moneda, activo, aprobacion_publica, imagen_url, imagenes_extra, created_at, stock_confirmado_at, pausado_por_stock_vencido, stock_actual, vertical, disponibilidad_aviso, es_oferta, tiendas(id, nombre, nombre_comercial)';
 
-const ADMIN_PRODUCTOS_PAGE = 1000;
+/** Lotes pequeños: el admin busca/filtra; no descarga todo el catálogo. */
+const ADMIN_PRODUCTOS_PAGE = 40;
+
+type FiltrosConsultaAdminProductos = {
+  texto: string;
+  estado: FiltroEstadoProductoGestion;
+  vertical: 'todos' | 'auto' | 'moto';
+  tiendaId: string;
+};
 
 function errorAdminPorColumnaCodigo(msg: string | undefined): boolean {
   const m = (msg ?? '').toLowerCase();
   return m.includes('codigo') && (m.includes('does not exist') || m.includes('column'));
+}
+
+function isoHaceDiasAdmin(dias: number): string {
+  return new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function comillasFiltroFechaAdmin(iso: string): string {
+  return `"${iso.replace(/"/g, '')}"`;
+}
+
+function aplicarFiltroEstadoAdminProductosQuery(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query: any,
+  filtro: FiltroEstadoProductoGestion
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any {
+  if (filtro === 'activos') return query.eq('activo', true);
+  if (filtro === 'pausados') return query.eq('activo', false);
+  if (filtro === 'por_aprobar') return query.eq('aprobacion_publica', 'pendiente');
+  if (filtro === 'agregado_reciente') {
+    return query.gte('created_at', isoHaceDiasAdmin(DIAS_PRODUCTO_AGREGADO_RECIENTE));
+  }
+
+  const hace30 = comillasFiltroFechaAdmin(isoHaceDiasAdmin(DIAS_STOCK_SEMAFORO_VERDE));
+  const hace60 = comillasFiltroFechaAdmin(isoHaceDiasAdmin(DIAS_PAUSA_STOCK_VENCIDO));
+
+  if (filtro === 'proximos_stock') {
+    return query
+      .eq('activo', true)
+      .or(
+        [
+          `and(stock_confirmado_at.not.is.null,stock_confirmado_at.lt.${hace30},stock_confirmado_at.gte.${hace60})`,
+          `and(stock_confirmado_at.is.null,created_at.lt.${hace30},created_at.gte.${hace60})`,
+        ].join(',')
+      );
+  }
+  if (filtro === 'stock_vencido') {
+    return query.or(
+      [
+        'pausado_por_stock_vencido.eq.true',
+        `and(stock_confirmado_at.not.is.null,stock_confirmado_at.lt.${hace60})`,
+        `and(stock_confirmado_at.is.null,created_at.lt.${hace60})`,
+      ].join(',')
+    );
+  }
+  if (filtro === 'sin_fecha_stock') {
+    return query.is('stock_confirmado_at', null).is('created_at', null);
+  }
+  return query;
+}
+
+async function fetchPaginaProductosAdmin(opts: {
+  filtros: FiltrosConsultaAdminProductos;
+  offset: number;
+  conCodigo?: boolean;
+}): Promise<{ productos: AdminProducto[]; hayMas: boolean; error: string | null; conCodigo: boolean }> {
+  const { filtros, offset } = opts;
+  let conCodigo = opts.conCodigo !== false;
+  const selectCols = conCodigo ? ADMIN_PRODUCTOS_SELECT : ADMIN_PRODUCTOS_SELECT_SIN_CODIGO;
+
+  let query = supabase
+    .from('productos')
+    .select(selectCols)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false });
+
+  if (filtros.vertical === 'auto' || filtros.vertical === 'moto') {
+    query = query.eq('vertical', filtros.vertical);
+  }
+  if (filtros.tiendaId.trim()) {
+    query = query.eq('tienda_id', filtros.tiendaId.trim());
+  }
+  query = aplicarFiltroEstadoAdminProductosQuery(query, filtros.estado);
+
+  const texto = filtros.texto.trim();
+  if (texto) {
+    query = aplicarTerminosTextoAMisProductos(query, texto, conCodigo);
+  }
+
+  const { data, error } = await query.range(offset, offset + ADMIN_PRODUCTOS_PAGE);
+  if (error) {
+    if (conCodigo && errorAdminPorColumnaCodigo(error.message)) {
+      return fetchPaginaProductosAdmin({ ...opts, conCodigo: false });
+    }
+    return { productos: [], hayMas: false, error: error.message, conCodigo };
+  }
+  const filas = (data ?? []) as unknown as AdminProducto[];
+  const hayMas = filas.length > ADMIN_PRODUCTOS_PAGE;
+  return {
+    productos: hayMas ? filas.slice(0, ADMIN_PRODUCTOS_PAGE) : filas,
+    hayMas,
+    error: null,
+    conCodigo,
+  };
 }
 
 export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: DashboardAdminProps) {
@@ -640,15 +748,20 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [adminFiltroVendedorTiendaId, setAdminFiltroVendedorTiendaId] = useState('');
   const [filtroEstadoProductosAdmin, setFiltroEstadoProductosAdmin] =
     useState<FiltroEstadoProductoGestion>('todos');
-  /** Valores en los controles; vertical/vendedor/estado se aplican al pulsar «Aplicar filtros».
-   *  El texto de búsqueda filtra en vivo (igual que Mis productos del vendedor). */
+  /** Valores en los controles; se aplican al pulsar «Aplicar filtros» (consulta al servidor). */
   const [adminFiltroVerticalDraft, setAdminFiltroVerticalDraft] =
     useState<'todos' | 'auto' | 'moto'>(defaultVerticalFiltro);
   const [adminFiltroVendedorTiendaIdDraft, setAdminFiltroVendedorTiendaIdDraft] = useState('');
   const [busquedaProductosAdminDraft, setBusquedaProductosAdminDraft] = useState('');
+  const [busquedaProductosAdminAplicada, setBusquedaProductosAdminAplicada] = useState('');
   const [filtroEstadoProductosAdminDraft, setFiltroEstadoProductosAdminDraft] =
     useState<FiltroEstadoProductoGestion>('todos');
   const [cargandoFiltrosProductos, setCargandoFiltrosProductos] = useState(false);
+  const [cargandoMasProductosAdmin, setCargandoMasProductosAdmin] = useState(false);
+  const [hayMasProductosAdmin, setHayMasProductosAdmin] = useState(false);
+  const [offsetProductosAdmin, setOffsetProductosAdmin] = useState(0);
+  const [consultaUsaCodigoAdmin, setConsultaUsaCodigoAdmin] = useState(true);
+  const [productosTabCargada, setProductosTabCargada] = useState(false);
   const [adminImportVertical, setAdminImportVertical] = useState<VerticalVehiculo>(VERTICAL_AUTO);
   const [adminImportTiendaId, setAdminImportTiendaId] = useState('');
   const [bulkProductosAccion, setBulkProductosAccion] = useState<AccionMasivaProductosAdmin>('');
@@ -706,50 +819,100 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   } | null>(null);
   const [perfilVendedorModal, setPerfilVendedorModal] = useState<PerfilVendedorAdminEditable | null>(null);
 
-  const cargarProductos = async (opts?: { conIndicadorFiltros?: boolean }) => {
+  const filtrosProductosAdminAplicados = useMemo<FiltrosConsultaAdminProductos>(
+    () => ({
+      texto: busquedaProductosAdminAplicada,
+      estado: filtroEstadoProductosAdmin,
+      vertical: adminFiltroVertical,
+      tiendaId: adminFiltroVendedorTiendaId,
+    }),
+    [
+      busquedaProductosAdminAplicada,
+      filtroEstadoProductosAdmin,
+      adminFiltroVertical,
+      adminFiltroVendedorTiendaId,
+    ]
+  );
+
+  const cargarProductosPrimeraPagina = async (opts?: {
+    conIndicadorFiltros?: boolean;
+    filtros?: FiltrosConsultaAdminProductos;
+  }) => {
     const conIndicador = opts?.conIndicadorFiltros === true;
     if (conIndicador) setCargandoFiltrosProductos(true);
-    const acumulado: AdminProducto[] = [];
-    let from = 0;
-    let selectCols = ADMIN_PRODUCTOS_SELECT;
+    const filtros = opts?.filtros ?? filtrosProductosAdminAplicados;
     try {
-      while (true) {
-        const pRes = await supabase
-          .from('productos')
-          .select(selectCols)
-          .order('created_at', { ascending: false })
-          .range(from, from + ADMIN_PRODUCTOS_PAGE - 1);
-        if (pRes.error) {
-          if (selectCols === ADMIN_PRODUCTOS_SELECT && errorAdminPorColumnaCodigo(pRes.error.message)) {
-            selectCols = ADMIN_PRODUCTOS_SELECT_SIN_CODIGO;
-            from = 0;
-            acumulado.length = 0;
-            continue;
-          }
-          setError(pRes.error.message);
-          break;
-        }
-        const batch = (pRes.data ?? []) as unknown as AdminProducto[];
-        acumulado.push(...batch);
-        if (batch.length < ADMIN_PRODUCTOS_PAGE) break;
-        from += ADMIN_PRODUCTOS_PAGE;
+      const pagina = await fetchPaginaProductosAdmin({
+        filtros,
+        offset: 0,
+        conCodigo: consultaUsaCodigoAdmin,
+      });
+      if (pagina.error) {
+        setError(pagina.error);
+        setProductos([]);
+        setHayMasProductosAdmin(false);
+        setOffsetProductosAdmin(0);
+        return;
       }
-      setProductos(acumulado);
+      setConsultaUsaCodigoAdmin(pagina.conCodigo);
+      setProductos(pagina.productos);
+      setHayMasProductosAdmin(pagina.hayMas);
+      setOffsetProductosAdmin(pagina.productos.length);
+      setProductosTabCargada(true);
     } finally {
       if (conIndicador) setCargandoFiltrosProductos(false);
     }
   };
 
+  const cargarMasProductosAdmin = async () => {
+    if (cargandoMasProductosAdmin || !hayMasProductosAdmin) return;
+    setCargandoMasProductosAdmin(true);
+    try {
+      const pagina = await fetchPaginaProductosAdmin({
+        filtros: filtrosProductosAdminAplicados,
+        offset: offsetProductosAdmin,
+        conCodigo: consultaUsaCodigoAdmin,
+      });
+      if (pagina.error) {
+        setError(pagina.error);
+        return;
+      }
+      setConsultaUsaCodigoAdmin(pagina.conCodigo);
+      setProductos((prev) => {
+        const vistos = new Set(prev.map((p) => p.id));
+        return [...prev, ...pagina.productos.filter((p) => !vistos.has(p.id))];
+      });
+      setHayMasProductosAdmin(pagina.hayMas);
+      setOffsetProductosAdmin((prev) => prev + pagina.productos.length);
+    } finally {
+      setCargandoMasProductosAdmin(false);
+    }
+  };
+
   const aplicarFiltrosProductosAdmin = async () => {
-    setAdminFiltroVendedorTiendaId(adminFiltroVendedorTiendaIdDraft);
-    setAdminFiltroVertical(adminFiltroVerticalDraft);
-    setFiltroEstadoProductosAdmin(filtroEstadoProductosAdminDraft);
+    const filtros: FiltrosConsultaAdminProductos = {
+      texto: busquedaProductosAdminDraft,
+      estado: filtroEstadoProductosAdminDraft,
+      vertical: adminFiltroVerticalDraft,
+      tiendaId: adminFiltroVendedorTiendaIdDraft,
+    };
+    setBusquedaProductosAdminAplicada(filtros.texto);
+    setAdminFiltroVendedorTiendaId(filtros.tiendaId);
+    setAdminFiltroVertical(filtros.vertical);
+    setFiltroEstadoProductosAdmin(filtros.estado);
     setError(null);
-    await cargarProductos({ conIndicadorFiltros: true });
+    await cargarProductosPrimeraPagina({ conIndicadorFiltros: true, filtros });
   };
 
   const restablecerFiltrosProductosAdmin = async () => {
+    const filtros: FiltrosConsultaAdminProductos = {
+      texto: '',
+      estado: 'todos',
+      vertical: defaultVerticalFiltro,
+      tiendaId: '',
+    };
     setBusquedaProductosAdminDraft('');
+    setBusquedaProductosAdminAplicada('');
     setAdminFiltroVendedorTiendaIdDraft('');
     setAdminFiltroVerticalDraft(defaultVerticalFiltro);
     setFiltroEstadoProductosAdminDraft('todos');
@@ -757,7 +920,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     setAdminFiltroVertical(defaultVerticalFiltro);
     setFiltroEstadoProductosAdmin('todos');
     setError(null);
-    await cargarProductos({ conIndicadorFiltros: true });
+    await cargarProductosPrimeraPagina({ conIndicadorFiltros: true, filtros });
   };
 
   const cargarKpis = async () => {
@@ -878,7 +1041,6 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       setCargando(true);
       setError(null);
     }
-    await cargarProductos();
     await cargarKpis();
     await Promise.all([
       cargarUsuarios(''),
@@ -886,12 +1048,24 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       cargarVendedores(''),
       cargarTalleres(''),
     ]);
+    // Productos: solo primera página (o al entrar a la pestaña); ya no se descarga el catálogo entero.
+    if (tab === 'productos' || productosTabCargada) {
+      await cargarProductosPrimeraPagina();
+    }
     if (!silencioso) setCargando(false);
   };
 
   useEffect(() => {
     void cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- carga inicial del panel
   }, []);
+
+  useEffect(() => {
+    if (tab !== 'productos') return;
+    if (productosTabCargada) return;
+    void cargarProductosPrimeraPagina({ conIndicadorFiltros: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al entrar a Productos la primera vez
+  }, [tab]);
 
   useEffect(() => {
     if (tab !== 'usuarios') return;
@@ -1106,51 +1280,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     [talleres]
   );
 
-  const productosFiltrados = useMemo(() => {
-    return productos.filter((p) => {
-      const vertOk =
-        adminFiltroVertical === 'todos' || (p.vertical ?? 'auto') === adminFiltroVertical;
-      const tidProd = p.tienda_id ?? primeraTiendaProducto(p)?.id;
-      const vendedorOk =
-        !adminFiltroVendedorTiendaId || tidProd === adminFiltroVendedorTiendaId;
-      const semaforo = semaforoStockGestion(p);
-      const estadoOk =
-        filtroEstadoProductosAdmin === 'todos' ||
-        (filtroEstadoProductosAdmin === 'activos' && p.activo === true) ||
-        (filtroEstadoProductosAdmin === 'pausados' && p.activo !== true) ||
-        (filtroEstadoProductosAdmin === 'por_aprobar' &&
-          (p.aprobacion_publica ?? 'aprobado') === 'pendiente') ||
-        (filtroEstadoProductosAdmin === 'agregado_reciente' &&
-          esProductoAgregadoReciente(p.created_at)) ||
-        (filtroEstadoProductosAdmin === 'proximos_stock' &&
-          p.activo === true &&
-          (semaforo.clase === 'amarillo' || semaforo.clase === 'rojo')) ||
-        (filtroEstadoProductosAdmin === 'stock_vencido' && semaforo.clase === 'vencido') ||
-        (filtroEstadoProductosAdmin === 'sin_fecha_stock' && semaforo.clase === 'sin-fecha');
-      // Criterio inteligente (+ código + nombre de vendedor). Texto en vivo desde el input.
-      const textoOk = productoCoincideTextoFlexible(
-        [
-          p.nombre,
-          p.codigo,
-          p.descripcion,
-          p.comentarios,
-          p.marca,
-          p.modelo,
-          p.categoria,
-          etiquetaVendedorDesdeProducto(p, vendedores),
-        ],
-        busquedaProductosAdminDraft
-      );
-      return vertOk && vendedorOk && estadoOk && textoOk;
-    });
-  }, [
-    productos,
-    adminFiltroVertical,
-    adminFiltroVendedorTiendaId,
-    busquedaProductosAdminDraft,
-    filtroEstadoProductosAdmin,
-    vendedores,
-  ]);
+  /** Ya filtrado en servidor; la lista es la página(s) cargada(s). */
+  const productosFiltrados = productos;
   const productosPendientesFiltrados = useMemo(
     () => productosFiltrados.filter((p) => (p.aprobacion_publica ?? 'aprobado') === 'pendiente'),
     [productosFiltrados]
@@ -2556,7 +2687,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             void aplicarFiltrosProductosAdmin();
                           }
                         }}
-                        placeholder="Filtra al escribir: plural, typos, código SKU..."
+                        placeholder="Nombre o código; pulsa Aplicar (o Intro)…"
                         autoComplete="off"
                         spellCheck={false}
                       />
@@ -2614,30 +2745,34 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     <button
                       type="button"
                       className="dashboard-admin-btn ok"
-                      disabled={cargandoFiltrosProductos || cargando}
+                      disabled={cargandoFiltrosProductos || cargando || cargandoMasProductosAdmin}
                       onClick={() => void aplicarFiltrosProductosAdmin()}
                     >
-                      {cargandoFiltrosProductos ? 'Cargando catálogo…' : 'Aplicar filtros'}
+                      {cargandoFiltrosProductos ? 'Buscando…' : 'Aplicar filtros'}
                     </button>
                     <button
                       type="button"
                       className="dashboard-admin-btn"
-                      disabled={cargandoFiltrosProductos || cargando}
+                      disabled={cargandoFiltrosProductos || cargando || cargandoMasProductosAdmin}
                       onClick={() => void restablecerFiltrosProductosAdmin()}
                     >
                       Restablecer filtros
                     </button>
                   </div>
                   <p className="dashboard-admin-productos-hint" role="status">
-                    {busquedaProductosAdminDraft.trim()
-                      ? `Búsqueda «${busquedaProductosAdminDraft.trim()}»: ${productosFiltrados.length} de ${productos.length} producto(s). `
-                      : `Mostrando ${productosFiltrados.length} de ${productos.length} producto(s). `}
-                    El texto filtra al instante (plural/typos/código). Vertical, vendedor y estado se
-                    aplican con «Aplicar filtros» (también recarga el catálogo).
+                    {busquedaProductosAdminAplicada.trim()
+                      ? `Búsqueda «${busquedaProductosAdminAplicada.trim()}»: ${productosFiltrados.length} producto(s) en esta vista${
+                          hayMasProductosAdmin ? ' (hay más)' : ''
+                        }. `
+                      : `Mostrando ${productosFiltrados.length} producto(s)${
+                          hayMasProductosAdmin ? ' (hay más en el catálogo)' : ''
+                        }. `}
+                    Se consultan {ADMIN_PRODUCTOS_PAGE} por vez. Pulsa «Aplicar filtros» (o Intro) para buscar.
+                    Las acciones masivas aplican solo a lo ya cargado en esta lista.
                   </p>
                   <div className="dashboard-admin-acciones-masivas dashboard-admin-bulk-productos-toolbar">
                     <label htmlFor="admin-bulk-productos-accion" className="dashboard-admin-filtro-vertical">
-                      Acción masiva (sobre el listado filtrado)
+                      Acción masiva (sobre esta lista cargada)
                       <select
                         id="admin-bulk-productos-accion"
                         value={bulkProductosAccion}
@@ -2647,9 +2782,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         disabled={accionando === 'bulk-productos-masivo'}
                       >
                         <option value="">— Elegir —</option>
-                        <option value="activar">Activar todos los filtrados</option>
-                        <option value="pausar">Pausar todos los filtrados</option>
-                        <option value="eliminar">Eliminar todos los filtrados (irreversible)</option>
+                        <option value="activar">Activar los de esta lista</option>
+                        <option value="pausar">Pausar los de esta lista</option>
+                        <option value="eliminar">Eliminar los de esta lista (irreversible)</option>
                       </select>
                     </label>
                     <button
@@ -2864,6 +2999,20 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </tbody>
                     </table>
                   </div>
+                  {hayMasProductosAdmin && (
+                    <div className="dashboard-admin-cargar-mas">
+                      <button
+                        type="button"
+                        className="dashboard-admin-btn ok"
+                        disabled={cargandoMasProductosAdmin || cargandoFiltrosProductos || cargando}
+                        onClick={() => void cargarMasProductosAdmin()}
+                      >
+                        {cargandoMasProductosAdmin
+                          ? 'Cargando…'
+                          : `Cargar más (${ADMIN_PRODUCTOS_PAGE})`}
+                      </button>
+                    </div>
+                  )}
                 </section>
               )}
 

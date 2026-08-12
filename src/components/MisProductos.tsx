@@ -17,8 +17,10 @@ import {
   etiquetaStockActual,
   claseSemaforoStockPorDias,
   diasDesdeFechaISO,
+  DIAS_PAUSA_STOCK_VENCIDO,
+  DIAS_STOCK_SEMAFORO_VERDE,
 } from '../utils/stockActualInventario';
-import { productoCoincideTextoFlexible } from '../utils/busquedaProductosTexto';
+import { aplicarTerminosTextoAMisProductos } from '../utils/busquedaProductosTexto';
 
 const NETWORK_TIMEOUT_MS = 30000;
 const NETWORK_RETRIES = 1;
@@ -109,61 +111,135 @@ const PRODUCTOS_VENDEDOR_SELECT =
 const PRODUCTOS_VENDEDOR_SELECT_SIN_CODIGO =
   'id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, aprobacion_publica, created_at, stock_confirmado_at, pausado_por_stock_vencido, stock_actual, vertical, disponibilidad_aviso, es_oferta';
 
-const PRODUCTOS_VENDEDOR_PAGE = 1000;
+/** Lotes pequeños: el vendedor busca algo concreto, no descarga todo el catálogo. */
+const PRODUCTOS_VENDEDOR_PAGE = 20;
+
+type FiltrosConsultaMisProductos = {
+  texto: string;
+  estado: FiltroEstadoProductoGestion;
+  vertical: FiltroVerticalMisProductos;
+};
 
 function errorPorColumnaCodigo(msg: string | undefined): boolean {
   const m = (msg ?? '').toLowerCase();
   return m.includes('codigo') && (m.includes('does not exist') || m.includes('column'));
 }
 
-/** Carga todos los productos de las tiendas del usuario (paginado; PostgREST limita ~1000 por solicitud). */
-async function fetchProductosDelVendedor(
+function isoHaceDias(dias: number): string {
+  return new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function comillasFiltroFecha(iso: string): string {
+  return `"${iso.replace(/"/g, '')}"`;
+}
+
+function aplicarFiltroEstadoMisProductosQuery(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query: any,
+  filtro: FiltroEstadoProductoGestion
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): any {
+  if (filtro === 'activos') return query.eq('activo', true);
+  if (filtro === 'pausados') return query.eq('activo', false);
+
+  const hace30 = comillasFiltroFecha(isoHaceDias(DIAS_STOCK_SEMAFORO_VERDE));
+  const hace60 = comillasFiltroFecha(isoHaceDias(DIAS_PAUSA_STOCK_VENCIDO));
+
+  if (filtro === 'proximos_stock') {
+    return query
+      .eq('activo', true)
+      .or(
+        [
+          `and(stock_confirmado_at.not.is.null,stock_confirmado_at.lt.${hace30},stock_confirmado_at.gte.${hace60})`,
+          `and(stock_confirmado_at.is.null,created_at.lt.${hace30},created_at.gte.${hace60})`,
+        ].join(',')
+      );
+  }
+  if (filtro === 'stock_vencido') {
+    return query.or(
+      [
+        'pausado_por_stock_vencido.eq.true',
+        `and(stock_confirmado_at.not.is.null,stock_confirmado_at.lt.${hace60})`,
+        `and(stock_confirmado_at.is.null,created_at.lt.${hace60})`,
+      ].join(',')
+    );
+  }
+  if (filtro === 'sin_fecha_stock') {
+    return query.is('stock_confirmado_at', null).is('created_at', null);
+  }
+  return query;
+}
+
+async function fetchTiendaIdsVendedor(
   userId: string
-): Promise<{ productos: ProductoPanel[]; error: string | null }> {
+): Promise<{ tiendaIds: string[]; error: string | null }> {
   const { data: tiendas, error: errTiendas } = await withRetry(() =>
     supabase.from('tiendas').select('id').eq('user_id', userId)
   );
-
   if (errTiendas) {
-    return { productos: [], error: errTiendas.message || 'Error al cargar tus tiendas.' };
+    return { tiendaIds: [], error: errTiendas.message || 'Error al cargar tus tiendas.' };
+  }
+  return { tiendaIds: (tiendas ?? []).map((t) => t.id), error: null };
+}
+
+/** Una página de productos del vendedor con filtros en servidor. */
+async function fetchPaginaProductosVendedor(opts: {
+  tiendaIds: string[];
+  filtros: FiltrosConsultaMisProductos;
+  offset: number;
+  conCodigo?: boolean;
+}): Promise<{ productos: ProductoPanel[]; hayMas: boolean; error: string | null; conCodigo: boolean }> {
+  const { tiendaIds, filtros, offset } = opts;
+  let conCodigo = opts.conCodigo !== false;
+
+  if (tiendaIds.length === 0) {
+    return { productos: [], hayMas: false, error: null, conCodigo };
   }
 
-  if (!tiendas || tiendas.length === 0) {
-    return { productos: [], error: null };
+  const selectCols = conCodigo ? PRODUCTOS_VENDEDOR_SELECT : PRODUCTOS_VENDEDOR_SELECT_SIN_CODIGO;
+  let query = supabase
+    .from('productos')
+    .select(selectCols)
+    .in('tienda_id', tiendaIds)
+    .order('nombre')
+    .order('id');
+
+  if (filtros.vertical === 'auto' || filtros.vertical === 'moto') {
+    query = query.eq('vertical', filtros.vertical);
   }
 
-  const tiendaIds = tiendas.map((t) => t.id);
-  const acumulado: ProductoPanel[] = [];
-  let from = 0;
-  let selectCols = PRODUCTOS_VENDEDOR_SELECT;
+  query = aplicarFiltroEstadoMisProductosQuery(query, filtros.estado);
 
-  while (true) {
-    const { data: productosData, error: errProd } = await withRetry(() =>
-      supabase
-        .from('productos')
-        .select(selectCols)
-        .in('tienda_id', tiendaIds)
-        .order('nombre')
-        .range(from, from + PRODUCTOS_VENDEDOR_PAGE - 1)
-    );
+  const texto = filtros.texto.trim();
+  if (texto) {
+    query = aplicarTerminosTextoAMisProductos(query, texto, conCodigo);
+  }
 
-    if (errProd) {
-      if (selectCols === PRODUCTOS_VENDEDOR_SELECT && errorPorColumnaCodigo(errProd.message)) {
-        selectCols = PRODUCTOS_VENDEDOR_SELECT_SIN_CODIGO;
-        from = 0;
-        acumulado.length = 0;
-        continue;
-      }
-      return { productos: [], error: errProd.message || 'Error al cargar tus productos.' };
+  // Pedimos PAGE+1 para saber si hay más sin count exact.
+  const { data, error: errProd } = await withRetry(() =>
+    query.range(offset, offset + PRODUCTOS_VENDEDOR_PAGE)
+  );
+
+  if (errProd) {
+    if (conCodigo && errorPorColumnaCodigo(errProd.message)) {
+      return fetchPaginaProductosVendedor({ ...opts, conCodigo: false });
     }
-
-    const batch = (productosData ?? []) as unknown as ProductoPanel[];
-    acumulado.push(...batch);
-    if (batch.length < PRODUCTOS_VENDEDOR_PAGE) break;
-    from += PRODUCTOS_VENDEDOR_PAGE;
+    return {
+      productos: [],
+      hayMas: false,
+      error: errProd.message || 'Error al cargar tus productos.',
+      conCodigo,
+    };
   }
 
-  return { productos: acumulado, error: null };
+  const filas = (data ?? []) as unknown as ProductoPanel[];
+  const hayMas = filas.length > PRODUCTOS_VENDEDOR_PAGE;
+  return {
+    productos: hayMas ? filas.slice(0, PRODUCTOS_VENDEDOR_PAGE) : filas,
+    hayMas,
+    error: null,
+    conCodigo,
+  };
 }
 
 function semaforoStockProducto(p: ProductoPanel): {
@@ -205,8 +281,10 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
   /** Selección manual para acciones masivas (pausar/activar/eliminar/precios). */
   const [productosSeleccionados, setProductosSeleccionados] = useState<string[]>([]);
   const [etiquetandoId, setEtiquetandoId] = useState<string | null>(null);
-  /** Texto de búsqueda: filtra la lista en vivo al escribir. */
+  /** Texto de búsqueda en el input (draft). */
   const [busquedaProductosInput, setBusquedaProductosInput] = useState('');
+  /** Texto ya aplicado en la consulta al servidor. */
+  const [busquedaProductosAplicada, setBusquedaProductosAplicada] = useState('');
   const [filtroEstadoProductos, setFiltroEstadoProductos] = useState<FiltroEstadoProductoGestion>('todos');
   const [filtroEstadoProductosDraft, setFiltroEstadoProductosDraft] =
     useState<FiltroEstadoProductoGestion>('todos');
@@ -218,17 +296,76 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
       () => (vertical === 'auto' || vertical === 'moto' ? vertical : 'todos')
     );
   const [cargandoFiltrosProductos, setCargandoFiltrosProductos] = useState(false);
+  const [cargandoMasProductos, setCargandoMasProductos] = useState(false);
+  const [hayMasProductos, setHayMasProductos] = useState(false);
+  const [offsetProductos, setOffsetProductos] = useState(0);
+  const [tiendaIds, setTiendaIds] = useState<string[]>([]);
+  const [consultaUsaCodigo, setConsultaUsaCodigo] = useState(true);
+  /** true si, sin filtros, el vendedor no tiene ningún producto. */
+  const [catalogoVacio, setCatalogoVacio] = useState(false);
   const [accionMasivaAlcance, setAccionMasivaAlcance] = useState<AlcanceAccionMasiva>('filtrados');
   const [accionMasivaTipo, setAccionMasivaTipo] = useState<AccionMasivaProducto>('pausar');
   const [ejecutandoAccionMasiva, setEjecutandoAccionMasiva] = useState(false);
   const [mensajeAccionMasiva, setMensajeAccionMasiva] = useState<string | null>(null);
   const [confirmarEliminarMasivo, setConfirmarEliminarMasivo] = useState(false);
 
+  const filtrosAplicados = useMemo<FiltrosConsultaMisProductos>(
+    () => ({
+      texto: busquedaProductosAplicada,
+      estado: filtroEstadoProductos,
+      vertical: verticalFijo ?? filtroVerticalProductos,
+    }),
+    [busquedaProductosAplicada, filtroEstadoProductos, filtroVerticalProductos, verticalFijo]
+  );
+
   useEffect(() => {
     if (!verticalFijo) return;
     setFiltroVerticalProductos(verticalFijo);
     setFiltroVerticalProductosDraft(verticalFijo);
   }, [verticalFijo]);
+
+  const cargarPrimeraPagina = async (opts: {
+    userId: string;
+    filtros: FiltrosConsultaMisProductos;
+    marcarCatalogoVacio?: boolean;
+  }) => {
+    const idsRes = await fetchTiendaIdsVendedor(opts.userId);
+    if (idsRes.error) {
+      setTiendaIds([]);
+      setProductos([]);
+      setHayMasProductos(false);
+      setOffsetProductos(0);
+      setError(idsRes.error);
+      return;
+    }
+    setTiendaIds(idsRes.tiendaIds);
+    const pagina = await fetchPaginaProductosVendedor({
+      tiendaIds: idsRes.tiendaIds,
+      filtros: opts.filtros,
+      offset: 0,
+      conCodigo: consultaUsaCodigo,
+    });
+    if (pagina.error) {
+      setProductos([]);
+      setHayMasProductos(false);
+      setOffsetProductos(0);
+      setError(pagina.error);
+      return;
+    }
+    setConsultaUsaCodigo(pagina.conCodigo);
+    setProductos(pagina.productos);
+    setHayMasProductos(pagina.hayMas);
+    setOffsetProductos(pagina.productos.length);
+    setProductosSeleccionados([]);
+    setError(null);
+    if (opts.marcarCatalogoVacio) {
+      const sinFiltros =
+        !opts.filtros.texto.trim() &&
+        opts.filtros.estado === 'todos' &&
+        (opts.filtros.vertical === 'todos' || Boolean(verticalFijo));
+      setCatalogoVacio(sinFiltros && pagina.productos.length === 0 && !pagina.hayMas);
+    }
+  };
 
   useEffect(() => {
     let cancelado = false;
@@ -241,14 +378,43 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
       }
 
       try {
-        const { productos: lista, error: errMsg } = await fetchProductosDelVendedor(user.id);
+        const filtrosIniciales: FiltrosConsultaMisProductos = {
+          texto: '',
+          estado: 'todos',
+          vertical: verticalFijo ?? 'todos',
+        };
+        const idsRes = await fetchTiendaIdsVendedor(user.id);
         if (cancelado) return;
-        if (errMsg) {
+        if (idsRes.error) {
+          setTiendaIds([]);
           setProductos([]);
-          setError(errMsg);
+          setError(idsRes.error);
           return;
         }
-        setProductos(lista);
+        setTiendaIds(idsRes.tiendaIds);
+        const pagina = await fetchPaginaProductosVendedor({
+          tiendaIds: idsRes.tiendaIds,
+          filtros: filtrosIniciales,
+          offset: 0,
+        });
+        if (cancelado) return;
+        if (pagina.error) {
+          setProductos([]);
+          setError(pagina.error);
+          return;
+        }
+        setConsultaUsaCodigo(pagina.conCodigo);
+        setProductos(pagina.productos);
+        setHayMasProductos(pagina.hayMas);
+        setOffsetProductos(pagina.productos.length);
+        setCatalogoVacio(pagina.productos.length === 0 && !pagina.hayMas);
+        setBusquedaProductosInput('');
+        setBusquedaProductosAplicada('');
+        setFiltroEstadoProductos('todos');
+        setFiltroEstadoProductosDraft('todos');
+        setFiltroVerticalProductos(verticalFijo ?? 'todos');
+        setFiltroVerticalProductosDraft(verticalFijo ?? 'todos');
+        setProductosSeleccionados([]);
       } catch (e) {
         if (!cancelado) {
           const msg =
@@ -268,7 +434,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     return () => {
       cancelado = true;
     };
-  }, [user, refreshTrigger]);
+  }, [user, refreshTrigger, verticalFijo]);
 
   useEffect(() => {
     const cargarContactos = async () => {
@@ -300,40 +466,8 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     }
   }, [productoDetalle, user]);
 
-  /**
-   * Primera sección «Buscar y filtrar»: nombre + código con match flexible
-   * (plural/singular y typo leve). No usa descripción/comentarios aquí para evitar
-   * que un texto repetido en todos los productos (plantilla) devuelva el catálogo entero.
-   */
-  const productoCoincideBusqueda = (p: ProductoPanel, texto: string) =>
-    productoCoincideTextoFlexible([p.nombre, p.codigo], texto);
-
-  const productoCoincideEstado = (p: ProductoPanel, filtro: FiltroEstadoProductoGestion) => {
-    const semaforo = semaforoStockProducto(p);
-    if (filtro === 'activos') return p.activo !== false;
-    if (filtro === 'pausados') return p.activo === false;
-    if (filtro === 'proximos_stock') {
-      return p.activo !== false && (semaforo.clase === 'amarillo' || semaforo.clase === 'rojo');
-    }
-    if (filtro === 'stock_vencido') return semaforo.clase === 'vencido';
-    if (filtro === 'sin_fecha_stock') return semaforo.clase === 'sin-fecha';
-    return true;
-  };
-
-  // Filtra en vivo con el texto del cuadro (no hace falta “aplicar” para ver resultados).
-  const productosVisibles = useMemo(
-    () =>
-      productos.filter((p) => {
-        const vertOk =
-          filtroVerticalProductos === 'todos' || (p.vertical ?? 'auto') === filtroVerticalProductos;
-        return (
-          vertOk &&
-          productoCoincideBusqueda(p, busquedaProductosInput) &&
-          productoCoincideEstado(p, filtroEstadoProductos)
-        );
-      }),
-    [productos, busquedaProductosInput, filtroEstadoProductos, filtroVerticalProductos]
-  );
+  /** Lista ya filtrada en servidor; se muestra tal cual. */
+  const productosVisibles = productos;
 
   if (!user) {
     return null;
@@ -341,18 +475,18 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
 
   const aplicarFiltrosMisProductos = async () => {
     if (!user) return;
-    setFiltroEstadoProductos(filtroEstadoProductosDraft);
-    setFiltroVerticalProductos(verticalFijo ?? filtroVerticalProductosDraft);
+    const filtros: FiltrosConsultaMisProductos = {
+      texto: busquedaProductosInput,
+      estado: filtroEstadoProductosDraft,
+      vertical: verticalFijo ?? filtroVerticalProductosDraft,
+    };
+    setBusquedaProductosAplicada(filtros.texto);
+    setFiltroEstadoProductos(filtros.estado);
+    setFiltroVerticalProductos(filtros.vertical);
     setCargandoFiltrosProductos(true);
     setError(null);
     try {
-      const { productos: lista, error: errMsg } = await fetchProductosDelVendedor(user.id);
-      if (errMsg) {
-        setProductos([]);
-        setError(errMsg);
-        return;
-      }
-      setProductos(lista);
+      await cargarPrimeraPagina({ userId: user.id, filtros });
     } catch (e) {
       const msg =
         e instanceof Error
@@ -369,6 +503,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     if (!user) return;
     const verticalReset: FiltroVerticalMisProductos = verticalFijo ?? 'todos';
     setBusquedaProductosInput('');
+    setBusquedaProductosAplicada('');
     setFiltroEstadoProductosDraft('todos');
     setFiltroVerticalProductosDraft(verticalReset);
     setFiltroEstadoProductos('todos');
@@ -376,13 +511,11 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     setCargandoFiltrosProductos(true);
     setError(null);
     try {
-      const { productos: lista, error: errMsg } = await fetchProductosDelVendedor(user.id);
-      if (errMsg) {
-        setProductos([]);
-        setError(errMsg);
-        return;
-      }
-      setProductos(lista);
+      await cargarPrimeraPagina({
+        userId: user.id,
+        filtros: { texto: '', estado: 'todos', vertical: verticalReset },
+        marcarCatalogoVacio: true,
+      });
     } catch (e) {
       const msg =
         e instanceof Error
@@ -392,6 +525,45 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
       setError(msg);
     } finally {
       setCargandoFiltrosProductos(false);
+    }
+  };
+
+  const cargarMasProductos = async () => {
+    if (!user || cargandoMasProductos || !hayMasProductos) return;
+    setCargandoMasProductos(true);
+    setError(null);
+    try {
+      const ids =
+        tiendaIds.length > 0
+          ? tiendaIds
+          : (await fetchTiendaIdsVendedor(user.id)).tiendaIds;
+      if (tiendaIds.length === 0 && ids.length > 0) setTiendaIds(ids);
+      const pagina = await fetchPaginaProductosVendedor({
+        tiendaIds: ids,
+        filtros: filtrosAplicados,
+        offset: offsetProductos,
+        conCodigo: consultaUsaCodigo,
+      });
+      if (pagina.error) {
+        setError(pagina.error);
+        return;
+      }
+      setConsultaUsaCodigo(pagina.conCodigo);
+      setProductos((prev) => {
+        const vistos = new Set(prev.map((p) => p.id));
+        const nuevos = pagina.productos.filter((p) => !vistos.has(p.id));
+        return [...prev, ...nuevos];
+      });
+      setHayMasProductos(pagina.hayMas);
+      setOffsetProductos((prev) => prev + pagina.productos.length);
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : 'No se pudo cargar más productos. Revisa la conexión e intenta de nuevo.';
+      setError(msg);
+    } finally {
+      setCargandoMasProductos(false);
     }
   };
 
@@ -615,7 +787,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     );
   }
 
-  if (error) {
+  if (error && productos.length === 0 && catalogoVacio === false && tiendaIds.length === 0) {
     return (
       <div className="mis-productos">
         <p className="mis-productos-mensaje mis-productos-error">{error}</p>
@@ -623,7 +795,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     );
   }
 
-  if (productos.length === 0) {
+  if (catalogoVacio && !busquedaProductosAplicada.trim() && filtroEstadoProductos === 'todos') {
     return (
       <div className="mis-productos">
         <p className="mis-productos-mensaje">
@@ -640,9 +812,10 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         <div>
           <p className="mis-productos-ajuste-masivo-titulo">Buscar y filtrar mis productos</p>
             <p className="mis-productos-ajuste-masivo-descripcion">
-              Escribe el nombre o código: la lista se filtra al instante. Acepta plural/singular y errores
-              leves (ej. camaras → camara). Pulsa <strong>Aplicar filtros</strong> (o Intro) para recargar
-              el catálogo desde el servidor. Para fotos masivas usa el menú <strong>Gestión de fotos</strong>.
+              Escribe el nombre o código y pulsa <strong>Aplicar filtros</strong> (o Intro). Se consultan{' '}
+              {PRODUCTOS_VENDEDOR_PAGE} productos por vez; usa <strong>Cargar más</strong> si hace falta.
+              Acepta plural/singular (ej. camaras → camara). Para fotos masivas usa el menú{' '}
+              <strong>Gestión de fotos</strong>.
             </p>
         </div>
         <form
@@ -701,31 +874,40 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
           <button
             type="button"
             className="mis-productos-btn-primario"
-            disabled={cargandoFiltrosProductos || cargando}
+            disabled={cargandoFiltrosProductos || cargando || cargandoMasProductos}
             onClick={() => void aplicarFiltrosMisProductos()}
           >
-            {cargandoFiltrosProductos ? 'Cargando catálogo…' : 'Aplicar filtros'}
+            {cargandoFiltrosProductos ? 'Buscando…' : 'Aplicar filtros'}
           </button>
           <button
             type="button"
             className="mis-productos-btn-secundario"
-            disabled={cargandoFiltrosProductos || cargando}
+            disabled={cargandoFiltrosProductos || cargando || cargandoMasProductos}
             onClick={() => void restablecerFiltrosMisProductos()}
           >
             Restablecer filtros
           </button>
         </div>
+        {error && (
+          <p className="mis-productos-mensaje mis-productos-error" role="alert">
+            {error}
+          </p>
+        )}
         <p className="mis-productos-filtros-resumen" role="status">
-          {busquedaProductosInput.trim()
-            ? `Búsqueda «${busquedaProductosInput.trim()}»: ${productosVisibles.length} de ${productos.length} producto(s).`
-            : `Mostrando ${productosVisibles.length} de ${productos.length} producto(s) cargados.`}
+          {busquedaProductosAplicada.trim()
+            ? `Búsqueda «${busquedaProductosAplicada.trim()}»: ${productosVisibles.length} producto(s) en esta vista${
+                hayMasProductos ? ' (hay más)' : ''
+              }.`
+            : `Mostrando ${productosVisibles.length} producto(s)${
+                hayMasProductos ? ' (hay más en el catálogo)' : ''
+              }.`}
         </p>
       </section>
       <section className="mis-productos-acciones-masivas" aria-label="Acciones masivas sobre productos">
         <p className="mis-productos-ajuste-masivo-titulo">Acciones sobre productos filtrados</p>
         <p className="mis-productos-ajuste-masivo-descripcion">
-          Elige el alcance y la acción, luego pulsa <strong>Ejecutar</strong>. Puedes aplicar a todos los
-          filtrados o marcar productos uno a uno (alcance &quot;Solo seleccionados&quot;).
+          El alcance &quot;Todos los de esta lista&quot; aplica solo a los productos <strong>ya cargados</strong>{' '}
+          (no a todo el catálogo). Para afectar más, pulsa <strong>Cargar más</strong> o marca seleccionados.
         </p>
         <div className="mis-productos-acciones-masivas-grid">
           <label>
@@ -735,7 +917,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
               onChange={(e) => setAccionMasivaAlcance(e.target.value as AlcanceAccionMasiva)}
               disabled={ejecutandoAccionMasiva}
             >
-              <option value="filtrados">Todos los filtrados ({productosVisibles.length})</option>
+              <option value="filtrados">Todos los de esta lista ({productosVisibles.length})</option>
               <option value="seleccionados">
                 Solo seleccionados ({productosSeleccionados.length})
               </option>
@@ -1033,8 +1215,8 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         {productosVisibles.length === 0 ? (
           <div className="mis-productos-mensaje mis-productos-mensaje--bloque">
             <p>
-              {busquedaProductosInput.trim()
-                ? `No hay productos que coincidan con «${busquedaProductosInput.trim()}». Prueba otra palabra o revisa el nombre en el catálogo.`
+              {busquedaProductosAplicada.trim()
+                ? `No hay productos que coincidan con «${busquedaProductosAplicada.trim()}». Prueba otra palabra o revisa el nombre en el catálogo.`
                 : 'No hay productos que coincidan con el filtro seleccionado.'}
             </p>
           </div>
@@ -1289,6 +1471,18 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         })
         )}
       </div>
+      {hayMasProductos && (
+        <div className="mis-productos-cargar-mas">
+          <button
+            type="button"
+            className="mis-productos-btn-primario"
+            disabled={cargandoMasProductos || cargandoFiltrosProductos}
+            onClick={() => void cargarMasProductos()}
+          >
+            {cargandoMasProductos ? 'Cargando…' : `Cargar más (${PRODUCTOS_VENDEDOR_PAGE})`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

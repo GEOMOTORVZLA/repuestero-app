@@ -348,10 +348,14 @@ export function BusquedaRepuestos({
 
     const params: ParamsBusquedaProductos = { texto };
 
-    let ubicacionActual = userLocation;
+    // No bloquear la búsqueda esperando GPS: si ya hay ubicación, ordenamos; si no, pedimos en segundo plano.
+    const ubicacionActual = userLocation;
     if (!ubicacionActual) {
-      ubicacionActual = await solicitarUbicacionActual();
-      if (ubicacionActual) setUserLocation(ubicacionActual);
+      void solicitarUbicacionActual().then((u) => {
+        if (!u) return;
+        setUserLocation(u);
+        setResultados((prev) => (prev.length > 0 ? ordenarPorUbicacionUsuario(prev, u) : prev));
+      });
     }
 
     const query = armarQueryListaProductos(params);
@@ -533,14 +537,15 @@ export function BusquedaRepuestos({
         return;
       }
 
-      let ubicacionActual = userLocation;
-      if (!ubicacionActual) {
-        ubicacionActual = await solicitarUbicacionActual();
-        if (!cancelled && ubicacionActual) setUserLocation(ubicacionActual);
+      // Mostrar el producto al instante; el GPS (si hace falta) se pide en segundo plano para el mapa.
+      if (!userLocation) {
+        void solicitarUbicacionActual().then((u) => {
+          if (!cancelled && u) setUserLocation(u);
+        });
       }
       if (cancelled) return;
 
-      const lista = ubicacionActual ? ordenarPorUbicacionUsuario([fila], ubicacionActual) : [fila];
+      const lista = userLocation ? ordenarPorUbicacionUsuario([fila], userLocation) : [fila];
 
       setTextoBusqueda(fila.nombre);
       textoUltimaBusquedaEjecutadaRef.current = '';

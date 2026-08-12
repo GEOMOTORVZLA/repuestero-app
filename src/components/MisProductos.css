@@ -156,6 +156,16 @@
   font-weight: 700;
 }
 
+.mis-productos-cargar-mas {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0 0.35rem;
+}
+
+.mis-productos-cargar-mas .mis-productos-btn-primario {
+  min-width: 12rem;
+}
+
 @media (max-width: 520px) {
   .mis-productos-filtros-grid {
     grid-template-columns: 1fr;
