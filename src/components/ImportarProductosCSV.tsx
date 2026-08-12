@@ -219,6 +219,15 @@ type ParsedRow = {
   imagenesUrl: string[];
 };
 
+type LotePendienteImport = {
+  filas: ParsedRow[];
+  tiendaId: string;
+  codigosExistentes: Map<string, string>;
+  modo: ModoImportacion;
+  aActualizar: number;
+  aCrear: number;
+};
+
 function normalizeHeader(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, '_');
 }
@@ -289,11 +298,14 @@ export function ImportarProductosCSV({
   const { user } = useAuth();
   const [modoImportacion, setModoImportacion] = useState<ModoImportacion>('alta');
   const [archivo, setArchivo] = useState<File | null>(null);
-  const [estado, setEstado] = useState<'idle' | 'importando' | 'ok' | 'error'>('idle');
+  const [estado, setEstado] = useState<'idle' | 'analizando' | 'confirmar' | 'importando' | 'ok' | 'error'>(
+    'idle'
+  );
   const [mensaje, setMensaje] = useState('');
   const [errores, setErrores] = useState<string[]>([]);
   const [insertados, setInsertados] = useState(0);
   const [actualizados, setActualizados] = useState(0);
+  const [lotePendiente, setLotePendiente] = useState<LotePendienteImport | null>(null);
 
   const categoriasLookup = useMemo(() => {
     const m = new Map<string, string>();
@@ -307,17 +319,35 @@ export function ImportarProductosCSV({
   const esSync = modoImportacion === 'sincronizar';
   const esFreemarket = modoImportacion === 'freemarket_fotos';
   const usaCodigoObligatorio = esSync || esFreemarket;
+  const ocupado = estado === 'analizando' || estado === 'importando';
+
+  const reiniciarFormularioParcial = () => {
+    setMensaje('');
+    setErrores([]);
+    setInsertados(0);
+    setActualizados(0);
+    setLotePendiente(null);
+    setEstado('idle');
+  };
 
   const descargarTemplate = () => {
     descargarPlantillaImportacion(vertical, modoImportacion);
   };
 
-  const importar = async () => {
+  const etiquetaModo = esFreemarket
+    ? 'Freemarket con fotos en URL'
+    : esSync
+      ? 'Sincronizar inventario'
+      : 'Alta nueva';
+
+  /** Analiza el Excel y pide confirmación; aún no escribe en la base. */
+  const analizarArchivo = async () => {
     setEstado('idle');
     setMensaje('');
     setErrores([]);
     setInsertados(0);
     setActualizados(0);
+    setLotePendiente(null);
 
     if (!user) {
       setEstado('error');
@@ -332,30 +362,6 @@ export function ImportarProductosCSV({
     if (!archivo) {
       setEstado('error');
       setMensaje('Selecciona un archivo Excel (.xlsx o .xls).');
-      return;
-    }
-
-    const rl = permitirAccionCliente(
-      modoAdmin
-        ? esFreemarket
-          ? 'freemarket-fotos-admin'
-          : esSync
-            ? 'sync-inventario-admin'
-            : 'importar-productos-admin'
-        : esFreemarket
-          ? 'freemarket-fotos'
-          : esSync
-            ? 'sync-inventario'
-            : 'importar-productos',
-      {
-        maxIntentos: modoAdmin ? 12 : esFreemarket || esSync ? 8 : 4,
-        ventanaMs: 10 * 60 * 1000,
-        bloqueoMs: 3 * 60 * 1000,
-      }
-    );
-    if (!rl.ok) {
-      setEstado('error');
-      setMensaje(rl.mensaje);
       return;
     }
 
@@ -378,7 +384,7 @@ export function ImportarProductosCSV({
       return;
     }
 
-    setEstado('importando');
+    setEstado('analizando');
     setMensaje('Leyendo Excel...');
 
     let parsed: string[][];
@@ -602,12 +608,79 @@ export function ImportarProductosCSV({
       codigosExistentes = mapa.map;
     }
 
+    let aActualizar = 0;
+    let aCrear = 0;
+    for (const r of filas) {
+      if ((esSync || esFreemarket) && r.codigo && codigosExistentes.has(r.codigo)) {
+        aActualizar += 1;
+      } else {
+        aCrear += 1;
+      }
+    }
+
+    setLotePendiente({
+      filas,
+      tiendaId: tiendaId!,
+      codigosExistentes,
+      modo: modoImportacion,
+      aActualizar,
+      aCrear,
+    });
+    setEstado('confirmar');
     setMensaje(
-      esFreemarket
+      `Lote listo para revisar: ${filas.length} fila(s) válida(s). Confirma si deseas subirlo.`
+    );
+  };
+
+  const cancelarLotePendiente = () => {
+    setLotePendiente(null);
+    setEstado('idle');
+    setMensaje('Carga cancelada. No se modificó el inventario.');
+    setErrores([]);
+  };
+
+  /** Escribe en la base solo tras confirmar el lote analizado. */
+  const confirmarYSubirLote = async () => {
+    if (!lotePendiente || !user) return;
+
+    const rl = permitirAccionCliente(
+      modoAdmin
+        ? lotePendiente.modo === 'freemarket_fotos'
+          ? 'freemarket-fotos-admin'
+          : lotePendiente.modo === 'sincronizar'
+            ? 'sync-inventario-admin'
+            : 'importar-productos-admin'
+        : lotePendiente.modo === 'freemarket_fotos'
+          ? 'freemarket-fotos'
+          : lotePendiente.modo === 'sincronizar'
+            ? 'sync-inventario'
+            : 'importar-productos',
+      {
+        maxIntentos: modoAdmin ? 12 : lotePendiente.modo !== 'alta' ? 8 : 4,
+        ventanaMs: 10 * 60 * 1000,
+        bloqueoMs: 3 * 60 * 1000,
+      }
+    );
+    if (!rl.ok) {
+      setEstado('error');
+      setMensaje(rl.mensaje);
+      return;
+    }
+
+    const { filas, tiendaId } = lotePendiente;
+    const codigosExistentes = new Map(lotePendiente.codigosExistentes);
+    const modoLote = lotePendiente.modo;
+    const esSyncLote = modoLote === 'sincronizar';
+    const esFreemarketLote = modoLote === 'freemarket_fotos';
+    const usaCodigoLote = esSyncLote || esFreemarketLote;
+
+    setEstado('importando');
+    setMensaje(
+      esFreemarketLote
         ? modoAdmin
           ? `Freemarket: actualizando inventario y fotos URL en ${etiquetaDestino?.trim() || 'la tienda'}...`
           : 'Freemarket: actualizando inventario y fotos por URL...'
-        : esSync
+        : esSyncLote
           ? modoAdmin
             ? `Sincronizando inventario en ${etiquetaDestino?.trim() || 'la tienda'}...`
             : 'Sincronizando inventario (precio, stock, nombre y descripción; conserva categoría y fotos)...'
@@ -624,16 +697,14 @@ export function ImportarProductosCSV({
       const inv = patchDesdeStockActual(r.cantidad);
       const existenteId = r.codigo ? codigosExistentes.get(r.codigo) : undefined;
       const patchFotos =
-        esFreemarket && r.imagenesUrl.length > 0
+        esFreemarketLote && r.imagenesUrl.length > 0
           ? {
               imagen_url: r.imagenesUrl[0],
               imagenes_extra: r.imagenesUrl.length > 1 ? r.imagenesUrl.slice(1) : null,
             }
           : null;
 
-      if ((esSync || esFreemarket) && existenteId) {
-        // Sync / Freemarket por codigo: precio, stock, nombre y descripcion.
-        // Sync: no toca categoría ni fotos. Freemarket: también actualiza fotos por URL.
+      if ((esSyncLote || esFreemarketLote) && existenteId) {
         const patch: Record<string, unknown> = {
           nombre: r.nombre,
           descripcion: r.comentarios,
@@ -709,6 +780,7 @@ export function ImportarProductosCSV({
       okInsert += 1;
     }
 
+    setLotePendiente(null);
     setInsertados(okInsert);
     setActualizados(okUpdate);
 
@@ -716,7 +788,7 @@ export function ImportarProductosCSV({
       setErrores(erroresOp.slice(0, 20));
       setEstado('error');
       setMensaje(
-        usaCodigoObligatorio
+        usaCodigoLote
           ? `Parcial: ${okUpdate} actualizado(s), ${okInsert} nuevo(s); ${erroresOp.length} error(es). (Mostrando hasta 20)`
           : `Se insertaron ${okInsert} producto(s), pero hubo ${erroresOp.length} error(es). (Mostrando hasta 20)`
       );
@@ -726,9 +798,9 @@ export function ImportarProductosCSV({
 
     setEstado('ok');
     setMensaje(
-      esFreemarket
+      esFreemarketLote
         ? `Freemarket completado: ${okUpdate} actualizado(s) con fotos URL, ${okInsert} nuevo(s) con fotos URL.`
-        : esSync
+        : esSyncLote
           ? `Sincronización completada: ${okUpdate} actualizado(s) (categoría y fotos intactas), ${okInsert} nuevo(s) sin foto.`
           : modoAdmin
             ? `Importación completada: ${okInsert} producto(s) insertados en ${etiquetaDestino?.trim() || 'la tienda'} (sin fotos).`
@@ -762,13 +834,11 @@ export function ImportarProductosCSV({
         <button
           type="button"
           className={`importar-productos-modo-btn${modoImportacion === 'alta' ? ' activo' : ''}`}
-          disabled={estado === 'importando'}
+          disabled={ocupado}
           onClick={() => {
             setModoImportacion('alta');
             setArchivo(null);
-            setMensaje('');
-            setErrores([]);
-            setEstado('idle');
+            reiniciarFormularioParcial();
           }}
         >
           Alta nueva
@@ -776,13 +846,11 @@ export function ImportarProductosCSV({
         <button
           type="button"
           className={`importar-productos-modo-btn${modoImportacion === 'sincronizar' ? ' activo' : ''}`}
-          disabled={estado === 'importando'}
+          disabled={ocupado}
           onClick={() => {
             setModoImportacion('sincronizar');
             setArchivo(null);
-            setMensaje('');
-            setErrores([]);
-            setEstado('idle');
+            reiniciarFormularioParcial();
           }}
         >
           Sincronizar inventario
@@ -790,13 +858,11 @@ export function ImportarProductosCSV({
         <button
           type="button"
           className={`importar-productos-modo-btn${modoImportacion === 'freemarket_fotos' ? ' activo' : ''}`}
-          disabled={estado === 'importando'}
+          disabled={ocupado}
           onClick={() => {
             setModoImportacion('freemarket_fotos');
             setArchivo(null);
-            setMensaje('');
-            setErrores([]);
-            setEstado('idle');
+            reiniciarFormularioParcial();
           }}
         >
           Freemarket con fotos en URL
@@ -826,14 +892,25 @@ export function ImportarProductosCSV({
             comentarios (marca/modelo/año), precio, moneda y cantidad. Solo hoja Categorias de
             referencia (categorías de {vertical === 'moto' ? 'motocicleta' : 'automóvil'}).
           </>
-        )}
+        )}{' '}
+        Tras analizar el archivo te pediremos confirmación antes de escribir en el inventario.
       </p>
 
       <input
         type="file"
         accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        onChange={(e) => setArchivo(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
-        disabled={estado === 'importando'}
+        onChange={(e) => {
+          setArchivo(e.target.files && e.target.files[0] ? e.target.files[0] : null);
+          setLotePendiente(null);
+          if (estado === 'confirmar' || estado === 'ok' || estado === 'error') {
+            setEstado('idle');
+            setMensaje('');
+            setErrores([]);
+            setInsertados(0);
+            setActualizados(0);
+          }
+        }}
+        disabled={ocupado}
       />
 
       <div className="importar-productos-botones-row">
@@ -841,7 +918,7 @@ export function ImportarProductosCSV({
           type="button"
           onClick={descargarTemplate}
           className="importar-productos-link"
-          disabled={estado === 'importando'}
+          disabled={ocupado}
         >
           {esFreemarket
             ? 'Descargar modelo Freemarket con fotos en URL (.xlsx)'
@@ -853,25 +930,73 @@ export function ImportarProductosCSV({
         <button
           type="button"
           className="importar-productos-boton"
-          onClick={() => void importar()}
-          disabled={estado === 'importando' || !archivo || (modoAdmin && !tiendaIdDestino)}
+          onClick={() => void analizarArchivo()}
+          disabled={ocupado || estado === 'confirmar' || !archivo || (modoAdmin && !tiendaIdDestino)}
           title={
             modoAdmin && !tiendaIdDestino ? 'Selecciona primero el vendedor destino' : undefined
           }
         >
-          {estado === 'importando'
-            ? esFreemarket
-              ? 'Importando Freemarket...'
-              : esSync
-                ? 'Sincronizando...'
-                : 'Importando...'
+          {estado === 'analizando'
+            ? 'Analizando archivo...'
             : esFreemarket
-              ? 'Importar Freemarket'
+              ? 'Analizar Freemarket'
               : esSync
-                ? 'Sincronizar inventario'
-                : 'Importar'}
+                ? 'Analizar sincronización'
+                : 'Analizar alta'}
         </button>
       </div>
+
+      {(estado === 'confirmar' || (estado === 'importando' && lotePendiente)) && lotePendiente && (
+        <div className="importar-productos-confirmacion" role="alertdialog" aria-labelledby="importar-confirm-titulo">
+          <p id="importar-confirm-titulo" className="importar-productos-confirmacion-titulo">
+            {estado === 'importando'
+              ? 'Subiendo lote de inventario…'
+              : '¿Seguro de subir este lote de inventario?'}
+          </p>
+          <ul className="importar-productos-confirmacion-lista">
+            <li>
+              Modo: <strong>{etiquetaModo}</strong>
+            </li>
+            {modoAdmin && (
+              <li>
+                Destino: <strong>{etiquetaDestino?.trim() || 'tienda seleccionada'}</strong>
+              </li>
+            )}
+            <li>
+              Filas válidas: <strong>{lotePendiente.filas.length}</strong>
+            </li>
+            <li>
+              Se actualizarán: <strong>{lotePendiente.aActualizar}</strong>
+            </li>
+            <li>
+              Se crearán: <strong>{lotePendiente.aCrear}</strong>
+            </li>
+          </ul>
+          {estado === 'confirmar' && (
+            <p className="importar-productos-confirmacion-aviso">
+              Si eliges No, no se modifica nada en la base. Revisa que el archivo y el modo sean los correctos.
+            </p>
+          )}
+          <div className="importar-productos-botones-row">
+            <button
+              type="button"
+              className="importar-productos-boton-cancelar"
+              disabled={ocupado}
+              onClick={cancelarLotePendiente}
+            >
+              No, cancelar
+            </button>
+            <button
+              type="button"
+              className="importar-productos-boton"
+              disabled={ocupado}
+              onClick={() => void confirmarYSubirLote()}
+            >
+              {estado === 'importando' ? 'Subiendo lote...' : 'Sí, subir lote'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {mensaje && (
         <p
@@ -894,7 +1019,7 @@ export function ImportarProductosCSV({
         </div>
       )}
 
-      {(insertados > 0 || actualizados > 0) && estado !== 'importando' && (
+      {(insertados > 0 || actualizados > 0) && estado !== 'importando' && estado !== 'analizando' && (
         <p className="importar-productos-mensaje ok">
           {actualizados > 0 ? `Actualizados: ${actualizados}. ` : null}
           {insertados > 0 ? `Nuevos: ${insertados}.` : null}
