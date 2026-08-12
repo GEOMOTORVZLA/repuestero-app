@@ -678,6 +678,24 @@ begin
     'productos_total', (select count(*)::int from public.productos),
     'productos_activos', (select count(*)::int from public.productos where coalesce(activo, false) = true),
     'productos_pausados', (select count(*)::int from public.productos where coalesce(activo, false) = false),
+    -- Clasificación exclusiva: fecha (flag) > stock 0 > pausado por vendedor (manual).
+    'productos_pausados_fecha', (
+      select count(*)::int from public.productos
+      where coalesce(activo, false) = false
+        and coalesce(pausado_por_stock_vencido, false) = true
+    ),
+    'productos_pausados_stock0', (
+      select count(*)::int from public.productos
+      where coalesce(activo, false) = false
+        and coalesce(pausado_por_stock_vencido, false) = false
+        and coalesce(stock_actual, -1) = 0
+    ),
+    'productos_pausados_vendedor', (
+      select count(*)::int from public.productos
+      where coalesce(activo, false) = false
+        and coalesce(pausado_por_stock_vencido, false) = false
+        and coalesce(stock_actual, -1) <> 0
+    ),
     'productos_auto', (select count(*)::int from public.productos where coalesce(vertical, 'auto') = 'auto'),
     'productos_moto', (select count(*)::int from public.productos where vertical = 'moto'),
     'tiendas_pendientes_aprobacion', (

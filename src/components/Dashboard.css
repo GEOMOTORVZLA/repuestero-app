@@ -393,6 +393,27 @@
   gap: 1rem;
 }
 
+.dashboard-kpi-grupos {
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+}
+
+.dashboard-kpi-grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.dashboard-kpi-grupo-titulo {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #475569;
+}
+
 .dashboard-kpi-card {
   background: #fff;
   border-radius: 10px;

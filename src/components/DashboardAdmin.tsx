@@ -44,13 +44,45 @@ type AdminKpiDetalle =
   | 'talleres_total'
   | 'compradores_total'
   | 'productos_activos'
-  | 'productos_pausados'
+  | 'productos_pausados_stock0'
+  | 'productos_pausados_fecha'
+  | 'productos_pausados_vendedor'
   | 'productos_total'
   | 'catalogo_auto'
   | 'catalogo_moto'
   | 'vendedores_pendientes'
   | 'talleres_pendientes'
   | 'productos_pendientes_web';
+
+type MotivoPausaProducto = 'stock0' | 'fecha' | 'vendedor';
+
+/** Clasificación exclusiva: fecha > stock 0 > pausado por vendedor (manual). */
+function clasificarMotivoPausa(p: { activo?: boolean | null; stock_actual?: number | null; pausado_por_stock_vencido?: boolean | null }): MotivoPausaProducto | null {
+  if (p.activo === true) return null;
+  if (p.pausado_por_stock_vencido === true) return 'fecha';
+  if (p.stock_actual === 0) return 'stock0';
+  return 'vendedor';
+}
+
+function esKpiDetallePausados(d: AdminKpiDetalle | null): d is
+  | 'productos_pausados_stock0'
+  | 'productos_pausados_fecha'
+  | 'productos_pausados_vendedor' {
+  return (
+    d === 'productos_pausados_stock0' ||
+    d === 'productos_pausados_fecha' ||
+    d === 'productos_pausados_vendedor'
+  );
+}
+
+const MOTIVO_PAUSA_POR_KPI: Record<
+  'productos_pausados_stock0' | 'productos_pausados_fecha' | 'productos_pausados_vendedor',
+  MotivoPausaProducto
+> = {
+  productos_pausados_stock0: 'stock0',
+  productos_pausados_fecha: 'fecha',
+  productos_pausados_vendedor: 'vendedor',
+};
 
 const KPI_DETALLE_TITULO: Record<AdminKpiDetalle, string> = {
   usuarios_total: 'Usuarios (total)',
@@ -59,7 +91,9 @@ const KPI_DETALLE_TITULO: Record<AdminKpiDetalle, string> = {
   talleres_total: 'Talleres (total)',
   compradores_total: 'Compradores (total)',
   productos_activos: 'Productos activos',
-  productos_pausados: 'Productos pausados',
+  productos_pausados_stock0: 'Pausados por inventario 0',
+  productos_pausados_fecha: 'Pausados por fecha',
+  productos_pausados_vendedor: 'Pausado por vendedor',
   productos_total: 'Total productos',
   catalogo_auto: 'Catálogo automóvil',
   catalogo_moto: 'Catálogo motocicleta',
@@ -89,7 +123,9 @@ const KPI_DETALLE_IR_TAB: Partial<Record<AdminKpiDetalle, AdminTab>> = {
   talleres_total: 'talleres',
   compradores_total: 'compradores',
   productos_activos: 'productos',
-  productos_pausados: 'productos',
+  productos_pausados_stock0: 'productos',
+  productos_pausados_fecha: 'productos',
+  productos_pausados_vendedor: 'productos',
   productos_total: 'productos',
   catalogo_auto: 'productos',
   catalogo_moto: 'productos',
@@ -119,7 +155,11 @@ type AdminKpis = {
   compradores_total: number;
   productos_total: number;
   productos_activos: number;
-  productos_pausados: number;
+  /** Total pausados (compatibilidad con RPC anterior). */
+  productos_pausados?: number;
+  productos_pausados_stock0?: number;
+  productos_pausados_fecha?: number;
+  productos_pausados_vendedor?: number;
   productos_auto: number;
   productos_moto: number;
   tiendas_pendientes_aprobacion: number;
@@ -922,7 +962,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   }, [kpiDetalle]);
 
   useEffect(() => {
-    if (kpiDetalle !== 'productos_pausados') {
+    if (!esKpiDetallePausados(kpiDetalle)) {
       setListaProductosPausadosModal(null);
       setErrListaProductosPausadosModal(null);
       return;
@@ -951,7 +991,15 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
 
   const totalProductos = kpis?.productos_total ?? productos.length;
   const productosActivos = kpis?.productos_activos ?? productos.filter((p) => p.activo).length;
-  const productosPausados = kpis?.productos_pausados ?? productos.filter((p) => p.activo !== true).length;
+  const productosPausadosStock0 =
+    kpis?.productos_pausados_stock0 ??
+    productos.filter((p) => clasificarMotivoPausa(p) === 'stock0').length;
+  const productosPausadosFecha =
+    kpis?.productos_pausados_fecha ??
+    productos.filter((p) => clasificarMotivoPausa(p) === 'fecha').length;
+  const productosPausadosVendedor =
+    kpis?.productos_pausados_vendedor ??
+    productos.filter((p) => clasificarMotivoPausa(p) === 'vendedor').length;
   const productosCountAuto = kpis?.productos_auto ?? productos.filter((p) => (p.vertical ?? 'auto') === 'auto').length;
   const productosCountMoto = kpis?.productos_moto ?? productos.filter((p) => p.vertical === 'moto').length;
 
@@ -1132,6 +1180,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     const pReciente = [...productos].sort((a, b) => cmpIsoDesc(a.created_at, b.created_at));
     const pActivos = pReciente.filter((p) => p.activo);
     const pPausados = pReciente.filter((p) => p.activo !== true);
+    const pPausadosStock0 = pPausados.filter((p) => clasificarMotivoPausa(p) === 'stock0');
+    const pPausadosFecha = pPausados.filter((p) => clasificarMotivoPausa(p) === 'fecha');
+    const pPausadosVendedor = pPausados.filter((p) => clasificarMotivoPausa(p) === 'vendedor');
     const pAuto = pReciente.filter((p) => (p.vertical ?? 'auto') === 'auto');
     const pMoto = pReciente.filter((p) => p.vertical === 'moto');
     const pPendWeb = pReciente.filter((p) => (p.aprobacion_publica ?? 'aprobado') === 'pendiente');
@@ -1148,6 +1199,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       pReciente,
       pActivos,
       pPausados,
+      pPausadosStock0,
+      pPausadosFecha,
+      pPausadosVendedor,
       pAuto,
       pMoto,
       pPendWeb,
@@ -2025,15 +2079,37 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       }
       case 'productos_activos':
         return tablaProductos(L.pActivos, 'No hay productos activos en el catálogo cargado.');
-      case 'productos_pausados': {
+      case 'productos_pausados_stock0':
+      case 'productos_pausados_fecha':
+      case 'productos_pausados_vendedor': {
+        const motivo = MOTIVO_PAUSA_POR_KPI[kpiDetalle];
+        const respaldo =
+          motivo === 'stock0'
+            ? L.pPausadosStock0
+            : motivo === 'fecha'
+              ? L.pPausadosFecha
+              : L.pPausadosVendedor;
+        const kpiEsperado =
+          motivo === 'stock0'
+            ? kpis?.productos_pausados_stock0
+            : motivo === 'fecha'
+              ? kpis?.productos_pausados_fecha
+              : kpis?.productos_pausados_vendedor;
+        const meta =
+          motivo === 'stock0'
+            ? 'Pausados con inventario en 0 (sin flag de vencimiento por fecha).'
+            : motivo === 'fecha'
+              ? 'Pausados automáticamente por no confirmar stock a tiempo (flag pausado_por_stock_vencido).'
+              : 'Pausados de forma manual por el vendedor o el admin (no es stock 0 ni pausa por fecha).';
         const cargandoPausados =
           listaProductosPausadosModal === null && errListaProductosPausadosModal == null;
-        const listaMostrar =
-          errListaProductosPausadosModal != null ? L.pPausados : (listaProductosPausadosModal ?? []);
+        const listaCompleta = listaProductosPausadosModal ?? [];
+        const listaFiltrada = listaCompleta.filter((p) => clasificarMotivoPausa(p) === motivo);
+        const listaMostrar = errListaProductosPausadosModal != null ? respaldo : listaFiltrada;
         return (
           <>
             <p className="dashboard-kpi-modal-meta" style={{ marginBottom: '0.75rem' }}>
-              Productos con <strong>activo</strong> en falso o sin valor (igual que el KPI en base de datos).
+              {meta}
             </p>
             {cargandoPausados && (
               <p className="dashboard-texto-placeholder">Cargando productos pausados desde el servidor…</p>
@@ -2041,14 +2117,14 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
             {errListaProductosPausadosModal != null && (
               <p className="dashboard-kpi-modal-aviso">
                 No se pudo cargar el listado completo: {errListaProductosPausadosModal}. Se muestran solo los del
-                catálogo ya cargado ({L.pPausados.length}).
+                catálogo ya cargado ({respaldo.length}).
               </p>
             )}
             {!cargandoPausados &&
-              kpis?.productos_pausados != null &&
-              listaMostrar.length !== kpis.productos_pausados && (
+              kpiEsperado != null &&
+              listaMostrar.length !== kpiEsperado && (
                 <p className="dashboard-kpi-modal-aviso">
-                  El KPI indica <strong>{kpis.productos_pausados}</strong> y este listado muestra{' '}
+                  El KPI indica <strong>{kpiEsperado}</strong> y este listado muestra{' '}
                   <strong>{listaMostrar.length}</strong>. Revisa <code>admin_dashboard_counts</code> y permisos RLS.
                 </p>
               )}
@@ -2057,7 +2133,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                 listaMostrar,
                 errListaProductosPausadosModal != null
                   ? 'No hay productos pausados en el listado de respaldo.'
-                  : 'No hay productos pausados.'
+                  : 'No hay productos en esta categoría.'
               )}
           </>
         );
@@ -2124,111 +2200,150 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                 <section className="dashboard-seccion">
                   <h2 className="dashboard-seccion-titulo">Resumen global</h2>
                   <p className="dashboard-kpi-grid-hint">Pulsa una tarjeta para ver el listado detallado (datos ya cargados en esta sesión).</p>
-                  <div className="dashboard-kpi-grid">
-                    <button
-                      type="button"
-                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
-                      onClick={() => setKpiDetalle('usuarios_total')}
-                    >
-                      <p className="dashboard-kpi-label">Usuarios (total)</p>
-                      <p className="dashboard-kpi-valor">{kpis?.usuarios_total ?? usuarios.length}</p>
-                    </button>
-                    <button
-                      type="button"
-                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
-                      onClick={() => setKpiDetalle('vendedores_total')}
-                    >
-                      <p className="dashboard-kpi-label">Vendedores (total)</p>
-                      <p className="dashboard-kpi-valor">{kpis?.vendedores_total ?? vendedores.length}</p>
-                    </button>
-                    <button
-                      type="button"
-                      className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
-                      onClick={() => setKpiDetalle('vendedores_suspendidos_impago')}
-                    >
-                      <p className="dashboard-kpi-label">Vendedores suspendidos por impago</p>
-                      <p className="dashboard-kpi-valor">{vendedoresSuspendidosImpago}</p>
-                    </button>
-                    <button
-                      type="button"
-                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
-                      onClick={() => setKpiDetalle('talleres_total')}
-                    >
-                      <p className="dashboard-kpi-label">Talleres (total)</p>
-                      <p className="dashboard-kpi-valor">{kpis?.talleres_total ?? talleres.length}</p>
-                    </button>
-                    <button
-                      type="button"
-                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
-                      onClick={() => setKpiDetalle('compradores_total')}
-                    >
-                      <p className="dashboard-kpi-label">Compradores (total)</p>
-                      <p className="dashboard-kpi-valor">{kpis?.compradores_total ?? compradores.length}</p>
-                    </button>
-                    <button
-                      type="button"
-                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
-                      onClick={() => setKpiDetalle('productos_activos')}
-                    >
-                      <p className="dashboard-kpi-label">Productos activos</p>
-                      <p className="dashboard-kpi-valor">{productosActivos}</p>
-                    </button>
-                    <button
-                      type="button"
-                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
-                      onClick={() => setKpiDetalle('productos_pausados')}
-                    >
-                      <p className="dashboard-kpi-label">Productos pausados</p>
-                      <p className="dashboard-kpi-valor">{productosPausados}</p>
-                    </button>
-                    <button
-                      type="button"
-                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
-                      onClick={() => setKpiDetalle('productos_total')}
-                    >
-                      <p className="dashboard-kpi-label">Total productos</p>
-                      <p className="dashboard-kpi-valor">{totalProductos}</p>
-                    </button>
-                    <button
-                      type="button"
-                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
-                      onClick={() => setKpiDetalle('catalogo_auto')}
-                    >
-                      <p className="dashboard-kpi-label">Catálogo auto</p>
-                      <p className="dashboard-kpi-valor">{productosCountAuto}</p>
-                    </button>
-                    <button
-                      type="button"
-                      className="dashboard-kpi-card dashboard-kpi-card--clickable"
-                      onClick={() => setKpiDetalle('catalogo_moto')}
-                    >
-                      <p className="dashboard-kpi-label">Catálogo moto</p>
-                      <p className="dashboard-kpi-valor">{productosCountMoto}</p>
-                    </button>
-                    <button
-                      type="button"
-                      className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
-                      onClick={() => setKpiDetalle('vendedores_pendientes')}
-                    >
-                      <p className="dashboard-kpi-label">Vendedores nuevos (5 días)</p>
-                      <p className="dashboard-kpi-valor">{vendedoresNuevos5Dias}</p>
-                    </button>
-                    <button
-                      type="button"
-                      className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
-                      onClick={() => setKpiDetalle('talleres_pendientes')}
-                    >
-                      <p className="dashboard-kpi-label">Talleres nuevos (5 días)</p>
-                      <p className="dashboard-kpi-valor">{talleresNuevos5Dias}</p>
-                    </button>
-                    <button
-                      type="button"
-                      className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
-                      onClick={() => setKpiDetalle('productos_pendientes_web')}
-                    >
-                      <p className="dashboard-kpi-label">Productos por autorizar (web)</p>
-                      <p className="dashboard-kpi-valor">{productosPendientesWeb}</p>
-                    </button>
+                  <div className="dashboard-kpi-grupos">
+                    <div className="dashboard-kpi-grupo">
+                      <h3 className="dashboard-kpi-grupo-titulo">Atención / pendientes</h3>
+                      <div className="dashboard-kpi-grid">
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('vendedores_suspendidos_impago')}
+                        >
+                          <p className="dashboard-kpi-label">Vendedores suspendidos por impago</p>
+                          <p className="dashboard-kpi-valor">{vendedoresSuspendidosImpago}</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('vendedores_pendientes')}
+                        >
+                          <p className="dashboard-kpi-label">Vendedores nuevos (5 días)</p>
+                          <p className="dashboard-kpi-valor">{vendedoresNuevos5Dias}</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('talleres_pendientes')}
+                        >
+                          <p className="dashboard-kpi-label">Talleres nuevos (5 días)</p>
+                          <p className="dashboard-kpi-valor">{talleresNuevos5Dias}</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('productos_pendientes_web')}
+                        >
+                          <p className="dashboard-kpi-label">Productos por autorizar (web)</p>
+                          <p className="dashboard-kpi-valor">{productosPendientesWeb}</p>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="dashboard-kpi-grupo">
+                      <h3 className="dashboard-kpi-grupo-titulo">Cuentas y roles</h3>
+                      <div className="dashboard-kpi-grid">
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('usuarios_total')}
+                        >
+                          <p className="dashboard-kpi-label">Usuarios (total)</p>
+                          <p className="dashboard-kpi-valor">{kpis?.usuarios_total ?? usuarios.length}</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('vendedores_total')}
+                        >
+                          <p className="dashboard-kpi-label">Vendedores (total)</p>
+                          <p className="dashboard-kpi-valor">{kpis?.vendedores_total ?? vendedores.length}</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('talleres_total')}
+                        >
+                          <p className="dashboard-kpi-label">Talleres (total)</p>
+                          <p className="dashboard-kpi-valor">{kpis?.talleres_total ?? talleres.length}</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('compradores_total')}
+                        >
+                          <p className="dashboard-kpi-label">Compradores (total)</p>
+                          <p className="dashboard-kpi-valor">{kpis?.compradores_total ?? compradores.length}</p>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="dashboard-kpi-grupo">
+                      <h3 className="dashboard-kpi-grupo-titulo">Inventario / catálogo</h3>
+                      <div className="dashboard-kpi-grid">
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('productos_total')}
+                        >
+                          <p className="dashboard-kpi-label">Total productos</p>
+                          <p className="dashboard-kpi-valor">{totalProductos}</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('productos_activos')}
+                        >
+                          <p className="dashboard-kpi-label">Productos activos</p>
+                          <p className="dashboard-kpi-valor">{productosActivos}</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('catalogo_auto')}
+                        >
+                          <p className="dashboard-kpi-label">Catálogo auto</p>
+                          <p className="dashboard-kpi-valor">{productosCountAuto}</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('catalogo_moto')}
+                        >
+                          <p className="dashboard-kpi-label">Catálogo moto</p>
+                          <p className="dashboard-kpi-valor">{productosCountMoto}</p>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="dashboard-kpi-grupo">
+                      <h3 className="dashboard-kpi-grupo-titulo">Productos pausados</h3>
+                      <div className="dashboard-kpi-grid">
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('productos_pausados_stock0')}
+                        >
+                          <p className="dashboard-kpi-label">Pausados por inventario 0</p>
+                          <p className="dashboard-kpi-valor">{productosPausadosStock0}</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('productos_pausados_fecha')}
+                        >
+                          <p className="dashboard-kpi-label">Pausados por fecha</p>
+                          <p className="dashboard-kpi-valor">{productosPausadosFecha}</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('productos_pausados_vendedor')}
+                        >
+                          <p className="dashboard-kpi-label">Pausado por vendedor</p>
+                          <p className="dashboard-kpi-valor">{productosPausadosVendedor}</p>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   <p className="dashboard-texto-placeholder" style={{ marginTop: '0.5rem' }}>
                     Los vendedores y talleres quedan activos al registrarse. Revisa los{' '}
