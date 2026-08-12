@@ -188,14 +188,6 @@ const DIAS_PRODUCTO_AGREGADO_RECIENTE = 5;
 /** Mismo criterio (5 días) para revisar registros nuevos de vendedores/talleres. */
 const DIAS_REGISTRO_NUEVO_NEGOCIO = 5;
 
-function esProductoAgregadoReciente(createdAt: string | null | undefined): boolean {
-  if (createdAt == null || String(createdAt).trim() === '') return false;
-  const creado = new Date(createdAt).getTime();
-  if (Number.isNaN(creado)) return false;
-  const limiteMs = DIAS_PRODUCTO_AGREGADO_RECIENTE * 24 * 60 * 60 * 1000;
-  return Date.now() - creado <= limiteMs;
-}
-
 function esRegistroNegocioNuevo(createdAt: string | null | undefined): boolean {
   if (createdAt == null || String(createdAt).trim() === '') return false;
   const creado = new Date(createdAt).getTime();
@@ -702,8 +694,8 @@ async function fetchPaginaProductosAdmin(opts: {
   let conCodigo = opts.conCodigo !== false;
   const selectCols = conCodigo ? ADMIN_PRODUCTOS_SELECT : ADMIN_PRODUCTOS_SELECT_SIN_CODIGO;
 
-  let query = supabase
-    .from('productos')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query: any = (supabase.from('productos') as any)
     .select(selectCols)
     .order('created_at', { ascending: false })
     .order('id', { ascending: false });

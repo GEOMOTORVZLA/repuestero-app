@@ -250,7 +250,7 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
 
     setAplicando(true);
     try {
-      const bucket = 'productos';
+      const bucket = supabase.storage.from('productos');
       const lote = `${Date.now()}`;
       const urls: (string | null)[] = [null, null, null, null];
 

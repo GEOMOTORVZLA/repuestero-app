@@ -197,8 +197,8 @@ async function fetchPaginaProductosVendedor(opts: {
   }
 
   const selectCols = conCodigo ? PRODUCTOS_VENDEDOR_SELECT : PRODUCTOS_VENDEDOR_SELECT_SIN_CODIGO;
-  let query = supabase
-    .from('productos')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query: any = (supabase.from('productos') as any)
     .select(selectCols)
     .in('tienda_id', tiendaIds)
     .order('nombre')
@@ -217,7 +217,10 @@ async function fetchPaginaProductosVendedor(opts: {
 
   // Pedimos PAGE+1 para saber si hay más sin count exact.
   const { data, error: errProd } = await withRetry(() =>
-    query.range(offset, offset + PRODUCTOS_VENDEDOR_PAGE)
+    query.range(offset, offset + PRODUCTOS_VENDEDOR_PAGE) as PromiseLike<{
+      data: ProductoPanel[] | null;
+      error: { message?: string } | null;
+    }>
   );
 
   if (errProd) {
