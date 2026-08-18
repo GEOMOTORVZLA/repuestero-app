@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../supabaseClient';
 import { urlsFotosProducto } from '../utils/productoImagenesExtra';
@@ -22,7 +22,9 @@ import { mensajeNegocioNoListoParaAprobar } from '../utils/validarDatosNegocio';
 import { ImportarProductosCSV } from './ImportarProductosCSV';
 import { VisorMostrador } from './VisorMostrador';
 import {
+  aplicarTerminosTextoABusquedaTiendas,
   aplicarTerminosTextoAMisProductos,
+  productoCoincideTextoFlexible,
 } from '../utils/busquedaProductosTexto';
 import {
   DIAS_PAUSA_STOCK_VENCIDO,
@@ -508,6 +510,18 @@ function celdaUbicacionAdmin(lat?: number | null, lng?: number | null): string {
   return `${fmtCoordAdmin(latN)}, ${fmtCoordAdmin(lngN)}`;
 }
 
+function etiquetaVendedorMostrador(v: {
+  user_id: string;
+  nombre?: string | null;
+  nombre_comercial?: string | null;
+  rif?: string | null;
+}): string {
+  const nom = v.nombre_comercial?.trim() || v.nombre?.trim();
+  const rif = v.rif?.trim();
+  if (nom && rif) return `${nom} · ${rif}`;
+  return nom || rif || v.user_id;
+}
+
 function emailNegocioAdmin(
   negocio: { user_id: string; email?: string | null },
   emailsPorUserId: Map<string, string | null>
@@ -809,6 +823,11 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     string | null
   >(null);
   const [mostradorUserId, setMostradorUserId] = useState('');
+  const [mostradorTexto, setMostradorTexto] = useState('');
+  const [mostradorListaAbierta, setMostradorListaAbierta] = useState(false);
+  const [mostradorRemotos, setMostradorRemotos] = useState<AdminTienda[]>([]);
+  const [mostradorBuscando, setMostradorBuscando] = useState(false);
+  const mostradorVendedorRef = useRef<HTMLDivElement>(null);
   /** Listado KPI modal «productos pausados» (misma lógica que SQL: activo distinto de true). */
   const [listaProductosPausadosModal, setListaProductosPausadosModal] = useState<AdminProducto[] | null>(null);
   const [errListaProductosPausadosModal, setErrListaProductosPausadosModal] = useState<string | null>(null);
@@ -1110,6 +1129,56 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   }, [busquedaTalleres, tab]);
 
   useEffect(() => {
+    if (tab !== 'mostrador') return;
+    const q = mostradorTexto.trim();
+    if (q.length < 2) {
+      setMostradorRemotos([]);
+      setMostradorBuscando(false);
+      return;
+    }
+    let cancelado = false;
+    setMostradorBuscando(true);
+    const tm = window.setTimeout(() => {
+      void (async () => {
+        try {
+          let query = supabase.from('tiendas').select(ADMIN_TIENDAS_SELECT).limit(80);
+          query = aplicarTerminosTextoABusquedaTiendas(query, q);
+          const { data, error: err } = await query;
+          if (cancelado) return;
+          if (err) {
+            setMostradorRemotos([]);
+            return;
+          }
+          const vistos = new Set<string>();
+          const rows: AdminTienda[] = [];
+          for (const t of (data ?? []) as AdminTienda[]) {
+            if (vistos.has(t.user_id)) continue;
+            vistos.add(t.user_id);
+            rows.push(t);
+          }
+          setMostradorRemotos(rows);
+        } finally {
+          if (!cancelado) setMostradorBuscando(false);
+        }
+      })();
+    }, 350);
+    return () => {
+      cancelado = true;
+      window.clearTimeout(tm);
+    };
+  }, [tab, mostradorTexto]);
+
+  useEffect(() => {
+    if (!mostradorListaAbierta) return;
+    const onDown = (e: MouseEvent) => {
+      const el = mostradorVendedorRef.current;
+      if (el && !el.contains(e.target as Node)) setMostradorListaAbierta(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [mostradorListaAbierta]);
+
+  useEffect(() => {
     if (!kpiDetalle && !especialidadTallerModal && !userIdPerfilModal) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -1247,6 +1316,24 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       return true;
     });
   }, [vendedoresParaFiltroProductos]);
+
+  const vendedoresMostradorSugeridos = useMemo(() => {
+    const porUser = new Map<string, AdminTienda>();
+    for (const v of vendedoresParaMostrador) porUser.set(v.user_id, v);
+    for (const v of mostradorRemotos) {
+      if (!porUser.has(v.user_id)) porUser.set(v.user_id, v);
+    }
+    const pool = [...porUser.values()].sort((a, b) =>
+      etiquetaVendedorMostrador(a).localeCompare(etiquetaVendedorMostrador(b), 'es')
+    );
+    const q = mostradorTexto.trim();
+    const filtrados = q
+      ? pool.filter((v) =>
+          productoCoincideTextoFlexible([v.nombre_comercial, v.nombre, v.rif], q)
+        )
+      : pool;
+    return filtrados.slice(0, 40);
+  }, [vendedoresParaMostrador, mostradorRemotos, mostradorTexto]);
 
   /** Vendedores activos (aprobados y no bloqueados) para carga masiva admin. */
   const vendedoresActivosImportAdmin = useMemo(() => {
@@ -3148,23 +3235,81 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     BÚSQUEDA EN PRODUCTOS PUBLICADOS
                   </h2>
                   <p className="dashboard-admin-productos-hint">
-                    Elige un vendedor para ver el mismo visor de mostrador que usa en su panel (búsqueda, activos y
-                    fotos).
+                    Escribe parte del nombre comercial, del nombre o del RIF. No hace falta el nombre exacto: con
+                    algunas palabras basta para filtrar.
                   </p>
-                  <div className="dashboard-admin-filtro-vertical dashboard-admin-mostrador-vendedor">
+                  <div
+                    className="dashboard-admin-filtro-vertical dashboard-admin-mostrador-vendedor"
+                    ref={mostradorVendedorRef}
+                  >
                     <label htmlFor="admin-mostrador-vendedor">Vendedor</label>
-                    <select
+                    <input
                       id="admin-mostrador-vendedor"
-                      value={mostradorUserId}
-                      onChange={(e) => setMostradorUserId(e.target.value)}
-                    >
-                      <option value="">Selecciona un vendedor…</option>
-                      {vendedoresParaMostrador.map((v) => (
-                        <option key={v.user_id} value={v.user_id}>
-                          {v.nombre_comercial?.trim() || v.nombre?.trim() || v.rif || v.user_id}
-                        </option>
-                      ))}
-                    </select>
+                      type="search"
+                      role="combobox"
+                      aria-expanded={mostradorListaAbierta}
+                      aria-controls="admin-mostrador-vendedor-lista"
+                      aria-autocomplete="list"
+                      className="dashboard-admin-mostrador-vendedor-input"
+                      value={mostradorTexto}
+                      onChange={(e) => {
+                        setMostradorTexto(e.target.value);
+                        setMostradorListaAbierta(true);
+                        if (mostradorUserId) setMostradorUserId('');
+                      }}
+                      onFocus={() => setMostradorListaAbierta(true)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          setMostradorListaAbierta(false);
+                          return;
+                        }
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const primero = vendedoresMostradorSugeridos[0];
+                          if (!primero) return;
+                          setMostradorUserId(primero.user_id);
+                          setMostradorTexto(etiquetaVendedorMostrador(primero));
+                          setMostradorListaAbierta(false);
+                        }
+                      }}
+                      placeholder="Ej: dlar, auto parts, J-123…"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    {mostradorListaAbierta && (
+                      <ul
+                        id="admin-mostrador-vendedor-lista"
+                        className="dashboard-admin-mostrador-sugerencias"
+                        role="listbox"
+                      >
+                        {mostradorBuscando && (
+                          <li className="dashboard-admin-mostrador-sugerencia-meta">Buscando…</li>
+                        )}
+                        {!mostradorBuscando && vendedoresMostradorSugeridos.length === 0 && (
+                          <li className="dashboard-admin-mostrador-sugerencia-meta">
+                            {mostradorTexto.trim()
+                              ? 'Ningún vendedor coincide. Prueba otras palabras.'
+                              : 'Empieza a escribir para filtrar.'}
+                          </li>
+                        )}
+                        {vendedoresMostradorSugeridos.map((v) => (
+                          <li key={v.user_id} role="option" aria-selected={v.user_id === mostradorUserId}>
+                            <button
+                              type="button"
+                              className="dashboard-admin-mostrador-sugerencia"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setMostradorUserId(v.user_id);
+                                setMostradorTexto(etiquetaVendedorMostrador(v));
+                                setMostradorListaAbierta(false);
+                              }}
+                            >
+                              {etiquetaVendedorMostrador(v)}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                   {mostradorUserId ? (
                     <div className="dashboard-card">
