@@ -821,7 +821,7 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   margin: 0;
   padding: 0.25rem 0;
   list-style: none;
-  max-height: 16rem;
+  max-height: min(28rem, 60vh);
   overflow-y: auto;
   background: #fff;
   border: 1px solid #cbd5e1;

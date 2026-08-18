@@ -826,6 +826,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [mostradorTexto, setMostradorTexto] = useState('');
   const [mostradorListaAbierta, setMostradorListaAbierta] = useState(false);
   const [mostradorRemotos, setMostradorRemotos] = useState<AdminTienda[]>([]);
+  const [mostradorTodos, setMostradorTodos] = useState<AdminTienda[] | null>(null);
   const [mostradorBuscando, setMostradorBuscando] = useState(false);
   const mostradorVendedorRef = useRef<HTMLDivElement>(null);
   /** Listado KPI modal «productos pausados» (misma lógica que SQL: activo distinto de true). */
@@ -1130,6 +1131,53 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
 
   useEffect(() => {
     if (tab !== 'mostrador') return;
+    if (mostradorTodos != null) return;
+    let cancelado = false;
+    const PAGE = 1000;
+    const selectCols = 'id, user_id, nombre, nombre_comercial, rif';
+    void (async () => {
+      const all: AdminTienda[] = [];
+      let offset = 0;
+      try {
+        for (;;) {
+          const { data, error: err } = await supabase
+            .from('tiendas')
+            .select(selectCols)
+            .order('nombre_comercial', { ascending: true })
+            .range(offset, offset + PAGE - 1);
+          if (cancelado) return;
+          if (err) {
+            setMostradorTodos([]);
+            return;
+          }
+          const rows = (data ?? []) as AdminTienda[];
+          all.push(...rows);
+          if (rows.length < PAGE) break;
+          offset += PAGE;
+        }
+        if (cancelado) return;
+        const vistos = new Set<string>();
+        const unicos: AdminTienda[] = [];
+        for (const t of all) {
+          if (vistos.has(t.user_id)) continue;
+          vistos.add(t.user_id);
+          unicos.push(t);
+        }
+        unicos.sort((a, b) =>
+          etiquetaVendedorMostrador(a).localeCompare(etiquetaVendedorMostrador(b), 'es')
+        );
+        setMostradorTodos(unicos);
+      } catch {
+        if (!cancelado) setMostradorTodos([]);
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [tab, mostradorTodos]);
+
+  useEffect(() => {
+    if (tab !== 'mostrador') return;
     const q = mostradorTexto.trim();
     if (q.length < 2) {
       setMostradorRemotos([]);
@@ -1319,7 +1367,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
 
   const vendedoresMostradorSugeridos = useMemo(() => {
     const porUser = new Map<string, AdminTienda>();
-    for (const v of vendedoresParaMostrador) porUser.set(v.user_id, v);
+    for (const v of mostradorTodos ?? vendedoresParaMostrador) porUser.set(v.user_id, v);
     for (const v of mostradorRemotos) {
       if (!porUser.has(v.user_id)) porUser.set(v.user_id, v);
     }
@@ -1327,13 +1375,11 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       etiquetaVendedorMostrador(a).localeCompare(etiquetaVendedorMostrador(b), 'es')
     );
     const q = mostradorTexto.trim();
-    const filtrados = q
-      ? pool.filter((v) =>
-          productoCoincideTextoFlexible([v.nombre_comercial, v.nombre, v.rif], q)
-        )
-      : pool;
-    return filtrados.slice(0, 40);
-  }, [vendedoresParaMostrador, mostradorRemotos, mostradorTexto]);
+    if (!q) return pool;
+    return pool.filter((v) =>
+      productoCoincideTextoFlexible([v.nombre_comercial, v.nombre, v.rif], q)
+    );
+  }, [vendedoresParaMostrador, mostradorRemotos, mostradorTodos, mostradorTexto]);
 
   /** Vendedores activos (aprobados y no bloqueados) para carga masiva admin. */
   const vendedoresActivosImportAdmin = useMemo(() => {
@@ -3282,14 +3328,30 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         className="dashboard-admin-mostrador-sugerencias"
                         role="listbox"
                       >
+                        {mostradorTodos == null && (
+                          <li className="dashboard-admin-mostrador-sugerencia-meta">
+                            Cargando todos los vendedores…
+                          </li>
+                        )}
                         {mostradorBuscando && (
                           <li className="dashboard-admin-mostrador-sugerencia-meta">Buscando…</li>
                         )}
-                        {!mostradorBuscando && vendedoresMostradorSugeridos.length === 0 && (
+                        {mostradorTodos != null && vendedoresMostradorSugeridos.length > 0 && (
+                          <li className="dashboard-admin-mostrador-sugerencia-meta">
+                            {mostradorTexto.trim()
+                              ? `${vendedoresMostradorSugeridos.length} coincidencia${
+                                  vendedoresMostradorSugeridos.length === 1 ? '' : 's'
+                                }`
+                              : `${vendedoresMostradorSugeridos.length} vendedores · escribe para filtrar`}
+                          </li>
+                        )}
+                        {!mostradorBuscando &&
+                          mostradorTodos != null &&
+                          vendedoresMostradorSugeridos.length === 0 && (
                           <li className="dashboard-admin-mostrador-sugerencia-meta">
                             {mostradorTexto.trim()
                               ? 'Ningún vendedor coincide. Prueba otras palabras.'
-                              : 'Empieza a escribir para filtrar.'}
+                              : 'No hay vendedores para mostrar.'}
                           </li>
                         )}
                         {vendedoresMostradorSugeridos.map((v) => (
