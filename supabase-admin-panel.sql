@@ -639,6 +639,73 @@ $$;
 
 grant execute on function public.admin_list_tiendas_suspendidas_impago(int) to authenticated;
 
+-- Listado del modal KPI «talleres suspendidos por impago» (misma lógica que admin_dashboard_counts).
+drop function if exists public.admin_list_talleres_suspendidos_impago(int);
+
+create or replace function public.admin_list_talleres_suspendidos_impago(
+  p_limit int default 500
+)
+returns table (
+  id uuid,
+  user_id uuid,
+  nombre text,
+  nombre_comercial text,
+  rif text,
+  especialidad text[],
+  telefono text,
+  email text,
+  estado text,
+  ciudad text,
+  latitud double precision,
+  longitud double precision,
+  bloqueado boolean,
+  aprobacion_estado text,
+  created_at timestamptz,
+  membresia_hasta date
+)
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  lim int := least(greatest(coalesce(p_limit, 500), 1), 2000);
+begin
+  if not exists (
+    select 1
+    from auth.users me
+    where me.id = auth.uid()
+      and coalesce(me.raw_app_meta_data ->> 'role', '') = 'admin'
+  ) then
+    raise exception 'No autorizado';
+  end if;
+
+  return query
+  select
+    t.id::uuid,
+    t.user_id::uuid,
+    t.nombre::text,
+    t.nombre_comercial::text,
+    t.rif::text,
+    coalesce(t.especialidad, array[]::text[])::text[],
+    t.telefono::text,
+    t.email::text,
+    t.estado::text,
+    t.ciudad::text,
+    t.latitud::double precision,
+    t.longitud::double precision,
+    coalesce(t.bloqueado, false)::boolean,
+    coalesce(t.aprobacion_estado, 'aprobado')::text,
+    t.created_at::timestamptz,
+    t.membresia_hasta::date
+  from public.talleres t
+  where public.tienda_suspendida_por_impago(t.aprobacion_estado, t.bloqueado, t.membresia_hasta)
+  order by t.created_at desc
+  limit lim;
+end;
+$$;
+
+grant execute on function public.admin_list_talleres_suspendidos_impago(int) to authenticated;
+
 -- KPIs del resumen sin cargar miles de filas al navegador
 create or replace function public.admin_dashboard_counts()
 returns json
@@ -674,6 +741,11 @@ begin
       where public.tienda_suspendida_por_impago(t.aprobacion_estado, t.bloqueado, t.membresia_hasta)
     ),
     'talleres_total', (select count(*)::int from public.talleres),
+    'talleres_suspendidos_impago', (
+      select count(*)::int
+      from public.talleres t
+      where public.tienda_suspendida_por_impago(t.aprobacion_estado, t.bloqueado, t.membresia_hasta)
+    ),
     'compradores_total', compradores_ct::int,
     'productos_total', (select count(*)::int from public.productos),
     'productos_activos', (select count(*)::int from public.productos where coalesce(activo, false) = true),

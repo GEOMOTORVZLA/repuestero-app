@@ -20,6 +20,7 @@ import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO, VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import { mensajeNegocioNoListoParaAprobar } from '../utils/validarDatosNegocio';
 import { ImportarProductosCSV } from './ImportarProductosCSV';
+import { VisorMostrador } from './VisorMostrador';
 import {
   aplicarTerminosTextoAMisProductos,
 } from '../utils/busquedaProductosTexto';
@@ -47,6 +48,7 @@ type AdminKpiDetalle =
   | 'usuarios_total'
   | 'vendedores_total'
   | 'vendedores_suspendidos_impago'
+  | 'talleres_suspendidos_impago'
   | 'talleres_total'
   | 'compradores_total'
   | 'productos_activos'
@@ -94,6 +96,7 @@ const KPI_DETALLE_TITULO: Record<AdminKpiDetalle, string> = {
   usuarios_total: 'Usuarios (total)',
   vendedores_total: 'Vendedores — tiendas (total)',
   vendedores_suspendidos_impago: 'Vendedores suspendidos por impago',
+  talleres_suspendidos_impago: 'Talleres suspendidos por impago',
   talleres_total: 'Talleres (total)',
   compradores_total: 'Compradores (total)',
   productos_activos: 'Productos activos',
@@ -118,6 +121,7 @@ type AdminTab =
   | 'usuarios'
   | 'productos'
   | 'fotos'
+  | 'mostrador'
   | 'vendedores'
   | 'talleres'
   | 'compradores';
@@ -126,6 +130,7 @@ const KPI_DETALLE_IR_TAB: Partial<Record<AdminKpiDetalle, AdminTab>> = {
   usuarios_total: 'usuarios',
   vendedores_total: 'vendedores',
   vendedores_suspendidos_impago: 'vendedores',
+  talleres_suspendidos_impago: 'talleres',
   talleres_total: 'talleres',
   compradores_total: 'compradores',
   productos_activos: 'productos',
@@ -146,6 +151,7 @@ function etiquetaPestañaAdmin(t: AdminTab): string {
     usuarios: 'Usuarios',
     productos: 'Productos',
     fotos: 'Gestión de fotos',
+    mostrador: 'Visor de mostrador',
     vendedores: 'Vendedores',
     talleres: 'Talleres',
     compradores: 'Compradores',
@@ -157,6 +163,7 @@ type AdminKpis = {
   usuarios_total: number;
   vendedores_total: number;
   vendedores_suspendidos_impago?: number;
+  talleres_suspendidos_impago?: number;
   talleres_total: number;
   compradores_total: number;
   productos_total: number;
@@ -391,21 +398,25 @@ async function fetchTiendasSuspendidasImpago(limit = 2000): Promise<{
   return { data: rows, rpcError: res.error.message };
 }
 
-/** Talleres suspendidos por impago (sin RPC dedicado: filtra vía RLS admin). */
+/** Talleres suspendidos por impago: RPC admin; si falla, filtra vía RLS admin. */
 async function fetchTalleresSuspendidosImpago(limit = 2000): Promise<{
   data: AdminTaller[];
   rpcError: string | null;
 }> {
+  const res = await supabase.rpc('admin_list_talleres_suspendidos_impago', { p_limit: limit });
+  if (!res.error) {
+    return { data: (res.data ?? []) as AdminTaller[], rpcError: null };
+  }
   const fb = await supabase
     .from('talleres')
     .select(ADMIN_TALLERES_SELECT)
     .order('created_at', { ascending: false })
     .limit(limit);
   if (fb.error) {
-    return { data: [], rpcError: fb.error.message };
+    return { data: [], rpcError: res.error.message || fb.error.message };
   }
   const rows = ((fb.data ?? []) as AdminTaller[]).filter(perfilSuspendidoPorImpago);
-  return { data: rows, rpcError: null };
+  return { data: rows, rpcError: res.error.message };
 }
 
 type AdminTaller = {
@@ -791,6 +802,13 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   /** Listado completo para el modal «suspendidos por impago» (el KPI cuenta todo el sistema; esto evita depender de las 250 filas del tab). */
   const [listaSuspendidasImpagoModal, setListaSuspendidasImpagoModal] = useState<AdminTienda[] | null>(null);
   const [errListaSuspendidasImpagoModal, setErrListaSuspendidasImpagoModal] = useState<string | null>(null);
+  const [listaTalleresSuspendidosImpagoModal, setListaTalleresSuspendidosImpagoModal] = useState<
+    AdminTaller[] | null
+  >(null);
+  const [errListaTalleresSuspendidosImpagoModal, setErrListaTalleresSuspendidosImpagoModal] = useState<
+    string | null
+  >(null);
+  const [mostradorUserId, setMostradorUserId] = useState('');
   /** Listado KPI modal «productos pausados» (misma lógica que SQL: activo distinto de true). */
   const [listaProductosPausadosModal, setListaProductosPausadosModal] = useState<AdminProducto[] | null>(null);
   const [errListaProductosPausadosModal, setErrListaProductosPausadosModal] = useState<string | null>(null);
@@ -1108,20 +1126,43 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     if (kpiDetalle !== 'vendedores_suspendidos_impago') {
       setListaSuspendidasImpagoModal(null);
       setErrListaSuspendidasImpagoModal(null);
+    }
+    if (kpiDetalle !== 'talleres_suspendidos_impago') {
+      setListaTalleresSuspendidosImpagoModal(null);
+      setErrListaTalleresSuspendidosImpagoModal(null);
+    }
+    if (
+      kpiDetalle !== 'vendedores_suspendidos_impago' &&
+      kpiDetalle !== 'talleres_suspendidos_impago'
+    ) {
       return;
     }
     let cancelled = false;
-    setListaSuspendidasImpagoModal(null);
-    setErrListaSuspendidasImpagoModal(null);
-    void (async () => {
-      const { data, rpcError } = await fetchTiendasSuspendidasImpago(2000);
-      if (cancelled) return;
-      if (data.length === 0 && rpcError) {
-        setErrListaSuspendidasImpagoModal(rpcError);
-        return;
-      }
-      setListaSuspendidasImpagoModal(data);
-    })();
+    if (kpiDetalle === 'vendedores_suspendidos_impago') {
+      setListaSuspendidasImpagoModal(null);
+      setErrListaSuspendidasImpagoModal(null);
+      void (async () => {
+        const { data, rpcError } = await fetchTiendasSuspendidasImpago(2000);
+        if (cancelled) return;
+        if (data.length === 0 && rpcError) {
+          setErrListaSuspendidasImpagoModal(rpcError);
+          return;
+        }
+        setListaSuspendidasImpagoModal(data);
+      })();
+    } else {
+      setListaTalleresSuspendidosImpagoModal(null);
+      setErrListaTalleresSuspendidosImpagoModal(null);
+      void (async () => {
+        const { data, rpcError } = await fetchTalleresSuspendidosImpago(2000);
+        if (cancelled) return;
+        if (data.length === 0 && rpcError) {
+          setErrListaTalleresSuspendidosImpagoModal(rpcError);
+          return;
+        }
+        setListaTalleresSuspendidosImpagoModal(data);
+      })();
+    }
     return () => {
       cancelled = true;
     };
@@ -1197,6 +1238,15 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       return la.localeCompare(lb, 'es');
     });
   }, [vendedores]);
+
+  const vendedoresParaMostrador = useMemo(() => {
+    const vistos = new Set<string>();
+    return vendedoresParaFiltroProductos.filter((v) => {
+      if (vistos.has(v.user_id)) return false;
+      vistos.add(v.user_id);
+      return true;
+    });
+  }, [vendedoresParaFiltroProductos]);
 
   /** Vendedores activos (aprobados y no bloqueados) para carga masiva admin. */
   const vendedoresActivosImportAdmin = useMemo(() => {
@@ -1294,6 +1344,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const talleresNuevos5Dias = talleresNuevos5DiasEnLista;
   const vendedoresSuspendidosImpago =
     kpis?.vendedores_suspendidos_impago ?? vendedores.filter(perfilSuspendidoPorImpago).length;
+  const talleresSuspendidosImpago =
+    kpis?.talleres_suspendidos_impago ?? talleres.filter(perfilSuspendidoPorImpago).length;
 
   const listasKpiResumen = useMemo(() => {
     const u = [...usuarios].sort((a, b) => cmpIsoDesc(a.creado_en, b.creado_en));
@@ -1313,6 +1365,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     const vSuspendImpago = v.filter((x) => perfilSuspendidoPorImpago(x));
     const vNuevos5d = v.filter((x) => esRegistroNegocioNuevo(x.created_at));
     const tPend = t.filter((x) => (x.aprobacion_estado ?? 'aprobado') === 'pendiente');
+    const tSuspendImpago = t.filter((x) => perfilSuspendidoPorImpago(x));
     const tNuevos5d = t.filter((x) => esRegistroNegocioNuevo(x.created_at));
     return {
       u,
@@ -1332,6 +1385,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       vSuspendImpago,
       vNuevos5d,
       tPend,
+      tSuspendImpago,
       tNuevos5d,
     };
   }, [usuarios, vendedores, talleres, compradores, productos]);
@@ -1863,6 +1917,10 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       setFiltroListaVendedores('suspendidos');
       setBusquedaVendedores('');
     }
+    if (desdeKpi === 'talleres_suspendidos_impago') {
+      setFiltroListaTalleres('suspendidos');
+      setBusquedaTalleres('');
+    }
     if (desdeKpi === 'vendedores_pendientes') {
       setFiltroListaVendedores('nuevos_5d');
       setBusquedaVendedores('');
@@ -2140,6 +2198,49 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           </>
         );
       }
+      case 'talleres_suspendidos_impago': {
+        const cargandoSuspendidos =
+          listaTalleresSuspendidosImpagoModal === null && errListaTalleresSuspendidosImpagoModal == null;
+        const listaMostrar =
+          errListaTalleresSuspendidosImpagoModal != null
+            ? L.tSuspendImpago
+            : (listaTalleresSuspendidosImpagoModal ?? []);
+        return (
+          <>
+            <p className="dashboard-kpi-modal-meta" style={{ marginBottom: '0.75rem' }}>
+              Talleres <strong>aprobados</strong> que no cumplen condiciones de publicación en la web: bloqueo por
+              admin (Suspender por impago) o <strong>sin membresía vigente</strong> (fecha pasada o sin fecha).
+            </p>
+            {cargandoSuspendidos && (
+              <p className="dashboard-texto-placeholder">Cargando listado completo desde el servidor…</p>
+            )}
+            {errListaTalleresSuspendidosImpagoModal != null && (
+              <p className="dashboard-kpi-modal-aviso">
+                No se pudo cargar el listado completo: {errListaTalleresSuspendidosImpagoModal}. Se muestran solo los
+                talleres ya cargados en esta sesión ({L.tSuspendImpago.length}).
+              </p>
+            )}
+            {!cargandoSuspendidos &&
+              kpis?.talleres_suspendidos_impago != null &&
+              listaMostrar.length !== kpis.talleres_suspendidos_impago && (
+                <p className="dashboard-kpi-modal-aviso">
+                  El KPI indica <strong>{kpis.talleres_suspendidos_impago}</strong> y este listado muestra{' '}
+                  <strong>{listaMostrar.length}</strong>. Ejecuta en Supabase{' '}
+                  <code>supabase-admin-talleres-suspendidos-impago.sql</code> (funciones{' '}
+                  <code>tienda_suspendida_por_impago</code> y <code>admin_list_talleres_suspendidos_impago</code>) y
+                  recarga la página.
+                </p>
+              )}
+            {!cargandoSuspendidos &&
+              tablaTalleres(
+                listaMostrar,
+                errListaTalleresSuspendidosImpagoModal != null
+                  ? 'No hay coincidencias en el listado de respaldo.'
+                  : 'No hay talleres en esta categoría.'
+              )}
+          </>
+        );
+      }
       case 'talleres_total':
         return (
           <>
@@ -2288,6 +2389,13 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
         )}
         <nav className="dashboard-menu">
           <button type="button" className={`dashboard-menu-item ${tab === 'resumen' ? 'activo' : ''}`} onClick={() => setTab('resumen')}>Inicio admin</button>
+          <button
+            type="button"
+            className={`dashboard-menu-item dashboard-menu-item--mostrador ${tab === 'mostrador' ? 'activo' : ''}`}
+            onClick={() => setTab('mostrador')}
+          >
+            VISOR DE MOSTRADOR
+          </button>
           <button type="button" className={`dashboard-menu-item ${tab === 'usuarios' ? 'activo' : ''}`} onClick={() => setTab('usuarios')}>Usuarios</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'productos' ? 'activo' : ''}`} onClick={() => setTab('productos')}>Productos</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'fotos' ? 'activo' : ''}`} onClick={() => setTab('fotos')}>Gestión de fotos</button>
@@ -2334,6 +2442,14 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         >
                           <p className="dashboard-kpi-label">Vendedores suspendidos por impago</p>
                           <p className="dashboard-kpi-valor">{vendedoresSuspendidosImpago}</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('talleres_suspendidos_impago')}
+                        >
+                          <p className="dashboard-kpi-label">Talleres suspendidos por impago</p>
+                          <p className="dashboard-kpi-valor">{talleresSuspendidosImpago}</p>
                         </button>
                         <button
                           type="button"
@@ -2479,7 +2595,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                   {!kpis && (
                     <p className="dashboard-admin-productos-hint" style={{ marginTop: '0.35rem' }}>
                       Si los totales no coinciden con la realidad, ejecuta en Supabase el{' '}
-                      <code>supabase-admin-panel.sql</code> actualizado (función <code>admin_dashboard_counts</code>).
+                      <code>supabase-admin-panel.sql</code> actualizado o{' '}
+                      <code>supabase-admin-talleres-suspendidos-impago.sql</code> (función{' '}
+                      <code>admin_dashboard_counts</code>).
                     </p>
                   )}
                 </section>
@@ -3021,6 +3139,46 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       onFotosAplicadas={() => void cargar({ silencioso: true })}
                     />
                   </div>
+                </section>
+              )}
+
+              {tab === 'mostrador' && (
+                <section className="dashboard-seccion">
+                  <h2 className="dashboard-seccion-titulo dashboard-seccion-titulo--mostrador-busqueda">
+                    BÚSQUEDA EN PRODUCTOS PUBLICADOS
+                  </h2>
+                  <p className="dashboard-admin-productos-hint">
+                    Elige un vendedor para ver el mismo visor de mostrador que usa en su panel (búsqueda, activos y
+                    fotos).
+                  </p>
+                  <div className="dashboard-admin-filtro-vertical dashboard-admin-mostrador-vendedor">
+                    <label htmlFor="admin-mostrador-vendedor">Vendedor</label>
+                    <select
+                      id="admin-mostrador-vendedor"
+                      value={mostradorUserId}
+                      onChange={(e) => setMostradorUserId(e.target.value)}
+                    >
+                      <option value="">Selecciona un vendedor…</option>
+                      {vendedoresParaMostrador.map((v) => (
+                        <option key={v.user_id} value={v.user_id}>
+                          {v.nombre_comercial?.trim() || v.nombre?.trim() || v.rif || v.user_id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {mostradorUserId ? (
+                    <div className="dashboard-card">
+                      <VisorMostrador
+                        key={mostradorUserId}
+                        vertical={verticalEntrada === VERTICAL_MOTO ? VERTICAL_MOTO : VERTICAL_AUTO}
+                        userIdCatalogo={mostradorUserId}
+                      />
+                    </div>
+                  ) : (
+                    <p className="dashboard-texto-placeholder">
+                      Selecciona un vendedor para cargar su catálogo de mostrador.
+                    </p>
+                  )}
                 </section>
               )}
 
@@ -3999,6 +4157,15 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           onClick={() => setTab('resumen')}
         >
           Inicio
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item dashboard-nav-movil-item--mostrador ${tab === 'mostrador' ? 'activo' : ''}`}
+          onClick={() => setTab('mostrador')}
+          title="Visor de mostrador"
+          aria-label="Visor de mostrador"
+        >
+          Mostrador
         </button>
         <button
           type="button"

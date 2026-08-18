@@ -800,6 +800,17 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   max-width: none;
 }
 
+.dashboard-admin-mostrador-vendedor {
+  margin: 0.75rem 0 1rem;
+  max-width: 32rem;
+}
+
+.dashboard-admin-mostrador-vendedor select {
+  max-width: none;
+  width: 100%;
+  min-height: 2.5rem;
+}
+
 .dashboard-admin-filtro-vertical select:focus,
 .dashboard-admin-filtro-vertical input:focus {
   outline: none;

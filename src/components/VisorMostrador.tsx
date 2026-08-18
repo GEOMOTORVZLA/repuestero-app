@@ -42,10 +42,13 @@ const SELECT =
 type VisorMostradorProps = {
   vertical: VerticalVehiculo;
   refreshTrigger?: number;
+  /** Catálogo de este usuario (admin). Si se omite, usa la sesión del vendedor. */
+  userIdCatalogo?: string;
 };
 
-export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorProps) {
+export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }: VisorMostradorProps) {
   const { user } = useAuth();
+  const ownerId = userIdCatalogo ?? user?.id;
   const inputRef = useRef<HTMLInputElement>(null);
   const [productos, setProductos] = useState<ProductoMostrador[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -65,7 +68,7 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
   useEffect(() => {
     let cancelado = false;
     const init = async () => {
-      if (!user) return;
+      if (!ownerId) return;
       setCargando(true);
       setError(null);
       setProductos([]);
@@ -74,7 +77,7 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
       setBusqueda('');
       setBusquedaAplicada('');
       try {
-        const { tiendaIds: ids, error: errIds } = await fetchTiendaIdsUsuario(user.id);
+        const { tiendaIds: ids, error: errIds } = await fetchTiendaIdsUsuario(ownerId);
         if (cancelado) return;
         if (errIds) {
           setError(errIds);
@@ -100,7 +103,7 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
     return () => {
       cancelado = true;
     };
-  }, [user, vertical, refreshTrigger]);
+  }, [ownerId, vertical, refreshTrigger]);
 
   useEffect(() => {
     const t = window.setTimeout(() => inputRef.current?.focus(), 150);
@@ -109,8 +112,8 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
 
   // Consulta al servidor (debounce al escribir; inmediato al cambiar filtro o tiendas).
   useEffect(() => {
-    if (!user || tiendaIds.length === 0) {
-      if (user && tiendaIds.length === 0 && !cargando) {
+    if (!ownerId || tiendaIds.length === 0) {
+      if (ownerId && tiendaIds.length === 0 && !cargando) {
         /* sin tiendas */
       }
       return;
@@ -163,10 +166,10 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
       window.clearTimeout(handle);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busqueda, soloActivos, tiendaIds, user, vertical]);
+  }, [busqueda, soloActivos, tiendaIds, ownerId, vertical]);
 
   const cargarMas = async () => {
-    if (!user || cargandoMas || !hayMas || tiendaIds.length === 0) return;
+    if (!ownerId || cargandoMas || !hayMas || tiendaIds.length === 0) return;
     setCargandoMas(true);
     try {
       const pagina = await fetchPaginaProductosVendedorLista({
@@ -204,13 +207,13 @@ export function VisorMostrador({ vertical, refreshTrigger = 0 }: VisorMostradorP
     setVisorFotos({ fotos, indice: 0, nombre: p.nombre });
   };
 
-  if (!user) return null;
+  if (!user || !ownerId) return null;
 
   return (
     <div className="visor-mostrador">
       <header className="visor-mostrador-barra">
         <label className="visor-mostrador-buscar-label" htmlFor="visor-mostrador-buscar">
-          Buscar en tu catálogo
+          {userIdCatalogo ? 'Buscar en el catálogo del vendedor' : 'Buscar en tu catálogo'}
         </label>
         <input
           ref={inputRef}
