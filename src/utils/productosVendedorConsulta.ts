@@ -14,15 +14,25 @@ export function errorPorColumnaCodigoProducto(msg: string | undefined): boolean 
   return m.includes('codigo') && (m.includes('does not exist') || m.includes('column'));
 }
 
+export type TiendaVendedorResumen = {
+  id: string;
+  nombre: string | null;
+  nombre_comercial: string | null;
+  vertical?: string | null;
+};
+
 export async function fetchTiendaIdsUsuario(
   userId: string
-): Promise<{ tiendaIds: string[]; error: string | null }> {
+): Promise<{ tiendaIds: string[]; tiendas: TiendaVendedorResumen[]; error: string | null }> {
   const { data: tiendas, error } = await supabase
     .from('tiendas')
-    .select('id')
+    .select('id, nombre, nombre_comercial, vertical')
     .eq('user_id', userId);
-  if (error) return { tiendaIds: [], error: error.message || 'Error al cargar tus tiendas.' };
-  return { tiendaIds: (tiendas ?? []).map((t) => t.id), error: null };
+  if (error) {
+    return { tiendaIds: [], tiendas: [], error: error.message || 'Error al cargar tus tiendas.' };
+  }
+  const lista = (tiendas ?? []) as TiendaVendedorResumen[];
+  return { tiendaIds: lista.map((t) => t.id), tiendas: lista, error: null };
 }
 
 function isoHaceDias(dias: number): string {

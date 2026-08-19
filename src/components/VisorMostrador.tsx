@@ -10,7 +10,13 @@ import {
   PRODUCTOS_VENDEDOR_LISTA_PAGE,
   fetchPaginaProductosVendedorLista,
   fetchTiendaIdsUsuario,
+  type TiendaVendedorResumen,
 } from '../utils/productosVendedorConsulta';
+import {
+  abrirWhatsappConTexto,
+  construirUrlTiendaCompartida,
+  mensajeWhatsappCompartirCatalogoVendedor,
+} from '../utils/enlaceCompartirProducto';
 import { ImagenProducto } from './ImagenProducto';
 import { VisorFotoProducto } from './VisorFotoProducto';
 import './VisorMostrador.css';
@@ -39,6 +45,29 @@ type ProductoMostrador = {
 const SELECT =
   'id, nombre, codigo, descripcion, comentarios, categoria, marca, modelo, anio, precio_usd, moneda, imagen_url, imagenes_extra, activo, vertical, disponibilidad_aviso, es_oferta, stock_actual';
 
+function nombreTiendaMostrador(t: TiendaVendedorResumen): string {
+  return t.nombre_comercial?.trim() || t.nombre?.trim() || 'este vendedor';
+}
+
+function tiendaParaCompartir(
+  tiendas: TiendaVendedorResumen[],
+  vertical: VerticalVehiculo
+): TiendaVendedorResumen | null {
+  if (tiendas.length === 0) return null;
+  return tiendas.find((t) => t.vertical === vertical) ?? tiendas[0];
+}
+
+function IconoCompartirCatalogo() {
+  return (
+    <svg viewBox="0 0 24 24" width={20} height={20} aria-hidden="true" focusable="false">
+      <path
+        fill="currentColor"
+        d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"
+      />
+    </svg>
+  );
+}
+
 type VisorMostradorProps = {
   vertical: VerticalVehiculo;
   refreshTrigger?: number;
@@ -56,6 +85,7 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
   const [hayMas, setHayMas] = useState(false);
   const [offset, setOffset] = useState(0);
   const [tiendaIds, setTiendaIds] = useState<string[]>([]);
+  const [tiendas, setTiendas] = useState<TiendaVendedorResumen[]>([]);
   const [conCodigo, setConCodigo] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState('');
@@ -77,15 +107,17 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
       setBusqueda('');
       setBusquedaAplicada('');
       try {
-        const { tiendaIds: ids, error: errIds } = await fetchTiendaIdsUsuario(ownerId);
+        const { tiendaIds: ids, tiendas: lista, error: errIds } = await fetchTiendaIdsUsuario(ownerId);
         if (cancelado) return;
         if (errIds) {
           setError(errIds);
           setTiendaIds([]);
+          setTiendas([]);
           setCargando(false);
           return;
         }
         setTiendaIds(ids);
+        setTiendas(lista);
         setConCodigo(true);
         if (ids.length === 0) {
           setCargando(false);
@@ -207,6 +239,15 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
     setVisorFotos({ fotos, indice: 0, nombre: p.nombre });
   };
 
+  const tiendaCompartir = tiendaParaCompartir(tiendas, vertical);
+  const compartirCatalogo = () => {
+    if (!tiendaCompartir) return;
+    const url = construirUrlTiendaCompartida(tiendaCompartir.id, vertical);
+    void abrirWhatsappConTexto(
+      mensajeWhatsappCompartirCatalogoVendedor(nombreTiendaMostrador(tiendaCompartir), url)
+    );
+  };
+
   if (!user || !ownerId) return null;
 
   return (
@@ -235,13 +276,34 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
             />
             Solo activos
           </label>
-          <span className="visor-mostrador-contador" role="status">
-            {cargando
-              ? 'Buscando…'
-              : `${productos.length} resultado${productos.length === 1 ? '' : 's'}${
-                  hayMas ? '+' : ''
-                }`}
-          </span>
+          <div className="visor-mostrador-meta-acciones">
+            <span className="visor-mostrador-contador" role="status">
+              {cargando
+                ? 'Buscando…'
+                : `${productos.length} resultado${productos.length === 1 ? '' : 's'}${
+                    hayMas ? '+' : ''
+                  }`}
+            </span>
+            <button
+              type="button"
+              className="visor-mostrador-compartir"
+              disabled={!tiendaCompartir}
+              onClick={compartirCatalogo}
+              title={
+                tiendaCompartir
+                  ? 'Compartir catálogo por WhatsApp'
+                  : 'No hay tienda para compartir'
+              }
+              aria-label={
+                userIdCatalogo
+                  ? `Compartir catálogo de ${tiendaCompartir ? nombreTiendaMostrador(tiendaCompartir) : 'este vendedor'} por WhatsApp`
+                  : 'Compartir tu catálogo por WhatsApp'
+              }
+            >
+              <IconoCompartirCatalogo />
+              <span>Compartir catálogo</span>
+            </button>
+          </div>
         </div>
       </header>
 
