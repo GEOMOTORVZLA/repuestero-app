@@ -802,7 +802,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     return (
       <div className="mis-productos">
         <p className="mis-productos-mensaje">
-          Aún no tienes productos registrados. Usa el botón &quot;Publicar producto&quot; para crear tu
+          Aún no tienes productos registrados. Ve a <strong>Publicar</strong> (la P verde) para crear tu
           primera publicación.
         </p>
       </div>

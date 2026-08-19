@@ -59,27 +59,27 @@
 }
 
 .visor-mostrador-compartir {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
-  min-height: 2.5rem;
-  padding: 0.35rem 0.75rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  margin: 0;
   border-radius: 9999px;
   border: 1px solid #1da851;
   background: #25d366;
   color: #fff;
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 700;
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(18, 140, 126, 0.35);
-  touch-action: manipulation;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.12s;
 }
 
 .visor-mostrador-compartir:hover:not(:disabled) {
   background: #20bd5a;
   border-color: #128c7e;
+  box-shadow: 0 2px 8px rgba(18, 140, 126, 0.45);
 }
 
 .visor-mostrador-compartir:focus-visible {
@@ -88,7 +88,7 @@
 }
 
 .visor-mostrador-compartir:active:not(:disabled) {
-  transform: scale(0.98);
+  transform: scale(0.96);
 }
 
 .visor-mostrador-compartir:disabled {
@@ -99,7 +99,6 @@
 
 .visor-mostrador-compartir svg {
   display: block;
-  flex-shrink: 0;
 }
 
 .visor-mostrador-toggle {
@@ -307,6 +306,11 @@
 }
 
 @media (max-width: 640px) {
+  .visor-mostrador-compartir {
+    width: 2.35rem;
+    height: 2.35rem;
+  }
+
   .visor-mostrador-fila {
     grid-template-columns: 64px minmax(0, 1fr);
     grid-template-areas:

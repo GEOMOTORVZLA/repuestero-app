@@ -15,7 +15,7 @@ import type { BannerEstadoCuenta } from '../utils/estadoCuentaVendedorTaller';
 import { EstadoCuentaNegocioBanner } from './EstadoCuentaNegocioBanner';
 import './Dashboard.css';
 
-type TabId = 'resumen' | 'productos' | 'fotos' | 'mostrador' | 'perfil';
+type TabId = 'resumen' | 'publicar' | 'productos' | 'fotos' | 'mostrador' | 'perfil';
 
 interface DashboardVendedorProps {
   onVolverInicio?: () => void;
@@ -25,7 +25,6 @@ interface DashboardVendedorProps {
 export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: DashboardVendedorProps) {
   const { user, signOut } = useAuth();
   const [tab, setTab] = useState<TabId>('resumen');
-  const [mostrarNuevoProducto, setMostrarNuevoProducto] = useState(false);
   const [mostrarImportarCSV, setMostrarImportarCSV] = useState(false);
   const [refreshProductos, setRefreshProductos] = useState(0);
   const [bannerTienda, setBannerTienda] = useState<BannerEstadoCuenta | null>(null);
@@ -129,6 +128,13 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
           </button>
           <button
             type="button"
+            className={`dashboard-menu-item dashboard-menu-item--publicar ${tab === 'publicar' ? 'activo' : ''}`}
+            onClick={() => setTab('publicar')}
+          >
+            Publicar
+          </button>
+          <button
+            type="button"
             className={`dashboard-menu-item ${tab === 'productos' ? 'activo' : ''}`}
             onClick={() => setTab('productos')}
           >
@@ -197,46 +203,29 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
             <ResumenVendedor vertical={vertical} refreshTrigger={refreshProductos} />
           )}
 
-          {tab === 'productos' && (
+          {tab === 'publicar' && (
             <section className="dashboard-seccion">
-              <div className="dashboard-seccion-header dashboard-seccion-header--solo-accion">
-                <button
-                  type="button"
-                  className={`dashboard-btn-accion dashboard-btn-accion--principal${
-                    mostrarNuevoProducto ? '' : ' dashboard-btn-accion--titilar'
-                  }`}
-                  onClick={() => setMostrarNuevoProducto((v) => !v)}
-                >
-                  {mostrarNuevoProducto ? 'Cerrar formulario' : 'Publicar producto'}
-                </button>
-              </div>
-              <div className="mis-productos-alerta-stock mis-productos-alerta-stock--titilar" role="alert">
-                <strong>Control de inventario:</strong> todo producto con más de 60 días sin actualización de
-                stock será pausado automáticamente y dejará de verse en búsquedas públicas hasta que lo
-                reactives.
-              </div>
+              <h2 className="dashboard-seccion-titulo">Publicar</h2>
               <div
                 className="dashboard-productos-toolbar"
                 role="group"
-                aria-label={`Productos de ${etiquetaVertical}`}
+                aria-label={`Publicar productos de ${etiquetaVertical}`}
               >
                 <p className="dashboard-productos-toolbar-hint">
                   Este panel es solo de <strong>{etiquetaVertical}</strong>. Aquí puedes{' '}
-                  <strong>registrar</strong> o <strong>importar</strong> repuestos de {etiquetaVertical}. Para{' '}
-                  <strong>eliminar</strong>, usa la opción en cada producto del listado.
+                  <strong>publicar un producto nuevo</strong> o <strong>importar</strong> varios de una vez.
+                  Para editar o eliminar, usa <strong>Editar productos</strong>.
                 </p>
                 <p className="dashboard-productos-toolbar-vertical" role="status">
                   Catálogo activo: <strong>{etiquetaVerticalMayus}</strong>
                 </p>
               </div>
-              {mostrarNuevoProducto && (
-                <div className="dashboard-card" key={`registro-${vertical}`}>
-                  <RegistroRepuestos
-                    vertical={vertical}
-                    onProductoRegistrado={() => setRefreshProductos((n) => n + 1)}
-                  />
-                </div>
-              )}
+              <div className="dashboard-card" key={`registro-${vertical}`}>
+                <RegistroRepuestos
+                  vertical={vertical}
+                  onProductoRegistrado={() => setRefreshProductos((n) => n + 1)}
+                />
+              </div>
               <div className="dashboard-importar-row dashboard-importar-row-final">
                 <div className="dashboard-importar-bloque">
                   <p className="dashboard-importar-texto">
@@ -260,6 +249,30 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
                   />
                 </div>
               )}
+            </section>
+          )}
+
+          {tab === 'productos' && (
+            <section className="dashboard-seccion">
+              <h2 className="dashboard-seccion-titulo">Editar productos</h2>
+              <div className="mis-productos-alerta-stock mis-productos-alerta-stock--titilar" role="alert">
+                <strong>Control de inventario:</strong> todo producto con más de 60 días sin actualización de
+                stock será pausado automáticamente y dejará de verse en búsquedas públicas hasta que lo
+                reactives.
+              </div>
+              <div
+                className="dashboard-productos-toolbar"
+                role="group"
+                aria-label={`Editar productos de ${etiquetaVertical}`}
+              >
+                <p className="dashboard-productos-toolbar-hint">
+                  Este panel es solo de <strong>{etiquetaVertical}</strong>. Aquí puedes buscar, editar, pausar
+                  o eliminar tus publicaciones. Para un producto nuevo, usa <strong>Publicar</strong>.
+                </p>
+                <p className="dashboard-productos-toolbar-vertical" role="status">
+                  Catálogo activo: <strong>{etiquetaVerticalMayus}</strong>
+                </p>
+              </div>
               <div className="dashboard-card">
                 <MisProductos refreshTrigger={refreshProductos} vertical={vertical} />
               </div>
@@ -317,6 +330,15 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
           onClick={() => setTab('resumen')}
         >
           Inicio
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item dashboard-nav-movil-item--publicar ${tab === 'publicar' ? 'activo' : ''}`}
+          onClick={() => setTab('publicar')}
+          title="Publicar producto"
+          aria-label="Publicar producto"
+        >
+          P
         </button>
         <button
           type="button"

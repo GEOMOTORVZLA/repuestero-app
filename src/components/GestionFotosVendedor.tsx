@@ -325,8 +325,7 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
     return (
       <div className="mis-productos">
         <p className="mis-productos-mensaje">
-          Aún no tienes productos. Publícalos en <strong>Editar productos</strong> y vuelve aquí para
-          asignar fotos.
+          Aún no tienes productos. Publícalos en <strong>Publicar</strong> y vuelve aquí para asignar fotos.
         </p>
       </div>
     );
