@@ -210,7 +210,15 @@ export function normalizarTextoBusqueda(s: string): string {
 
 /** Variantes simples singular/plural en espa\u00f1ol (espirales <-> espiral). */
 export function variantesFormaPalabra(termino: string): string[] {
-  const t = normalizarTextoBusqueda(termino).replace(/[^a-z0-9]/g, '');
+  const norm = normalizarTextoBusqueda(termino);
+  // Códigos / medidas: conservar separadores (1-41210-528-0, 4.0). Sin eso "4.0"→"40" y
+  // "1-41210-528-0"→"1412105280" y no coinciden con el valor guardado.
+  if (/\d/.test(norm)) {
+    const conSep = norm.replace(/[^a-z0-9.\-_/]/g, '');
+    const soloAlnum = norm.replace(/[^a-z0-9]/g, '');
+    return [...new Set([conSep, soloAlnum].filter((v) => v.length >= 2))];
+  }
+  const t = norm.replace(/[^a-z0-9]/g, '');
   if (t.length < 2) return t ? [t] : [];
   const out = new Set([t]);
   if (t.endsWith('es') && t.length >= 5) {
