@@ -8,6 +8,8 @@
 
 -- Listas con búsqueda y límite (escala). Si ya tenías las funciones sin args, ejecuta antes
 -- supabase-admin-busqueda-panel.sql o haz DROP de las firmas antiguas.
+drop function if exists public.admin_list_usuarios(text, int);
+
 create or replace function public.admin_list_usuarios(
   p_buscar text default '',
   p_limit int default 200
@@ -19,7 +21,9 @@ returns table (
   role text,
   nombre text,
   telefono text,
-  creado_en timestamptz
+  creado_en timestamptz,
+  email_confirmed_at timestamptz,
+  confirmation_sent_at timestamptz
 )
 language plpgsql
 security definer
@@ -73,7 +77,9 @@ begin
       ),
       ''
     )::text,
-    u.created_at
+    u.created_at,
+    u.email_confirmed_at,
+    u.confirmation_sent_at
   from auth.users u
   left join public.tiendas t on t.user_id = u.id
   left join public.talleres tal on tal.user_id = u.id

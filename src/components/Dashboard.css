@@ -1221,13 +1221,19 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   text-align: center;
 }
 
-.dashboard-admin-status--compacto {
-  display: inline-block;
-  min-width: 2.25rem;
-  text-align: center;
-  font-weight: 700;
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
+.dashboard-admin-nombre-con-correo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dashboard-admin-correo-marcas {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-shrink: 0;
 }
 
 .dashboard-admin-status-stock--verde {

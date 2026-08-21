@@ -216,6 +216,8 @@ type AdminUsuario = {
   nombre: string | null;
   telefono: string | null;
   creado_en: string | null;
+  email_confirmed_at?: string | null;
+  confirmation_sent_at?: string | null;
 };
 
 type AdminComprador = {
@@ -453,6 +455,42 @@ function fmtFecha(v?: string | null) {
   } catch {
     return v;
   }
+}
+
+/** Marcas junto al nombre: confirmó el correo / se registró envío (datos de Auth). */
+function marcasCorreoRegistroAdmin(u: {
+  email_confirmed_at?: string | null;
+  confirmation_sent_at?: string | null;
+}): ReactNode {
+  if (u.email_confirmed_at === undefined && u.confirmation_sent_at === undefined) {
+    return null;
+  }
+  const confirmado = Boolean(u.email_confirmed_at);
+  const enviado = Boolean(u.confirmation_sent_at);
+  const titleConfirm = confirmado
+    ? `Confirmó el correo el ${fmtFecha(u.email_confirmed_at)}`
+    : 'Aún no confirmó el correo de registro';
+  const titleEnvio = enviado
+    ? `Supabase registró el envío el ${fmtFecha(u.confirmation_sent_at)} (no garantiza entrega en el buzón)`
+    : 'No consta envío del correo de confirmación (Google u otro método, o el envío no quedó registrado)';
+  return (
+    <span className="dashboard-admin-correo-marcas">
+      <span
+        className={`dashboard-admin-status dashboard-admin-status--compacto ${
+          confirmado ? 'ok' : 'rechazado'
+        }`}
+        title={titleConfirm}
+      >
+        {confirmado ? 'Conf.' : 'Sin conf.'}
+      </span>
+      <span
+        className={`dashboard-admin-status dashboard-admin-status--compacto ${enviado ? 'ok' : 'warn'}`}
+        title={titleEnvio}
+      >
+        {enviado ? 'Env.' : 'Sin envío'}
+      </span>
+    </span>
+  );
 }
 
 /** Fecha corta para tablas admin (una línea). */
@@ -2252,7 +2290,12 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           <td className="dashboard-admin-email-td">
                             {celdaEmailAdmin(u.email)}
                           </td>
-                          <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.nombre)}</td>
+                          <td className="dashboard-admin-texto-td">
+                            <span className="dashboard-admin-nombre-con-correo">
+                              {celdaTextoUnaLineaAdmin(u.nombre)}
+                              {marcasCorreoRegistroAdmin(u)}
+                            </span>
+                          </td>
                           <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.telefono)}</td>
                           <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.tipo_cuenta)}</td>
                           <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.role)}</td>
@@ -2758,6 +2801,10 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     </span>
                   </div>
                   <p className="dashboard-admin-productos-hint">
+                    Junto al nombre: <strong>Conf.</strong> = confirmó el correo de registro;{' '}
+                    <strong>Env.</strong> = Supabase registró el envío (no garantiza que llegó al buzón). Pasa el
+                    mouse para ver la fecha. Si las marcas no aparecen, ejecuta{' '}
+                    <code>supabase-admin-usuarios-correo-confirmacion.sql</code>.
                     Puedes eliminar una cuenta completa (Auth + tiendas/talleres/productos asociados) con{' '}
                     <strong>Eliminar usuario</strong>. Requiere la función RPC{' '}
                     <code>admin_eliminar_usuario</code> — ejecuta <code>supabase-admin-eliminar-usuario.sql</code> en
@@ -2789,7 +2836,12 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                               <td className="dashboard-admin-email-td">
                                 {celdaEmailAdmin(u.email)}
                               </td>
-                              <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.nombre)}</td>
+                              <td className="dashboard-admin-texto-td">
+                                <span className="dashboard-admin-nombre-con-correo">
+                                  {celdaTextoUnaLineaAdmin(u.nombre)}
+                                  {marcasCorreoRegistroAdmin(u)}
+                                </span>
+                              </td>
                               <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.telefono)}</td>
                               <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.tipo_cuenta || 'sin tipo')}</td>
                               <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(u.role)}</td>
