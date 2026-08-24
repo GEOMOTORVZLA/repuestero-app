@@ -1850,7 +1850,7 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
     background: #fff;
     border-top: 1px solid #e2e8f0;
     box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
-    overflow: hidden;
+    overflow: visible;
   }
 
   .dashboard-panel-movil .dashboard-nav-movil-item {
@@ -1922,6 +1922,70 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
     background: #15803d;
     color: #fff;
     box-shadow: 0 2px 8px rgba(22, 163, 74, 0.4);
+  }
+
+  .dashboard-panel-movil .dashboard-nav-movil-publicar-wrap {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+  }
+
+  .dashboard-panel-movil .dashboard-nav-movil-publicar-wrap .dashboard-nav-movil-item {
+    width: 100%;
+  }
+
+  .dashboard-panel-movil .dashboard-nav-movil-publicar-globo {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 0.45rem);
+    z-index: 2;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: min(9.5rem, 42vw);
+    padding: 0.4rem 0.5rem;
+    border-radius: 10px;
+    background: #16a34a;
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    text-align: center;
+    pointer-events: none;
+    transform: translateX(-50%);
+    box-shadow: 0 6px 16px rgba(22, 163, 74, 0.35);
+    animation: globo-publicar-titilar 1.4s ease-in-out infinite;
+  }
+
+  .dashboard-panel-movil .dashboard-nav-movil-publicar-globo::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    margin-left: -6px;
+    border: 6px solid transparent;
+    border-top-color: #16a34a;
+  }
+
+  @keyframes globo-publicar-titilar {
+    0%,
+    100% {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+    }
+    50% {
+      opacity: 0.55;
+      transform: translateX(-50%) scale(1.05);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dashboard-panel-movil .dashboard-nav-movil-publicar-globo {
+      animation: none;
+      opacity: 1;
+      transform: translateX(-50%);
+    }
   }
 
   .dashboard-panel-movil .dashboard-header {

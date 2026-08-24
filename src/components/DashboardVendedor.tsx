@@ -17,6 +17,16 @@ import './Dashboard.css';
 
 type TabId = 'resumen' | 'publicar' | 'productos' | 'fotos' | 'mostrador' | 'perfil';
 
+const STORAGE_GLOBO_PUBLICAR = 'repuestero:globo-publicar-visto';
+
+function globoPublicarPendiente(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_GLOBO_PUBLICAR) !== '1';
+  } catch {
+    return true;
+  }
+}
+
 interface DashboardVendedorProps {
   onVolverInicio?: () => void;
   vertical?: VerticalVehiculo;
@@ -25,6 +35,7 @@ interface DashboardVendedorProps {
 export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: DashboardVendedorProps) {
   const { user, signOut } = useAuth();
   const [tab, setTab] = useState<TabId>('resumen');
+  const [mostrarGloboPublicar, setMostrarGloboPublicar] = useState(globoPublicarPendiente);
   const [mostrarImportarCSV, setMostrarImportarCSV] = useState(false);
   const [refreshProductos, setRefreshProductos] = useState(0);
   const [bannerTienda, setBannerTienda] = useState<BannerEstadoCuenta | null>(null);
@@ -102,6 +113,17 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
   };
 
   const email = user?.email ?? '';
+
+  const irAPublicar = () => {
+    setTab('publicar');
+    if (!mostrarGloboPublicar) return;
+    setMostrarGloboPublicar(false);
+    try {
+      localStorage.setItem(STORAGE_GLOBO_PUBLICAR, '1');
+    } catch {
+      /* ignore quota / private mode */
+    }
+  };
 
   return (
     <div className="dashboard dashboard-vendedor dashboard-panel-movil">
@@ -331,15 +353,22 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
         >
           Inicio
         </button>
-        <button
-          type="button"
-          className={`dashboard-nav-movil-item dashboard-nav-movil-item--publicar ${tab === 'publicar' ? 'activo' : ''}`}
-          onClick={() => setTab('publicar')}
-          title="Publicar producto"
-          aria-label="Publicar producto"
-        >
-          P
-        </button>
+        <span className="dashboard-nav-movil-publicar-wrap">
+          {mostrarGloboPublicar && (
+            <span className="dashboard-nav-movil-publicar-globo" role="status">
+              PUBLICAR Y VENDER
+            </span>
+          )}
+          <button
+            type="button"
+            className={`dashboard-nav-movil-item dashboard-nav-movil-item--publicar ${tab === 'publicar' ? 'activo' : ''}`}
+            onClick={irAPublicar}
+            title="Publicar producto"
+            aria-label="Publicar producto"
+          >
+            P
+          </button>
+        </span>
         <button
           type="button"
           className={`dashboard-nav-movil-item ${tab === 'productos' ? 'activo' : ''}`}
