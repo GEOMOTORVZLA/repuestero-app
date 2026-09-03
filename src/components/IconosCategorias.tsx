@@ -161,6 +161,10 @@ const iconosMap: Record<string, ComponentType<{ className?: string }>> = {
   'Motores a diesel y componentes': IconoBujias,
   'Cauchos y tripas': IconoCaucho,
   Iluminación: IconoFaros,
+  Amortiguadores: IconoAmortiguador,
+  Bastones: IconoAmortiguador,
+  'Componentes eléctricos': IconoBateria,
+  Accesorios: IconoRepuestoGenerico,
 };
 
 export function IconoCategoria({ nombre, className }: { nombre: string; className?: string }) {

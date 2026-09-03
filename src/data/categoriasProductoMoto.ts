@@ -14,6 +14,10 @@ export const CATEGORIAS_MOTO_MAS_BUSCADAS: readonly string[] = [
   'Maletas',
   'Cascos y Ropa',
   'Alarmas',
+  'Amortiguadores',
+  'Bastones',
+  'Componentes eléctricos',
+  'Accesorios',
 ] as const;
 
 /** Mismo conjunto para validación o selects; el orden es el de arriba. */
@@ -34,6 +38,10 @@ export const IMAGEN_PIN_CATEGORIA_MOTO: Record<(typeof CATEGORIAS_MOTO_MAS_BUSCA
   Maletas: '/maletas.png',
   'Cascos y Ropa': '/cascos y ropa.png',
   Alarmas: '/alarmas.png',
+  Amortiguadores: '/amortiguadores.jpg',
+  Bastones: '/bastones.jpg',
+  'Componentes eléctricos': '/componentes electricos.jpg',
+  Accesorios: '/accesorios moto.jpg',
 };
 
 export function imagenPinCategoriaMoto(categoria: string): string | undefined {

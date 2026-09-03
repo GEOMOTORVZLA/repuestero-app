@@ -2078,7 +2078,16 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
         `No se pudo eliminar el usuario. Ejecuta en Supabase el script supabase-admin-eliminar-usuario.sql si falta la función RPC. Detalle: ${rpcError.message}`
       );
     } else {
-      await Promise.all([cargarKpis(), cargarUsuarios(busquedaUsuarios)]);
+      // Refrescar todas las listas: Usuarios y también Vendedores/Talleres/Compradores
+      // (antes solo se recargaban usuarios y el perfil podía quedar “fantasma” en Vendedores).
+      await Promise.all([
+        cargarKpis(),
+        cargarUsuarios(busquedaUsuarios),
+        cargarCompradores(busquedaCompradores),
+        cargarVendedores(busquedaVendedores),
+        cargarTalleres(busquedaTalleres),
+      ]);
+      setMostradorTodos(null);
     }
     setAccionando(null);
   };

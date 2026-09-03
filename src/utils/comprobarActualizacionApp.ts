@@ -18,7 +18,15 @@ export type ResultadoComprobacionActualizacion =
       immediateUpdateAllowed: boolean;
       /** Flexible ya descargada: hay que reiniciar / completar instalacion. */
       flexibleYaDescargada: boolean;
+      /** Flexible aceptada y aun descargando o instalando. */
+      descargaEnCurso: boolean;
     };
+
+export type EventoDescargaFlexible =
+  | { tipo: 'progreso' }
+  | { tipo: 'descargada' }
+  | { tipo: 'fallo' }
+  | { tipo: 'cancelado' };
 
 function leerOmitida(): string | null {
   try {
@@ -36,6 +44,23 @@ export function omitirActualizacionHasta(versionCode: string): void {
   }
 }
 
+function installStatusDe(info: { installStatus?: number }): number | undefined {
+  return info.installStatus;
+}
+
+function esDescargaEnCurso(info: {
+  updateAvailability: AppUpdateAvailability;
+  installStatus?: number;
+}): boolean {
+  const st = installStatusDe(info);
+  if (info.updateAvailability === AppUpdateAvailability.UPDATE_IN_PROGRESS) return true;
+  return (
+    st === FlexibleUpdateInstallStatus.PENDING ||
+    st === FlexibleUpdateInstallStatus.DOWNLOADING ||
+    st === FlexibleUpdateInstallStatus.INSTALLING
+  );
+}
+
 /** Solo Android nativo. Si falla la comprobacion, no molesta al usuario. */
 export async function comprobarActualizacionPlay(): Promise<ResultadoComprobacionActualizacion> {
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
@@ -44,22 +69,27 @@ export async function comprobarActualizacionPlay(): Promise<ResultadoComprobacio
 
   try {
     const info = await AppUpdate.getAppUpdateInfo();
-    const installStatus = (info as { installStatus?: number }).installStatus;
+    const installStatus = installStatusDe(info);
     const flexibleYaDescargada = installStatus === FlexibleUpdateInstallStatus.DOWNLOADED;
+    const descargaEnCurso = !flexibleYaDescargada && esDescargaEnCurso(info);
 
     if (
       info.updateAvailability !== AppUpdateAvailability.UPDATE_AVAILABLE &&
-      !flexibleYaDescargada
+      !flexibleYaDescargada &&
+      !descargaEnCurso
     ) {
       return { disponible: false };
     }
 
     const availableVersionCode = String(info.availableVersionCode ?? '');
-    if (!availableVersionCode && !flexibleYaDescargada) return { disponible: false };
+    if (!availableVersionCode && !flexibleYaDescargada && !descargaEnCurso) {
+      return { disponible: false };
+    }
 
     const omitida = leerOmitida();
     if (
       !flexibleYaDescargada &&
+      !descargaEnCurso &&
       omitida &&
       availableVersionCode &&
       omitida === availableVersionCode
@@ -74,6 +104,7 @@ export async function comprobarActualizacionPlay(): Promise<ResultadoComprobacio
       flexibleUpdateAllowed: Boolean(info.flexibleUpdateAllowed),
       immediateUpdateAllowed: Boolean(info.immediateUpdateAllowed),
       flexibleYaDescargada,
+      descargaEnCurso,
     };
   } catch {
     return { disponible: false };
@@ -83,8 +114,13 @@ export async function comprobarActualizacionPlay(): Promise<ResultadoComprobacio
 export async function iniciarActualizacionPlay(opciones: {
   flexibleUpdateAllowed: boolean;
   immediateUpdateAllowed: boolean;
-}): Promise<'ok' | 'cancelado' | 'fallo'> {
+}): Promise<'ok' | 'cancelado' | 'fallo' | 'ya_descargada'> {
   try {
+    const actual = await AppUpdate.getAppUpdateInfo();
+    const st = installStatusDe(actual);
+    if (st === FlexibleUpdateInstallStatus.DOWNLOADED) return 'ya_descargada';
+    if (esDescargaEnCurso(actual)) return 'ok';
+
     if (opciones.flexibleUpdateAllowed) {
       const r = await AppUpdate.startFlexibleUpdate();
       if (r.code === AppUpdateResultCode.OK) return 'ok';
@@ -131,19 +167,31 @@ export async function completarActualizacionFlexible(): Promise<'ok' | 'fallo' |
   }
 }
 
-export async function suscribirDescargaFlexible(onDescargada: () => void): Promise<() => void> {
+export async function suscribirDescargaFlexible(
+  onEvento: (evento: EventoDescargaFlexible) => void
+): Promise<() => void> {
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') {
     return () => undefined;
   }
   const handle = await AppUpdate.addListener('onFlexibleUpdateStateChange', (state) => {
-    if (state.installStatus === FlexibleUpdateInstallStatus.DOWNLOADED) {
-      onDescargada();
-    }
     if (
-      state.installStatus === FlexibleUpdateInstallStatus.FAILED ||
-      state.installStatus === FlexibleUpdateInstallStatus.CANCELED
+      state.installStatus === FlexibleUpdateInstallStatus.PENDING ||
+      state.installStatus === FlexibleUpdateInstallStatus.DOWNLOADING ||
+      state.installStatus === FlexibleUpdateInstallStatus.INSTALLING
     ) {
-      /* el UI de reinicio no debe quedar atrapado sin feedback en el siguiente intento */
+      onEvento({ tipo: 'progreso' });
+      return;
+    }
+    if (state.installStatus === FlexibleUpdateInstallStatus.DOWNLOADED) {
+      onEvento({ tipo: 'descargada' });
+      return;
+    }
+    if (state.installStatus === FlexibleUpdateInstallStatus.FAILED) {
+      onEvento({ tipo: 'fallo' });
+      return;
+    }
+    if (state.installStatus === FlexibleUpdateInstallStatus.CANCELED) {
+      onEvento({ tipo: 'cancelado' });
     }
   });
   return () => {

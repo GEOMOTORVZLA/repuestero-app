@@ -428,7 +428,7 @@ export function Landing({
                   />
                 ) : cat.nombre === 'Aire acondicionado Automotriz' ? (
                   <img
-                    src="/categoria-aire-acondicionado-automotriz.png"
+                    src={encodeURI('/aire acondicionado.jpg')}
                     alt="Aire acondicionado Automotriz"
                     className="landing-categoria-icono landing-categoria-icono-img"
                   />
@@ -452,31 +452,31 @@ export function Landing({
                   />
                 ) : cat.nombre === 'Carrocería' ? (
                   <img
-                    src="/categoria-carroceria.png"
+                    src={encodeURI('/carroceria.jpg')}
                     alt="Carrocería"
                     className="landing-categoria-icono landing-categoria-icono-img"
                   />
                 ) : cat.nombre === 'Motores y componentes' ? (
                   <img
-                    src="/categoria-motores-componentes.png"
+                    src={encodeURI('/motores y componentes.jpg')}
                     alt="Motores y componentes"
                     className="landing-categoria-icono landing-categoria-icono-img"
                   />
                 ) : cat.nombre === 'Motores a diesel y componentes' ? (
                   <img
-                    src="/categoria-motores-diesel-componentes.png"
+                    src={encodeURI('/motores a diesel y componentes.jpg')}
                     alt="Motores a diesel y componentes"
                     className="landing-categoria-icono landing-categoria-icono-img"
                   />
                 ) : cat.nombre === 'Tren Delantero' ? (
                   <img
-                    src="/categoria-tren-delantero.png"
+                    src={encodeURI('/tren delantero.jpg')}
                     alt="Tren Delantero"
                     className="landing-categoria-icono landing-categoria-icono-img"
                   />
                 ) : cat.nombre === 'Transmisiones' ? (
                   <img
-                    src="/categoria-transmisiones.png"
+                    src={encodeURI('/transmisiones.jpg')}
                     alt="Transmisiones"
                     className="landing-categoria-icono landing-categoria-icono-img"
                   />
