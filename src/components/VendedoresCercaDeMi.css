@@ -599,6 +599,11 @@
   background: rgba(15, 23, 42, 0.42);
 }
 
+/* Encima del catálogo del vendedor (1700); no subir el modal global de búsqueda (1000). */
+.busqueda-repuestos-modal-overlay.vendedores-cerca-modal-contactar-overlay {
+  z-index: 1800;
+}
+
 .vendedores-cerca-productos-panel {
   width: min(980px, 100%);
   max-height: calc(100vh - 2rem);

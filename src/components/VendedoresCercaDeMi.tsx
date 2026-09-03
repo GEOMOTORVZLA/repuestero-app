@@ -1295,7 +1295,7 @@ export function VendedoresCercaDeMi({
 
       {contactarTienda && (
         <div
-          className="busqueda-repuestos-modal-overlay busqueda-repuestos-modal-overlay--detalle"
+          className="busqueda-repuestos-modal-overlay busqueda-repuestos-modal-overlay--detalle vendedores-cerca-modal-contactar-overlay"
           onClick={cerrarContactar}
           role="dialog"
           aria-modal="true"
