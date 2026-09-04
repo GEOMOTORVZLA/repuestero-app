@@ -85,6 +85,12 @@ function esKpiDetallePausados(d: AdminKpiDetalle | null): d is
   );
 }
 
+function esKpiDetalleCatalogoVertical(
+  d: AdminKpiDetalle | null
+): d is 'catalogo_auto' | 'catalogo_moto' {
+  return d === 'catalogo_auto' || d === 'catalogo_moto';
+}
+
 const MOTIVO_PAUSA_POR_KPI: Record<
   'productos_pausados_stock0' | 'productos_pausados_fecha' | 'productos_pausados_vendedor',
   MotivoPausaProducto
@@ -793,6 +799,47 @@ async function fetchPaginaProductosAdmin(opts: {
   };
 }
 
+const ADMIN_CATALOGO_KPI_PAGE = 1000;
+
+/** Listado del modal KPI auto/moto: consulta el servidor (no el recorte de 250 recientes). */
+async function fetchProductosCatalogoVerticalAdmin(opts: {
+  vertical: 'auto' | 'moto';
+  conCodigo?: boolean;
+}): Promise<{ productos: AdminProducto[]; error: string | null }> {
+  let conCodigo = opts.conCodigo !== false;
+  const selectCols = conCodigo ? ADMIN_PRODUCTOS_SELECT : ADMIN_PRODUCTOS_SELECT_SIN_CODIGO;
+  const acc: AdminProducto[] = [];
+  let from = 0;
+  const tope = opts.vertical === 'moto' ? 8000 : ADMIN_KPI_MODAL_ROWS;
+  for (;;) {
+    const page = Math.min(ADMIN_CATALOGO_KPI_PAGE, tope - from);
+    if (page <= 0) break;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query: any = (supabase.from('productos') as any)
+      .select(selectCols)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, from + page - 1);
+    if (opts.vertical === 'moto') {
+      query = query.eq('vertical', 'moto');
+    } else {
+      query = query.or('vertical.eq.auto,vertical.is.null');
+    }
+    const { data, error } = await query;
+    if (error) {
+      if (conCodigo && errorAdminPorColumnaCodigo(error.message)) {
+        return fetchProductosCatalogoVerticalAdmin({ ...opts, conCodigo: false });
+      }
+      return { productos: [], error: error.message };
+    }
+    const batch = (data ?? []) as unknown as AdminProducto[];
+    acc.push(...batch);
+    if (batch.length < page) break;
+    from += page;
+  }
+  return { productos: acc, error: null };
+}
+
 export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: DashboardAdminProps) {
   const { user, signOut } = useAuth();
   const defaultVerticalFiltro: 'todos' | 'auto' | 'moto' =
@@ -870,6 +917,11 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   /** Listado KPI modal «productos pausados» (misma lógica que SQL: activo distinto de true). */
   const [listaProductosPausadosModal, setListaProductosPausadosModal] = useState<AdminProducto[] | null>(null);
   const [errListaProductosPausadosModal, setErrListaProductosPausadosModal] = useState<string | null>(null);
+  /** Listado KPI modal catálogo auto/moto (conteo real en BD, no la muestra reciente). */
+  const [listaProductosCatalogoModal, setListaProductosCatalogoModal] = useState<AdminProducto[] | null>(
+    null
+  );
+  const [errListaProductosCatalogoModal, setErrListaProductosCatalogoModal] = useState<string | null>(null);
   const [especialidadTallerModal, setEspecialidadTallerModal] = useState<{
     nombre: string;
     items: string[];
@@ -1345,6 +1397,30 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       }
       const rows = (res.data ?? []) as AdminProducto[];
       setListaProductosPausadosModal(rows.filter((p) => p.activo !== true));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [kpiDetalle]);
+
+  useEffect(() => {
+    if (!esKpiDetalleCatalogoVertical(kpiDetalle)) {
+      setListaProductosCatalogoModal(null);
+      setErrListaProductosCatalogoModal(null);
+      return;
+    }
+    const vertical = kpiDetalle === 'catalogo_moto' ? 'moto' : 'auto';
+    let cancelled = false;
+    setListaProductosCatalogoModal(null);
+    setErrListaProductosCatalogoModal(null);
+    void (async () => {
+      const res = await fetchProductosCatalogoVerticalAdmin({ vertical });
+      if (cancelled) return;
+      if (res.error) {
+        setErrListaProductosCatalogoModal(res.error);
+        return;
+      }
+      setListaProductosCatalogoModal(res.productos);
     })();
     return () => {
       cancelled = true;
@@ -2109,6 +2185,28 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       setFiltroListaTalleres('nuevos_5d');
       setBusquedaTalleres('');
     }
+    if (desdeKpi === 'catalogo_moto' || desdeKpi === 'catalogo_auto') {
+      const vert = desdeKpi === 'catalogo_moto' ? 'moto' : 'auto';
+      const filtros: FiltrosConsultaAdminProductos = {
+        texto: '',
+        estado: 'todos',
+        vertical: vert,
+        tiendaId: '',
+      };
+      setBusquedaProductosAdminDraft('');
+      setBusquedaProductosAdminAplicada('');
+      setFiltroEstadoProductosAdminDraft('todos');
+      setFiltroEstadoProductosAdmin('todos');
+      setAdminFiltroVendedorTiendaIdDraft('');
+      setAdminFiltroVendedorTiendaId('');
+      setAdminFiltroVerticalDraft(vert);
+      setAdminFiltroVertical(vert);
+      setProductosTabCargada(true);
+      setTab(t);
+      setKpiDetalle(null);
+      void cargarProductosPrimeraPagina({ conIndicadorFiltros: true, filtros });
+      return;
+    }
     setTab(t);
     setKpiDetalle(null);
   };
@@ -2550,9 +2648,53 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       case 'productos_total':
         return tablaProductos(L.pReciente, 'No hay productos en el catálogo cargado.');
       case 'catalogo_auto':
-        return tablaProductos(L.pAuto, 'No hay productos de automóvil en el catálogo cargado.');
-      case 'catalogo_moto':
-        return tablaProductos(L.pMoto, 'No hay productos de moto en el catálogo cargado.');
+      case 'catalogo_moto': {
+        const esMoto = kpiDetalle === 'catalogo_moto';
+        const kpiEsperado = esMoto ? kpis?.productos_moto : kpis?.productos_auto;
+        const respaldo = esMoto ? L.pMoto : L.pAuto;
+        const cargandoCatalogo =
+          listaProductosCatalogoModal === null && errListaProductosCatalogoModal == null;
+        const listaMostrar =
+          errListaProductosCatalogoModal != null ? respaldo : (listaProductosCatalogoModal ?? []);
+        return (
+          <>
+            {cargandoCatalogo && (
+              <p className="dashboard-texto-placeholder">
+                Cargando catálogo de {esMoto ? 'motocicleta' : 'automóvil'} desde el servidor…
+              </p>
+            )}
+            {errListaProductosCatalogoModal != null && (
+              <p className="dashboard-kpi-modal-aviso">
+                No se pudo cargar el listado completo: {errListaProductosCatalogoModal}. Se muestran solo los del
+                catálogo ya cargado ({respaldo.length}).
+              </p>
+            )}
+            {!cargandoCatalogo &&
+              kpiEsperado != null &&
+              listaMostrar.length !== kpiEsperado && (
+                <p className="dashboard-kpi-modal-aviso">
+                  El KPI indica <strong>{kpiEsperado}</strong> y este listado muestra{' '}
+                  <strong>{listaMostrar.length}</strong>
+                  {listaMostrar.length > ADMIN_KPI_MODAL_ROWS
+                    ? ` (la tabla recorta a ${ADMIN_KPI_MODAL_ROWS} filas).`
+                    : '.'}{' '}
+                  Usa <strong>Ir a «Productos»</strong> con el filtro de vertical para ver el resto.
+                </p>
+            )}
+            {!cargandoCatalogo &&
+              tablaProductos(
+                listaMostrar,
+                errListaProductosCatalogoModal != null
+                  ? esMoto
+                    ? 'No hay productos de moto en el listado de respaldo.'
+                    : 'No hay productos de automóvil en el listado de respaldo.'
+                  : esMoto
+                    ? 'No hay productos de moto en el sistema.'
+                    : 'No hay productos de automóvil en el sistema.'
+              )}
+          </>
+        );
+      }
       case 'vendedores_pendientes':
         return tablaTiendas(L.vNuevos5d, 'No hay vendedores registrados en los últimos 5 días.');
       case 'talleres_pendientes':
