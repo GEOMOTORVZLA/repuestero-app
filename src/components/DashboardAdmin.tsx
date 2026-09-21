@@ -37,7 +37,8 @@ import {
 import './Dashboard.css';
 import './MisProductos.css';
 
-const ADMIN_LIST_LIMIT = 250;
+/** Tope por consulta en listados admin (vendedores, talleres, usuarios, compradores). */
+const ADMIN_LIST_PAGE = 1000;
 /** Filas máximas en el modal de detalle KPI (evita DOM enorme con miles de productos). */
 const ADMIN_KPI_MODAL_ROWS = 250;
 const ADMIN_TIENDAS_SELECT =
@@ -122,6 +123,11 @@ const KPI_DETALLE_TITULO: Record<AdminKpiDetalle, string> = {
 /** Escapa % y _ para patrones ILIKE en filtros .or() de PostgREST */
 function escapeIlikePatron(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
+function concatenarUnicosPorId<T extends { id: string }>(prev: T[], extra: T[]): T[] {
+  const vistos = new Set(prev.map((x) => x.id));
+  return [...prev, ...extra.filter((x) => !vistos.has(x.id))];
 }
 
 type AdminTab =
@@ -882,6 +888,18 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [busquedaUsuarios, setBusquedaUsuarios] = useState('');
   const [busquedaCompradores, setBusquedaCompradores] = useState('');
   const [busquedaVendedores, setBusquedaVendedores] = useState('');
+  const [hayMasVendedoresAdmin, setHayMasVendedoresAdmin] = useState(false);
+  const [offsetVendedoresAdmin, setOffsetVendedoresAdmin] = useState(0);
+  const [cargandoMasVendedoresAdmin, setCargandoMasVendedoresAdmin] = useState(false);
+  const [hayMasTalleresAdmin, setHayMasTalleresAdmin] = useState(false);
+  const [offsetTalleresAdmin, setOffsetTalleresAdmin] = useState(0);
+  const [cargandoMasTalleresAdmin, setCargandoMasTalleresAdmin] = useState(false);
+  const [hayMasUsuariosAdmin, setHayMasUsuariosAdmin] = useState(false);
+  const [offsetUsuariosAdmin, setOffsetUsuariosAdmin] = useState(0);
+  const [cargandoMasUsuariosAdmin, setCargandoMasUsuariosAdmin] = useState(false);
+  const [hayMasCompradoresAdmin, setHayMasCompradoresAdmin] = useState(false);
+  const [offsetCompradoresAdmin, setOffsetCompradoresAdmin] = useState(0);
+  const [cargandoMasCompradoresAdmin, setCargandoMasCompradoresAdmin] = useState(false);
   const [filtroListaVendedores, setFiltroListaVendedores] = useState<
     'todos' | 'nuevos_5d' | 'suspendidos'
   >('todos');
@@ -1054,49 +1072,123 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   };
 
   const cargarUsuarios = async (buscar: string) => {
-    const uRes = await supabase.rpc('admin_list_usuarios', {
+    const conOffset = await supabase.rpc('admin_list_usuarios', {
       p_buscar: buscar,
-      p_limit: ADMIN_LIST_LIMIT,
+      p_limit: ADMIN_LIST_PAGE,
+      p_offset: 0,
     });
+    const uRes =
+      conOffset.error && String(conOffset.error.message || '').toLowerCase().includes('function')
+        ? await supabase.rpc('admin_list_usuarios', { p_buscar: buscar, p_limit: ADMIN_LIST_PAGE })
+        : conOffset;
     if (uRes.error) {
       setUsuarios([]);
+      setHayMasUsuariosAdmin(false);
+      setOffsetUsuariosAdmin(0);
       setError(
         `Listado de usuarios: ${uRes.error.message}. ¿Ejecutaste la migración del panel (supabase-admin-busqueda-panel.sql + supabase-admin-panel.sql actualizado)?`
       );
     } else {
-      setUsuarios((uRes.data ?? []) as AdminUsuario[]);
+      const rows = (uRes.data ?? []) as AdminUsuario[];
+      setUsuarios(rows);
+      setHayMasUsuariosAdmin(rows.length === ADMIN_LIST_PAGE);
+      setOffsetUsuariosAdmin(rows.length);
     }
   };
 
   const cargarCompradores = async (buscar: string) => {
-    const cRes = await supabase.rpc('admin_list_compradores', {
+    const conOffset = await supabase.rpc('admin_list_compradores', {
       p_buscar: buscar,
-      p_limit: ADMIN_LIST_LIMIT,
+      p_limit: ADMIN_LIST_PAGE,
+      p_offset: 0,
     });
+    const cRes =
+      conOffset.error && String(conOffset.error.message || '').toLowerCase().includes('function')
+        ? await supabase.rpc('admin_list_compradores', { p_buscar: buscar, p_limit: ADMIN_LIST_PAGE })
+        : conOffset;
     if (cRes.error) {
       setCompradores([]);
+      setHayMasCompradoresAdmin(false);
+      setOffsetCompradoresAdmin(0);
       setError(`Listado de compradores: ${cRes.error.message}. ¿Script SQL del panel actualizado?`);
     } else {
-      setCompradores((cRes.data ?? []) as AdminComprador[]);
+      const rows = (cRes.data ?? []) as AdminComprador[];
+      setCompradores(rows);
+      setHayMasCompradoresAdmin(rows.length === ADMIN_LIST_PAGE);
+      setOffsetCompradoresAdmin(rows.length);
+    }
+  };
+
+  const cargarMasUsuarios = async () => {
+    if (cargandoMasUsuariosAdmin || !hayMasUsuariosAdmin) return;
+    setCargandoMasUsuariosAdmin(true);
+    try {
+      const uRes = await supabase.rpc('admin_list_usuarios', {
+        p_buscar: busquedaUsuarios,
+        p_limit: ADMIN_LIST_PAGE,
+        p_offset: offsetUsuariosAdmin,
+      });
+      if (uRes.error) {
+        setError(uRes.error.message);
+        setHayMasUsuariosAdmin(false);
+        return;
+      }
+      const rows = (uRes.data ?? []) as AdminUsuario[];
+      setUsuarios((prev) => {
+        const vistos = new Set(prev.map((u) => u.user_id));
+        return [...prev, ...rows.filter((u) => !vistos.has(u.user_id))];
+      });
+      setHayMasUsuariosAdmin(rows.length === ADMIN_LIST_PAGE);
+      setOffsetUsuariosAdmin((prev) => prev + rows.length);
+    } finally {
+      setCargandoMasUsuariosAdmin(false);
+    }
+  };
+
+  const cargarMasCompradores = async () => {
+    if (cargandoMasCompradoresAdmin || !hayMasCompradoresAdmin) return;
+    setCargandoMasCompradoresAdmin(true);
+    try {
+      const cRes = await supabase.rpc('admin_list_compradores', {
+        p_buscar: busquedaCompradores,
+        p_limit: ADMIN_LIST_PAGE,
+        p_offset: offsetCompradoresAdmin,
+      });
+      if (cRes.error) {
+        setError(cRes.error.message);
+        setHayMasCompradoresAdmin(false);
+        return;
+      }
+      const rows = (cRes.data ?? []) as AdminComprador[];
+      setCompradores((prev) => {
+        const vistos = new Set(prev.map((c) => c.user_id));
+        return [...prev, ...rows.filter((c) => !vistos.has(c.user_id))];
+      });
+      setHayMasCompradoresAdmin(rows.length === ADMIN_LIST_PAGE);
+      setOffsetCompradoresAdmin((prev) => prev + rows.length);
+    } finally {
+      setCargandoMasCompradoresAdmin(false);
     }
   };
 
   const cargarVendedores = async (buscar: string) => {
-    let q = supabase
-      .from('tiendas')
-      .select(ADMIN_TIENDAS_SELECT)
-      .order('created_at', { ascending: false })
-      .limit(ADMIN_LIST_LIMIT);
     const t = buscar.trim();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q: any = supabase.from('tiendas').select(ADMIN_TIENDAS_SELECT);
     if (t) {
       const esc = escapeIlikePatron(t);
-      q = q.or(`rif.ilike.%${esc}%,nombre.ilike.%${esc}%,nombre_comercial.ilike.%${esc}%`);
+      q = q.or(
+        `rif.ilike.%${esc}%,nombre.ilike.%${esc}%,nombre_comercial.ilike.%${esc}%,telefono.ilike.%${esc}%,email.ilike.%${esc}%`
+      );
     }
-    const vRes = await q;
+    const vRes = await q
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(0, ADMIN_LIST_PAGE - 1);
     if (vRes.error) setError(vRes.error.message);
     let rows = (vRes.data ?? []) as AdminTienda[];
+    const hayMas = rows.length === ADMIN_LIST_PAGE;
 
-    // Tiendas suspendidas pueden quedar fuera de las 250 filas recientes; el KPI las cuenta igual.
     if (!t) {
       const { data: suspendidas } = await fetchTiendasSuspendidasImpago(2000);
       if (suspendidas.length) {
@@ -1118,22 +1210,57 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     }
 
     setVendedores(rows);
+    setHayMasVendedoresAdmin(hayMas);
+    setOffsetVendedoresAdmin(hayMas ? ADMIN_LIST_PAGE : rows.length);
+  };
+
+  const cargarMasVendedores = async () => {
+    if (cargandoMasVendedoresAdmin || !hayMasVendedoresAdmin) return;
+    setCargandoMasVendedoresAdmin(true);
+    try {
+      const t = busquedaVendedores.trim();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q: any = supabase.from('tiendas').select(ADMIN_TIENDAS_SELECT);
+      if (t) {
+        const esc = escapeIlikePatron(t);
+        q = q.or(
+          `rif.ilike.%${esc}%,nombre.ilike.%${esc}%,nombre_comercial.ilike.%${esc}%,telefono.ilike.%${esc}%,email.ilike.%${esc}%`
+        );
+      }
+      const vRes = await q
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(offsetVendedoresAdmin, offsetVendedoresAdmin + ADMIN_LIST_PAGE - 1);
+      if (vRes.error) {
+        setError(vRes.error.message);
+        return;
+      }
+      const rows = (vRes.data ?? []) as AdminTienda[];
+      setVendedores((prev) => concatenarUnicosPorId(prev, rows));
+      setHayMasVendedoresAdmin(rows.length === ADMIN_LIST_PAGE);
+      setOffsetVendedoresAdmin((prev) => prev + rows.length);
+    } finally {
+      setCargandoMasVendedoresAdmin(false);
+    }
   };
 
   const cargarTalleres = async (buscar: string) => {
-    let q = supabase
-      .from('talleres')
-      .select(ADMIN_TALLERES_SELECT)
-      .order('created_at', { ascending: false })
-      .limit(ADMIN_LIST_LIMIT);
     const t = buscar.trim();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q: any = supabase.from('talleres').select(ADMIN_TALLERES_SELECT);
     if (t) {
       const esc = escapeIlikePatron(t);
-      q = q.or(`nombre.ilike.%${esc}%,nombre_comercial.ilike.%${esc}%,telefono.ilike.%${esc}%`);
+      q = q.or(
+        `rif.ilike.%${esc}%,nombre.ilike.%${esc}%,nombre_comercial.ilike.%${esc}%,telefono.ilike.%${esc}%,email.ilike.%${esc}%`
+      );
     }
-    const tRes = await q;
+    const tRes = await q
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(0, ADMIN_LIST_PAGE - 1);
     if (tRes.error) setError(tRes.error.message);
     let rows = (tRes.data ?? []) as AdminTaller[];
+    const hayMas = rows.length === ADMIN_LIST_PAGE;
 
     if (!t) {
       const { data: suspendidos } = await fetchTalleresSuspendidosImpago(2000);
@@ -1156,6 +1283,38 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     }
 
     setTalleres(rows);
+    setHayMasTalleresAdmin(hayMas);
+    setOffsetTalleresAdmin(hayMas ? ADMIN_LIST_PAGE : rows.length);
+  };
+
+  const cargarMasTalleres = async () => {
+    if (cargandoMasTalleresAdmin || !hayMasTalleresAdmin) return;
+    setCargandoMasTalleresAdmin(true);
+    try {
+      const t = busquedaTalleres.trim();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q: any = supabase.from('talleres').select(ADMIN_TALLERES_SELECT);
+      if (t) {
+        const esc = escapeIlikePatron(t);
+        q = q.or(
+          `rif.ilike.%${esc}%,nombre.ilike.%${esc}%,nombre_comercial.ilike.%${esc}%,telefono.ilike.%${esc}%,email.ilike.%${esc}%`
+        );
+      }
+      const tRes = await q
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(offsetTalleresAdmin, offsetTalleresAdmin + ADMIN_LIST_PAGE - 1);
+      if (tRes.error) {
+        setError(tRes.error.message);
+        return;
+      }
+      const rows = (tRes.data ?? []) as AdminTaller[];
+      setTalleres((prev) => concatenarUnicosPorId(prev, rows));
+      setHayMasTalleresAdmin(rows.length === ADMIN_LIST_PAGE);
+      setOffsetTalleresAdmin((prev) => prev + rows.length);
+    } finally {
+      setCargandoMasTalleresAdmin(false);
+    }
   };
 
   const cargar = async (opts?: { silencioso?: boolean }) => {
@@ -2374,7 +2533,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
         const { rows, total, trunc } = capFilasKpiModal(L.u);
         return (
           <>
-            {notaCargaVsKpi(kpis?.usuarios_total, usuarios.length, ADMIN_LIST_LIMIT, 'usuarios')}
+            {notaCargaVsKpi(kpis?.usuarios_total, usuarios.length, ADMIN_LIST_PAGE, 'usuarios')}
             {total === 0 ? (
               <p className="dashboard-texto-placeholder">No hay usuarios en el listado cargado.</p>
             ) : (
@@ -2440,7 +2599,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       case 'vendedores_total':
         return (
           <>
-            {notaCargaVsKpi(kpis?.vendedores_total, vendedores.length, ADMIN_LIST_LIMIT, 'tiendas / vendedores')}
+            {notaCargaVsKpi(kpis?.vendedores_total, vendedores.length, ADMIN_LIST_PAGE, 'tiendas / vendedores')}
             {tablaTiendas(L.v, 'No hay tiendas en el listado cargado.')}
           </>
         );
@@ -2530,7 +2689,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       case 'talleres_total':
         return (
           <>
-            {notaCargaVsKpi(kpis?.talleres_total, talleres.length, ADMIN_LIST_LIMIT, 'talleres')}
+            {notaCargaVsKpi(kpis?.talleres_total, talleres.length, ADMIN_LIST_PAGE, 'talleres')}
             {tablaTalleres(L.t, 'No hay talleres en el listado cargado.')}
           </>
         );
@@ -2538,7 +2697,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
         const { rows, total, trunc } = capFilasKpiModal(L.c);
         return (
           <>
-            {notaCargaVsKpi(kpis?.compradores_total, compradores.length, ADMIN_LIST_LIMIT, 'compradores')}
+            {notaCargaVsKpi(kpis?.compradores_total, compradores.length, ADMIN_LIST_PAGE, 'compradores')}
             {total === 0 ? (
               <p className="dashboard-texto-placeholder">No hay compradores en el listado cargado.</p>
             ) : (
@@ -2951,7 +3110,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       spellCheck={false}
                     />
                     <span className="dashboard-admin-busqueda-hint">
-                      Hasta {ADMIN_LIST_LIMIT} coincidencias. Vacío = recientes primero.
+                      Hasta {ADMIN_LIST_PAGE} por consulta; usa «Cargar más» si hace falta. Vacío = recientes
+                      primero. La búsqueda va al servidor (correo, nombre, teléfono, ID).
                     </span>
                   </div>
                   <p className="dashboard-admin-productos-hint">
@@ -3060,6 +3220,18 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </tbody>
                     </table>
                   </div>
+                  {hayMasUsuariosAdmin && (
+                    <div className="dashboard-admin-cargar-mas">
+                      <button
+                        type="button"
+                        className="dashboard-admin-btn ok"
+                        disabled={cargandoMasUsuariosAdmin || cargando}
+                        onClick={() => void cargarMasUsuarios()}
+                      >
+                        {cargandoMasUsuariosAdmin ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
+                      </button>
+                    </div>
+                  )}
                 </section>
               )}
 
@@ -3600,7 +3772,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                   <h2 className="dashboard-seccion-titulo">Perfiles de vendedores</h2>
                   <div className="dashboard-admin-busqueda-fila">
                     <label htmlFor="admin-buscar-vendedores" className="dashboard-admin-busqueda-label">
-                      Buscar (RIF, nombre o nombre comercial)
+                      Buscar (RIF, nombre, comercial, teléfono o correo)
                     </label>
                     <input
                       id="admin-buscar-vendedores"
@@ -3613,9 +3785,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       spellCheck={false}
                     />
                     <span className="dashboard-admin-busqueda-hint">
-                      Hasta {ADMIN_LIST_LIMIT} filas recientes + suspendidos. Usa el filtro desplegable para ver
-                      altas de los <strong>últimos 5 días</strong>. Si un registro está mal:{' '}
-                      <strong>Ocultar</strong>. Membresía: <strong>+30d</strong> / <strong>+1a</strong>.
+                      Hasta {ADMIN_LIST_PAGE} por consulta (búsqueda en todo el catálogo, no solo los más
+                      nuevos). «Cargar más» pide otro bloque. Filtro: <strong>últimos 5 días</strong>. Si está
+                      mal: <strong>Ocultar</strong>. Membresía: <strong>+30d</strong> / <strong>+1a</strong>.
                     </span>
                   </div>
                   <div className="dashboard-admin-acciones-masivas">
@@ -3838,6 +4010,18 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </tbody>
                     </table>
                   </div>
+                  {hayMasVendedoresAdmin && (
+                    <div className="dashboard-admin-cargar-mas">
+                      <button
+                        type="button"
+                        className="dashboard-admin-btn ok"
+                        disabled={cargandoMasVendedoresAdmin || cargando}
+                        onClick={() => void cargarMasVendedores()}
+                      >
+                        {cargandoMasVendedoresAdmin ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
+                      </button>
+                    </div>
+                  )}
                 </section>
               )}
 
@@ -3846,7 +4030,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                   <h2 className="dashboard-seccion-titulo">Perfiles de talleres</h2>
                   <div className="dashboard-admin-busqueda-fila">
                     <label htmlFor="admin-buscar-talleres" className="dashboard-admin-busqueda-label">
-                      Buscar (nombre, nombre comercial o teléfono)
+                      Buscar (RIF, nombre, comercial o teléfono)
                     </label>
                     <input
                       id="admin-buscar-talleres"
@@ -3859,9 +4043,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       spellCheck={false}
                     />
                     <span className="dashboard-admin-busqueda-hint">
-                      Hasta {ADMIN_LIST_LIMIT} filas recientes + suspendidos. Usa el filtro desplegable para ver
-                      altas de los <strong>últimos 5 días</strong>. Si un registro está mal:{' '}
-                      <strong>Ocultar</strong>. Membresía: <strong>+30d</strong> / <strong>+1a</strong>.
+                      Hasta {ADMIN_LIST_PAGE} por consulta (búsqueda en todo el catálogo, no solo los más
+                      nuevos). «Cargar más» pide otro bloque. Filtro: <strong>últimos 5 días</strong>. Si está
+                      mal: <strong>Ocultar</strong>. Membresía: <strong>+30d</strong> / <strong>+1a</strong>.
                     </span>
                   </div>
                   <div className="dashboard-admin-acciones-masivas">
@@ -4087,6 +4271,18 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </tbody>
                     </table>
                   </div>
+                  {hayMasTalleresAdmin && (
+                    <div className="dashboard-admin-cargar-mas">
+                      <button
+                        type="button"
+                        className="dashboard-admin-btn ok"
+                        disabled={cargandoMasTalleresAdmin || cargando}
+                        onClick={() => void cargarMasTalleres()}
+                      >
+                        {cargandoMasTalleresAdmin ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
+                      </button>
+                    </div>
+                  )}
                 </section>
               )}
 
@@ -4108,9 +4304,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       spellCheck={false}
                     />
                     <span className="dashboard-admin-busqueda-hint">
-                      Hasta {ADMIN_LIST_LIMIT} filas. La suspensión por pago queda en{' '}
-                      <code>app_metadata.suspendido_membresia</code> (la app puede leerla para bloquear funciones de
-                      comprador).
+                      Hasta {ADMIN_LIST_PAGE} por consulta; «Cargar más» si hay más. La suspensión por pago
+                      queda en <code>app_metadata.suspendido_membresia</code>.
                     </span>
                   </div>
                   <div className="dashboard-admin-table-wrap">
@@ -4192,6 +4387,18 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </tbody>
                     </table>
                   </div>
+                  {hayMasCompradoresAdmin && (
+                    <div className="dashboard-admin-cargar-mas">
+                      <button
+                        type="button"
+                        className="dashboard-admin-btn ok"
+                        disabled={cargandoMasCompradoresAdmin || cargando}
+                        onClick={() => void cargarMasCompradores()}
+                      >
+                        {cargandoMasCompradoresAdmin ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
+                      </button>
+                    </div>
+                  )}
                 </section>
               )}
             </>
