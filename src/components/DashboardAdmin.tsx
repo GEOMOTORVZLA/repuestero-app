@@ -690,8 +690,11 @@ const ADMIN_PRODUCTOS_SELECT =
 const ADMIN_PRODUCTOS_SELECT_SIN_CODIGO =
   'id, nombre, descripcion, comentarios, tienda_id, categoria, marca, modelo, anio, precio_usd, moneda, activo, aprobacion_publica, imagen_url, imagenes_extra, created_at, stock_confirmado_at, pausado_por_stock_vencido, stock_actual, vertical, disponibilidad_aviso, es_oferta, tiendas(id, nombre, nombre_comercial)';
 
-/** Lotes pequeños: el admin busca/filtra; no descarga todo el catálogo. */
-const ADMIN_PRODUCTOS_PAGE = 40;
+/**
+ * Tope por consulta en Productos (admin): 1000 coincidencias.
+ * PostgREST suele devolver como máximo 1000 filas; no pedimos 1001 para detectar hayMás.
+ */
+const ADMIN_PRODUCTOS_LIMIT = 1000;
 
 type FiltrosConsultaAdminProductos = {
   texto: string;
@@ -782,7 +785,7 @@ async function fetchPaginaProductosAdmin(opts: {
     query = aplicarTerminosTextoAMisProductos(query, texto, conCodigo);
   }
 
-  const { data, error } = await query.range(offset, offset + ADMIN_PRODUCTOS_PAGE);
+  const { data, error } = await query.range(offset, offset + ADMIN_PRODUCTOS_LIMIT - 1);
   if (error) {
     if (conCodigo && errorAdminPorColumnaCodigo(error.message)) {
       return fetchPaginaProductosAdmin({ ...opts, conCodigo: false });
@@ -790,9 +793,9 @@ async function fetchPaginaProductosAdmin(opts: {
     return { productos: [], hayMas: false, error: error.message, conCodigo };
   }
   const filas = (data ?? []) as unknown as AdminProducto[];
-  const hayMas = filas.length > ADMIN_PRODUCTOS_PAGE;
+  const hayMas = filas.length === ADMIN_PRODUCTOS_LIMIT;
   return {
-    productos: hayMas ? filas.slice(0, ADMIN_PRODUCTOS_PAGE) : filas,
+    productos: filas,
     hayMas,
     error: null,
     conCodigo,
@@ -3208,13 +3211,13 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                   <p className="dashboard-admin-productos-hint" role="status">
                     {busquedaProductosAdminAplicada.trim()
                       ? `Búsqueda «${busquedaProductosAdminAplicada.trim()}»: ${productosFiltrados.length} producto(s) en esta vista${
-                          hayMasProductosAdmin ? ' (hay más)' : ''
+                          hayMasProductosAdmin ? ' (hay más de 1000; afina el filtro o carga otro bloque)' : ''
                         }. `
                       : `Mostrando ${productosFiltrados.length} producto(s)${
-                          hayMasProductosAdmin ? ' (hay más en el catálogo)' : ''
+                          hayMasProductosAdmin ? ' (hay más de 1000; afina el filtro o carga otro bloque)' : ''
                         }. `}
-                    Se consultan {ADMIN_PRODUCTOS_PAGE} por vez. Pulsa «Aplicar filtros» (o Intro) para buscar.
-                    Las acciones masivas aplican solo a lo ya cargado en esta lista.
+                    Hasta {ADMIN_PRODUCTOS_LIMIT} por consulta. Pulsa «Aplicar filtros» (o Intro) para buscar.
+                    Las acciones masivas aplican a esta lista cargada (máximo {ADMIN_PRODUCTOS_LIMIT} por bloque).
                   </p>
                   <div className="dashboard-admin-acciones-masivas dashboard-admin-bulk-productos-toolbar">
                     <label htmlFor="admin-bulk-productos-accion" className="dashboard-admin-filtro-vertical">
@@ -3455,7 +3458,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       >
                         {cargandoMasProductosAdmin
                           ? 'Cargando…'
-                          : `Cargar más (${ADMIN_PRODUCTOS_PAGE})`}
+                          : `Cargar más (${ADMIN_PRODUCTOS_LIMIT})`}
                       </button>
                     </div>
                   )}
