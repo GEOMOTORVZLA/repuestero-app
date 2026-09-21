@@ -25,5 +25,8 @@ export function mensajeErrorCorreoAuth(error: string): string {
   if (n.includes('invalid login credentials')) {
     return 'Correo o contraseña incorrectos. Si no recuerdas tu contraseña, usa "Olvidi mi contraseña".';
   }
+  if (n.includes('database error saving new user')) {
+    return 'No se pudo crear la cuenta. Es posible que estos datos (RIF o correo) ya estén registrados. Inicia sesión o recupera la contraseña.';
+  }
   return error;
 }
