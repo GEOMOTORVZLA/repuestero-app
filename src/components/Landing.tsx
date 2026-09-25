@@ -59,7 +59,7 @@ interface LandingProps {
 // ?v= obliga al navegador a refrescar caché al cambiar banners (sube el número cuando cambien)
 const HERO_IMAGENES_AUTO = [
   '/header-banner.png?v=4',
-  '/header-banner-2.png?v=3',
+  '/header-banner-2.png?v=4',
   '/header-banner-3.png?v=3',
   '/header-banner-4.png?v=3',
 ];
