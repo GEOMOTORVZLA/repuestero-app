@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { MARCAS_MOTOS, getModelosPorMarcaMoto } from '../data/marcasMotos';
 import { VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import { mensajeWhatsappVendedorProducto, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
+import { registrarEventoContacto } from '../services/eventoContactoFlujo';
 import { TarjetaProductoBusqueda, type ProductoTarjetaBusqueda } from './TarjetaProductoBusqueda';
 import './MecanicoVirtualObd.css';
 
@@ -318,7 +319,14 @@ export function MecanicoVirtualMoto({
     const telefono = p.tiendas?.telefono;
     if (!telefono) return;
     const url = urlWhatsAppGeomotor(telefono, mensajeWhatsappVendedorProducto(p.nombre));
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    if (url) {
+      registrarEventoContacto({
+        tipo: 'whatsapp',
+        origen: 'mecanico_virtual_moto',
+        productoId: p.id,
+      });
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const abrirAsistente = () => {

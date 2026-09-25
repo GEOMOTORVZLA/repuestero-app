@@ -7,6 +7,7 @@ import { MARCAS_MODELOS } from '../data/marcasModelos';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO, VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import { mensajeWhatsappVendedorProducto, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
+import { registrarEventoContacto } from '../services/eventoContactoFlujo';
 import { TarjetaProductoBusqueda, type ProductoTarjetaBusqueda } from './TarjetaProductoBusqueda';
 import './MecanicoVirtualObd.css';
 
@@ -358,7 +359,14 @@ export function MecanicoVirtualObd({
     const telefono = p.tiendas?.telefono;
     if (!telefono) return;
     const url = urlWhatsAppGeomotor(telefono, mensajeWhatsappVendedorProducto(p.nombre));
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    if (url) {
+      registrarEventoContacto({
+        tipo: 'whatsapp',
+        origen: 'mecanico_virtual',
+        productoId: p.id,
+      });
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const cerrarModal = () => {

@@ -12,6 +12,7 @@ import {
 } from '../constants/googleMapsNavUi';
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
 import { mensajeWhatsappTaller, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
+import { registrarEventoContacto } from '../services/eventoContactoFlujo';
 import './avisoSeleccionarEstado.css';
 import './BusquedaRepuestos.css';
 import './VendedoresCercaDeMi.css';
@@ -148,6 +149,11 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
   const abrirDetalleTaller = (t: Taller) => {
     if (!user) return;
     setContactarTaller(t);
+    registrarEventoContacto({
+      tipo: 'contactar_modal',
+      origen: 'busqueda_talleres',
+      tallerId: t.id,
+    });
   };
   const cerrarContactar = () => {
     setContactarTaller(null);
@@ -505,6 +511,14 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
                   target="_blank"
                   rel="noopener noreferrer"
                   className="busqueda-repuestos-modal-whatsapp"
+                  onClick={() =>
+                    contactarTaller &&
+                    registrarEventoContacto({
+                      tipo: 'whatsapp',
+                      origen: 'busqueda_talleres',
+                      tallerId: contactarTaller.id,
+                    })
+                  }
                 >
                   Contactar por WhatsApp
                 </a>

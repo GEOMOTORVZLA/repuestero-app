@@ -159,6 +159,48 @@ const KPI_DETALLE_IR_TAB: Partial<Record<AdminKpiDetalle, AdminTab>> = {
   productos_pendientes_web: 'productos',
 };
 
+type FlujoConteoPeriodo = { modal: number; whatsapp: number; total: number };
+type FlujoTopFila = { nombre?: string | null; total?: number };
+type AdminFlujoContactos = {
+  hoy: FlujoConteoPeriodo;
+  d7: FlujoConteoPeriodo;
+  d30: FlujoConteoPeriodo;
+  top_vendedores: FlujoTopFila[];
+  top_productos: FlujoTopFila[];
+  top_talleres: FlujoTopFila[];
+};
+
+function tablaFlujoTop(titulo: string, filas: FlujoTopFila[] | undefined, vacio: string) {
+  const list = filas ?? [];
+  return (
+    <div>
+      <h3 className="dashboard-kpi-grupo-titulo">{titulo}</h3>
+      {list.length === 0 ? (
+        <p className="dashboard-texto-placeholder">{vacio}</p>
+      ) : (
+        <div className="dashboard-admin-table-wrap">
+          <table className="dashboard-admin-table">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Contactos</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((f, i) => (
+                <tr key={`${f.nombre ?? 'fila'}-${i}`}>
+                  <td className="dashboard-admin-texto-td">{f.nombre?.trim() || '—'}</td>
+                  <td>{f.total ?? 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function etiquetaPestañaAdmin(t: AdminTab): string {
   const m: Record<AdminTab, string> = {
     resumen: 'Inicio admin',
@@ -885,6 +927,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [talleres, setTalleres] = useState<AdminTaller[]>([]);
   const [accionando, setAccionando] = useState<string | null>(null);
   const [kpis, setKpis] = useState<AdminKpis | null>(null);
+  const [flujoContactos, setFlujoContactos] = useState<AdminFlujoContactos | null>(null);
+  const [flujoContactosError, setFlujoContactosError] = useState<string | null>(null);
   const [busquedaUsuarios, setBusquedaUsuarios] = useState('');
   const [busquedaCompradores, setBusquedaCompradores] = useState('');
   const [busquedaVendedores, setBusquedaVendedores] = useState('');
@@ -1069,6 +1113,17 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     if (!e && data && typeof data === 'object') {
       setKpis(data as AdminKpis);
     }
+  };
+
+  const cargarFlujoContactos = async () => {
+    const { data, error: e } = await supabase.rpc('admin_flujo_contactos');
+    if (e) {
+      setFlujoContactos(null);
+      setFlujoContactosError(e.message);
+      return;
+    }
+    setFlujoContactosError(null);
+    setFlujoContactos((data ?? null) as AdminFlujoContactos | null);
   };
 
   const cargarUsuarios = async (buscar: string) => {
@@ -1323,7 +1378,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       setCargando(true);
       setError(null);
     }
-    await cargarKpis();
+    await Promise.all([cargarKpis(), cargarFlujoContactos()]);
     await Promise.all([
       cargarUsuarios(''),
       cargarCompradores(''),
@@ -3071,6 +3126,78 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                           <p className="dashboard-kpi-valor">{productosPausadosVendedor}</p>
                         </button>
                       </div>
+                    </div>
+
+                    <div className="dashboard-kpi-grupo">
+                      <h3 className="dashboard-kpi-grupo-titulo">Flujo: Contactar vendedor / taller</h3>
+                      <p className="dashboard-kpi-grid-hint">
+                        Clics reales desde que exista el SQL <code>supabase-admin-flujo-contactos.sql</code>.
+                        WhatsApp = pulsó el enlace; no confirma que envió el mensaje. El día usa hora de Venezuela.
+                      </p>
+                      {flujoContactosError ? (
+                        <p className="dashboard-admin-productos-hint">
+                          No se pudieron cargar las métricas de flujo. Ejecuta en Supabase{' '}
+                          <code>supabase-admin-flujo-contactos.sql</code>. Detalle: {flujoContactosError}
+                        </p>
+                      ) : (
+                        <>
+                          <div className="dashboard-kpi-grid">
+                            <div className="dashboard-kpi-card">
+                              <p className="dashboard-kpi-label">Hoy · abrió ficha</p>
+                              <p className="dashboard-kpi-valor">{flujoContactos?.hoy?.modal ?? 0}</p>
+                            </div>
+                            <div className="dashboard-kpi-card">
+                              <p className="dashboard-kpi-label">Hoy · WhatsApp</p>
+                              <p className="dashboard-kpi-valor">{flujoContactos?.hoy?.whatsapp ?? 0}</p>
+                            </div>
+                            <div className="dashboard-kpi-card">
+                              <p className="dashboard-kpi-label">Hoy · total</p>
+                              <p className="dashboard-kpi-valor">{flujoContactos?.hoy?.total ?? 0}</p>
+                            </div>
+                            <div className="dashboard-kpi-card">
+                              <p className="dashboard-kpi-label">7 días · ficha</p>
+                              <p className="dashboard-kpi-valor">{flujoContactos?.d7?.modal ?? 0}</p>
+                            </div>
+                            <div className="dashboard-kpi-card">
+                              <p className="dashboard-kpi-label">7 días · WhatsApp</p>
+                              <p className="dashboard-kpi-valor">{flujoContactos?.d7?.whatsapp ?? 0}</p>
+                            </div>
+                            <div className="dashboard-kpi-card">
+                              <p className="dashboard-kpi-label">7 días · total</p>
+                              <p className="dashboard-kpi-valor">{flujoContactos?.d7?.total ?? 0}</p>
+                            </div>
+                            <div className="dashboard-kpi-card">
+                              <p className="dashboard-kpi-label">30 días · ficha</p>
+                              <p className="dashboard-kpi-valor">{flujoContactos?.d30?.modal ?? 0}</p>
+                            </div>
+                            <div className="dashboard-kpi-card">
+                              <p className="dashboard-kpi-label">30 días · WhatsApp</p>
+                              <p className="dashboard-kpi-valor">{flujoContactos?.d30?.whatsapp ?? 0}</p>
+                            </div>
+                            <div className="dashboard-kpi-card">
+                              <p className="dashboard-kpi-label">30 días · total</p>
+                              <p className="dashboard-kpi-valor">{flujoContactos?.d30?.total ?? 0}</p>
+                            </div>
+                          </div>
+                          <div className="dashboard-flujo-tablas">
+                            {tablaFlujoTop(
+                              'Top vendedores (30 días)',
+                              flujoContactos?.top_vendedores,
+                              'Aún no hay contactos a vendedores.'
+                            )}
+                            {tablaFlujoTop(
+                              'Top productos (30 días)',
+                              flujoContactos?.top_productos,
+                              'Aún no hay contactos a productos.'
+                            )}
+                            {tablaFlujoTop(
+                              'Top talleres (30 días)',
+                              flujoContactos?.top_talleres,
+                              'Aún no hay contactos a talleres.'
+                            )}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                   <p className="dashboard-texto-placeholder" style={{ marginTop: '0.5rem' }}>

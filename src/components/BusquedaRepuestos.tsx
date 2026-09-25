@@ -5,6 +5,7 @@ import {
   registrarContactoProducto,
   usuarioDebeRegistrarHistorialContactos,
 } from '../services/historialContactosProducto';
+import { registrarEventoContacto } from '../services/eventoContactoFlujo';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
@@ -572,6 +573,11 @@ export function BusquedaRepuestos({
   const abrirContactar = (p: ProductoResultado) => {
     if (!user) return;
     setContactarProducto(p);
+    registrarEventoContacto({
+      tipo: 'contactar_modal',
+      origen: 'busqueda_repuestos',
+      productoId: p.id,
+    });
     if (user) {
       void (async () => {
         const debe = await usuarioDebeRegistrarHistorialContactos(supabase, user);
@@ -1057,6 +1063,13 @@ export function BusquedaRepuestos({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="busqueda-repuestos-modal-whatsapp"
+                  onClick={() =>
+                    registrarEventoContacto({
+                      tipo: 'whatsapp',
+                      origen: 'busqueda_repuestos',
+                      productoId: contactarProducto.id,
+                    })
+                  }
                 >
                   Contactar por WhatsApp
                 </a>

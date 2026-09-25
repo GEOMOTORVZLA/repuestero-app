@@ -9,6 +9,7 @@ import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO, VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import { TarjetaProductoBusqueda, type ProductoTarjetaBusqueda } from './TarjetaProductoBusqueda';
 import { mensajeWhatsappVendedorProducto, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
+import { registrarEventoContacto } from '../services/eventoContactoFlujo';
 import './MecanicoVirtualObd.css';
 
 /** En móvil / app nativa, `capture` en el input file abre la cámara del dispositivo. */
@@ -845,7 +846,14 @@ export function IdentificarRepuestoVision({ vertical, onIaModalCapaDelta }: Iden
     const tel = p.tiendas?.telefono;
     if (!tel) return;
     const url = urlWhatsAppGeomotor(tel, mensajeWhatsappVendedorProducto(p.nombre));
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    if (url) {
+      registrarEventoContacto({
+        tipo: 'whatsapp',
+        origen: 'identificar_repuesto',
+        productoId: p.id,
+      });
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const imagenCard = esMoto ? '/mecanico moto.png' : '/identificar-repuesto-auto.png';

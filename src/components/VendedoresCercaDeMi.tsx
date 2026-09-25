@@ -19,6 +19,7 @@ import {
 } from '../utils/enlaceCompartirProducto';
 import { productoCoincideTextoFlexible, terminosBusquedaProducto, aplicarTerminosTextoABusquedaTiendas, aplicarTerminosTextoABusquedaProductos } from '../utils/busquedaProductosTexto';
 import { aplicarFiltroStockPublico } from '../utils/stockActualInventario';
+import { registrarEventoContacto } from '../services/eventoContactoFlujo';
 import './VendedoresCercaDeMi.css';
 import './avisoSeleccionarEstado.css';
 import './BusquedaRepuestos.css';
@@ -588,6 +589,11 @@ export function VendedoresCercaDeMi({
   const abrirContactar = (t: TiendaCerca) => {
     if (!user) return;
     setContactarTienda(t);
+    registrarEventoContacto({
+      tipo: 'contactar_modal',
+      origen: 'vendedores_cerca',
+      tiendaId: t.id,
+    });
   };
 
   const tiendaProductosAbierta = tiendaProductosAbiertaSnap;
@@ -1359,6 +1365,14 @@ export function VendedoresCercaDeMi({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="busqueda-repuestos-modal-whatsapp"
+                  onClick={() =>
+                    contactarTienda &&
+                    registrarEventoContacto({
+                      tipo: 'whatsapp',
+                      origen: 'vendedores_cerca',
+                      tiendaId: contactarTienda.id,
+                    })
+                  }
                 >
                   Contactar por WhatsApp
                 </a>
