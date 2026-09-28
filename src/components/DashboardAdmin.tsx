@@ -201,6 +201,14 @@ function tablaFlujoTop(titulo: string, filas: FlujoTopFila[] | undefined, vacio:
   );
 }
 
+type AdminConteoEstado = {
+  estado: string;
+  orden?: number;
+  vendedores: number;
+  talleres: number;
+  compradores: number;
+};
+
 function etiquetaPestañaAdmin(t: AdminTab): string {
   const m: Record<AdminTab, string> = {
     resumen: 'Inicio admin',
@@ -929,6 +937,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [kpis, setKpis] = useState<AdminKpis | null>(null);
   const [flujoContactos, setFlujoContactos] = useState<AdminFlujoContactos | null>(null);
   const [flujoContactosError, setFlujoContactosError] = useState<string | null>(null);
+  const [conteoPorEstado, setConteoPorEstado] = useState<AdminConteoEstado[] | null>(null);
+  const [conteoPorEstadoError, setConteoPorEstadoError] = useState<string | null>(null);
   const [busquedaUsuarios, setBusquedaUsuarios] = useState('');
   const [busquedaCompradores, setBusquedaCompradores] = useState('');
   const [busquedaVendedores, setBusquedaVendedores] = useState('');
@@ -1124,6 +1134,17 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     }
     setFlujoContactosError(null);
     setFlujoContactos((data ?? null) as AdminFlujoContactos | null);
+  };
+
+  const cargarConteoPorEstado = async () => {
+    const { data, error: e } = await supabase.rpc('admin_conteo_por_estado');
+    if (e) {
+      setConteoPorEstado(null);
+      setConteoPorEstadoError(e.message);
+      return;
+    }
+    setConteoPorEstadoError(null);
+    setConteoPorEstado((data ?? []) as AdminConteoEstado[]);
   };
 
   const cargarUsuarios = async (buscar: string) => {
@@ -1378,7 +1399,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       setCargando(true);
       setError(null);
     }
-    await Promise.all([cargarKpis(), cargarFlujoContactos()]);
+    await Promise.all([cargarKpis(), cargarFlujoContactos(), cargarConteoPorEstado()]);
     await Promise.all([
       cargarUsuarios(''),
       cargarCompradores(''),
@@ -3197,6 +3218,45 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                             )}
                           </div>
                         </>
+                      )}
+                    </div>
+
+                    <div className="dashboard-kpi-grupo">
+                      <h3 className="dashboard-kpi-grupo-titulo">Cuentas por estado</h3>
+                      <p className="dashboard-kpi-grid-hint">
+                        Según el estado indicado en el registro. Solo visible para administrador. Ejecuta{' '}
+                        <code>supabase-admin-conteo-por-estado.sql</code> en Supabase si esta tabla no carga.
+                      </p>
+                      {conteoPorEstadoError ? (
+                        <p className="dashboard-admin-productos-hint">
+                          No se pudo cargar el conteo por estado. Detalle: {conteoPorEstadoError}
+                        </p>
+                      ) : (
+                        <div className="dashboard-admin-table-wrap dashboard-admin-conteo-estado-wrap">
+                          <table className="dashboard-admin-table">
+                            <thead>
+                              <tr>
+                                <th>Estado</th>
+                                <th>Vendedores</th>
+                                <th>Talleres</th>
+                                <th>Compradores</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(conteoPorEstado ?? []).map((fila) => (
+                                <tr key={fila.estado}>
+                                  <td className="dashboard-admin-texto-td">{fila.estado}</td>
+                                  <td>{fila.vendedores ?? 0}</td>
+                                  <td>{fila.talleres ?? 0}</td>
+                                  <td>{fila.compradores ?? 0}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {(conteoPorEstado == null || conteoPorEstado.length === 0) && (
+                            <p className="dashboard-texto-placeholder">Sin datos de estados todavía.</p>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>

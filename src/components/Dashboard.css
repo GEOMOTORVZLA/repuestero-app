@@ -452,6 +452,11 @@
   margin-top: 0.85rem;
 }
 
+.dashboard-admin-conteo-estado-wrap {
+  max-height: 28rem;
+  overflow: auto;
+}
+
 button.dashboard-kpi-card {
   display: block;
   width: 100%;
