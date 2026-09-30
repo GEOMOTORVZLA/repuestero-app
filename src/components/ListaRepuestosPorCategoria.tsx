@@ -322,7 +322,6 @@ export function ListaRepuestosPorCategoria({
                 onExpand={() => setProductoExpandidoId(p.id)}
                 onContraer={() => setProductoExpandidoId(null)}
                 onContactar={(prod) => {
-                  if (!user) return;
                   setContactarProducto(prod);
                   registrarEventoContacto({
                     tipo: 'contactar_modal',
@@ -330,6 +329,7 @@ export function ListaRepuestosPorCategoria({
                     productoId: prod.id,
                   });
                   void (async () => {
+                    if (!user) return;
                     const debe = await usuarioDebeRegistrarHistorialContactos(supabase, user);
                     if (!debe) return;
                     await registrarContactoProducto(

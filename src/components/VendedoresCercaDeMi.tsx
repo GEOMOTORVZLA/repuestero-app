@@ -465,10 +465,6 @@ export function VendedoresCercaDeMi({
       enlaceTiendaAbiertoOkRef.current = null;
       return;
     }
-    if (!userId) {
-      onRequiereLoginRef.current?.();
-      return;
-    }
     // Solo omitir si ya abrimos con éxito este id (reintentar si un fetch se canceló).
     if (enlaceTiendaAbiertoOkRef.current === tiendaIdDesdeEnlace) return;
 
@@ -587,7 +583,6 @@ export function VendedoresCercaDeMi({
   };
 
   const abrirContactar = (t: TiendaCerca) => {
-    if (!user) return;
     setContactarTienda(t);
     registrarEventoContacto({
       tipo: 'contactar_modal',
@@ -795,10 +790,6 @@ export function VendedoresCercaDeMi({
   };
 
   const compartirCatalogoVendedor = (t: TiendaCerca) => {
-    if (!user) {
-      onRequiereLoginParaCatalogo?.();
-      return;
-    }
     const url = construirUrlTiendaCompartida(t.id, vertical);
     void abrirWhatsappConTexto(mensajeWhatsappCompartirCatalogoVendedor(nombreTienda(t), url));
   };
@@ -977,11 +968,6 @@ export function VendedoresCercaDeMi({
                     Listado ordenado del más cercano al más lejano según tu ubicación.
                   </p>
                 )}
-                {!user && (
-                  <p className="busqueda-repuestos-login-aviso">
-                    Debes iniciar sesión o registrarte para contactar vendedores.
-                  </p>
-                )}
                 {cargando ? (
                   <p className="vendedores-cerca-cargando">Cargando vendedores…</p>
                 ) : error ? (
@@ -1021,12 +1007,7 @@ export function VendedoresCercaDeMi({
                                 type="button"
                                 className="vendedores-cerca-card-compartir"
                                 onClick={() => compartirCatalogoVendedor(t)}
-                                disabled={!user}
-                                title={
-                                  !user
-                                    ? 'Inicia sesión para compartir el catálogo'
-                                    : 'Compartir catálogo de este vendedor por WhatsApp'
-                                }
+                                title="Compartir catálogo de este vendedor por WhatsApp"
                                 aria-label={`Compartir catálogo de ${nombreTienda(t)} por WhatsApp`}
                               >
                                 <IconoCompartirCatalogo />
@@ -1036,8 +1017,6 @@ export function VendedoresCercaDeMi({
                                   type="button"
                                   className="vendedores-cerca-card-btn"
                                   onClick={() => abrirContactar(t)}
-                                  disabled={!user}
-                                  title={!user ? 'Inicia sesión para contactar vendedores' : undefined}
                                 >
                                   Contactar vendedor
                                 </button>

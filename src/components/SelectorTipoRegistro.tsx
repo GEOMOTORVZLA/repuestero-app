@@ -1,6 +1,6 @@
 import './SelectorTipoRegistro.css';
 
-export type TipoRegistro = 'vendedor' | 'usuario' | 'taller';
+export type TipoRegistro = 'vendedor' | 'taller' | 'usuario';
 
 interface SelectorTipoRegistroProps {
   onSeleccionar: (tipo: TipoRegistro) => void;
@@ -25,14 +25,6 @@ export function SelectorTipoRegistro({ onSeleccionar, onVolver, onIrALogin }: Se
           >
             <span className="selector-registro-nombre">Vendedor</span>
             <span className="selector-registro-desc">Venta de repuestos</span>
-          </button>
-          <button
-            type="button"
-            className="selector-registro-opcion"
-            onClick={() => onSeleccionar('usuario')}
-          >
-            <span className="selector-registro-nombre">Usuario</span>
-            <span className="selector-registro-desc">Compra de repuestos</span>
           </button>
           <button
             type="button"

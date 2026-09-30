@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
 import { urlImagenProductoVariante } from '../utils/imagenProducto';
 import { etiquetaMoneda } from '../utils/monedaProducto';
 import { formatearPrecioProducto } from '../utils/precioProducto';
@@ -64,8 +63,6 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
   onContraer,
   onContactar,
 }: TarjetaProductoBusquedaProps<T>) {
-  const { user } = useAuth();
-  const requiereLogin = !user;
   const fotos = useMemo(() => urlsFotosProducto(p), [p.id, p.imagen_url, p.imagenes_extra]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(fotos[0] ?? null);
   const [visorAbierto, setVisorAbierto] = useState(false);
@@ -121,11 +118,8 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
       className="busqueda-repuestos-card-compartir"
       onClick={(e) => {
         e.stopPropagation();
-        if (requiereLogin) return;
         compartirPorWhatsapp();
       }}
-      disabled={requiereLogin}
-      title={requiereLogin ? 'Inicia sesión para compartir productos' : undefined}
       aria-label="Compartir este repuesto por WhatsApp"
     >
       <IconoCompartir />
@@ -292,21 +286,13 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
               Estimado comprador, desde Geomotor te sugerimos que confirmes la disponibilidad del articulo a
               traves de Whatsapp, recuerda que todas las tiendas venden por otros medios.
             </p>
-            {requiereLogin && (
-              <p className="busqueda-repuestos-login-aviso">
-                Debes iniciar sesión o registrarte para contactar vendedores y compartir productos.
-              </p>
-            )}
             <div className="busqueda-repuestos-card-botones busqueda-repuestos-card-botones--panel">
               <button
                 type="button"
                 className="busqueda-repuestos-card-btn"
                 onClick={() => {
-                  if (requiereLogin) return;
                   onContactar(p);
                 }}
-                disabled={requiereLogin}
-                title={requiereLogin ? 'Inicia sesión para contactar vendedores' : undefined}
               >
                 Contactar vendedor
               </button>

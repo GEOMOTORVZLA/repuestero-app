@@ -1,8 +1,9 @@
 import { supabase } from '../supabaseClient';
+import { permitirAccionCliente } from '../utils/rateLimitCliente';
 
 export type TipoEventoContacto = 'contactar_modal' | 'whatsapp';
 
-/** Guarda un clic de Contactar para metricas admin. No bloquea la UI. */
+/** Guarda un clic de Contactar para metricas. No bloquea la UI. */
 export function registrarEventoContacto(opts: {
   tipo: TipoEventoContacto;
   origen: string;
@@ -10,6 +11,13 @@ export function registrarEventoContacto(opts: {
   tiendaId?: string | null;
   tallerId?: string | null;
 }): void {
+  const rl = permitirAccionCliente('evento-contacto', {
+    maxIntentos: 40,
+    ventanaMs: 10 * 60 * 1000,
+    bloqueoMs: 60 * 1000,
+  });
+  if (!rl.ok) return;
+
   void supabase
     .rpc('registrar_evento_contacto', {
       p_tipo: opts.tipo,

@@ -571,7 +571,6 @@ export function BusquedaRepuestos({
   }, [esCompacto, productoIdDesdeEnlace, vertical]);
 
   const abrirContactar = (p: ProductoResultado) => {
-    if (!user) return;
     setContactarProducto(p);
     registrarEventoContacto({
       tipo: 'contactar_modal',

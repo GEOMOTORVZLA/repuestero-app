@@ -91,10 +91,6 @@ declare
   v_origen text := left(trim(coalesce(p_origen, '')), 80);
   v_tienda uuid := p_tienda_id;
 begin
-  if auth.uid() is null then
-    return;
-  end if;
-
   if v_tipo not in ('contactar_modal', 'whatsapp') then
     return;
   end if;
@@ -124,7 +120,7 @@ begin
 end;
 $$;
 
-grant execute on function public.registrar_evento_contacto(text, text, uuid, uuid, uuid) to authenticated;
+grant execute on function public.registrar_evento_contacto(text, text, uuid, uuid, uuid) to anon, authenticated;
 
 create or replace function public.admin_flujo_contactos()
 returns json

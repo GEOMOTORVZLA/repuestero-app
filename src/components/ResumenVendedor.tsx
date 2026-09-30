@@ -88,6 +88,9 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
   const [countPausados, setCountPausados] = useState(0);
   const [countProximos, setCountProximos] = useState(0);
   const [membresiaHasta, setMembresiaHasta] = useState<string | null>(null);
+  const [countContactos, setCountContactos] = useState(0);
+  const [countContactosHoy, setCountContactosHoy] = useState(0);
+  const [countContactosD7, setCountContactosD7] = useState(0);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<KpiId | null>(null);
@@ -122,15 +125,19 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
         setCountActivos(0);
         setCountPausados(0);
         setCountProximos(0);
+        setCountContactos(0);
+        setCountContactosHoy(0);
+        setCountContactosD7(0);
         return;
       }
       setTiendaIds(ids);
 
-      const [pub, act, pau, prox] = await Promise.all([
+      const [pub, act, pau, prox, contactosRes] = await Promise.all([
         contarProductosVendedor({ tiendaIds: ids, vertical, estado: 'todos' }),
         contarProductosVendedor({ tiendaIds: ids, vertical, estado: 'activos' }),
         contarProductosVendedor({ tiendaIds: ids, vertical, estado: 'pausados' }),
         contarProductosVendedor({ tiendaIds: ids, vertical, estado: 'proximos_stock' }),
+        supabase.rpc('vendedor_conteo_contactos'),
       ]);
 
       const errCount = pub.error || act.error || pau.error || prox.error;
@@ -140,6 +147,17 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
       setCountActivos(act.count);
       setCountPausados(pau.count);
       setCountProximos(prox.count);
+
+      if (contactosRes.error) {
+        setCountContactos(0);
+        setCountContactosHoy(0);
+        setCountContactosD7(0);
+      } else {
+        const c = (contactosRes.data ?? {}) as { total?: number; hoy?: number; d7?: number };
+        setCountContactos(c.total ?? 0);
+        setCountContactosHoy(c.hoy ?? 0);
+        setCountContactosD7(c.d7 ?? 0);
+      }
 
       if (tiendaRes.error) {
         setMembresiaHasta(null);
@@ -245,6 +263,14 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
       {error && <p className="dashboard-admin-error">{error}</p>}
 
       <div className="dashboard-kpi-grid">
+        <div className="dashboard-kpi-card">
+          <p className="dashboard-kpi-label">Contactos</p>
+          <p className="dashboard-kpi-valor">{cargando ? '…' : countContactos}</p>
+          <p className="dashboard-kpi-hint">
+            Veces que pulsáron Contactar. Hoy {cargando ? '…' : countContactosHoy} · 7 días{' '}
+            {cargando ? '…' : countContactosD7}. No confirma que escribieron por WhatsApp.
+          </p>
+        </div>
         <button
           type="button"
           className="dashboard-kpi-card dashboard-kpi-card--clickable"
