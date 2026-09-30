@@ -283,17 +283,20 @@ export function Landing({
               </button>
             </div>
           ) : (
-            <div className="landing-header-botones">
-              <button type="button" className="landing-btn-login" onClick={() => onMostrarLogin?.()}>
-                Iniciar sesión
-              </button>
-              <button
-                type="button"
-                className="landing-btn-crear"
-                onClick={() => onMostrarCrearCuenta?.()}
-              >
-                Crear cuenta
-              </button>
+            <div className="landing-header-auth">
+              <div className="landing-header-botones">
+                <button type="button" className="landing-btn-login" onClick={() => onMostrarLogin?.()}>
+                  Iniciar sesión
+                </button>
+                <button
+                  type="button"
+                  className="landing-btn-crear"
+                  onClick={() => onMostrarCrearCuenta?.()}
+                >
+                  Crear cuenta
+                </button>
+              </div>
+              <p className="landing-header-auth-aviso">Solo para vendedores y talleres</p>
             </div>
           )}
         </div>

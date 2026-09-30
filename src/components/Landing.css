@@ -196,6 +196,22 @@
   justify-content: flex-end;
 }
 
+.landing-header-auth {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+}
+
+.landing-header-auth-aviso {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.25;
+  font-weight: 500;
+  color: #64748b;
+  text-align: right;
+}
+
 @media (min-width: 480px) {
   .landing-header-botones {
     gap: 0.75rem;
