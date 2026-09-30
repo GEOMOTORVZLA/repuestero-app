@@ -61,7 +61,7 @@ const HERO_IMAGENES_AUTO = [
   '/header-banner.png?v=4',
   '/header-banner-2.png?v=6',
   '/header-banner-3.png?v=3',
-  '/header-banner-4.png?v=4',
+  '/header-banner-4.png?v=5',
 ];
 /** Banners solo para /motos — archivos en `public/` (sube ?v= si cambias las imágenes). */
 const HERO_IMAGENES_MOTO = [
