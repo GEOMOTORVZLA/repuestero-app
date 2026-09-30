@@ -89,8 +89,6 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
   const [countProximos, setCountProximos] = useState(0);
   const [membresiaHasta, setMembresiaHasta] = useState<string | null>(null);
   const [countContactos, setCountContactos] = useState(0);
-  const [countContactosHoy, setCountContactosHoy] = useState(0);
-  const [countContactosD7, setCountContactosD7] = useState(0);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<KpiId | null>(null);
@@ -126,8 +124,6 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
         setCountPausados(0);
         setCountProximos(0);
         setCountContactos(0);
-        setCountContactosHoy(0);
-        setCountContactosD7(0);
         return;
       }
       setTiendaIds(ids);
@@ -150,13 +146,9 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
 
       if (contactosRes.error) {
         setCountContactos(0);
-        setCountContactosHoy(0);
-        setCountContactosD7(0);
       } else {
-        const c = (contactosRes.data ?? {}) as { total?: number; hoy?: number; d7?: number };
+        const c = (contactosRes.data ?? {}) as { total?: number };
         setCountContactos(c.total ?? 0);
-        setCountContactosHoy(c.hoy ?? 0);
-        setCountContactosD7(c.d7 ?? 0);
       }
 
       if (tiendaRes.error) {
@@ -267,8 +259,7 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
           <p className="dashboard-kpi-label">Contactos</p>
           <p className="dashboard-kpi-valor">{cargando ? '…' : countContactos}</p>
           <p className="dashboard-kpi-hint">
-            Veces que pulsáron Contactar. Hoy {cargando ? '…' : countContactosHoy} · 7 días{' '}
-            {cargando ? '…' : countContactosD7}. No confirma que escribieron por WhatsApp.
+            Número de veces que compradores han pedido tus datos de contacto.
           </p>
         </div>
         <button
