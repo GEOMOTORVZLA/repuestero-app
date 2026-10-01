@@ -29,12 +29,8 @@ import {
 } from '../utils/linkWhatsAppGeomotor';
 import './Landing.css';
 
-const MecanicoVirtualMoto = lazy(() =>
-  import('./MecanicoVirtualMoto').then((m) => ({ default: m.MecanicoVirtualMoto }))
-);
-const MecanicoVirtualObd = lazy(() => import('./MecanicoVirtualObd'));
-const IdentificarRepuestoVision = lazy(() =>
-  import('./IdentificarRepuestoVision').then((m) => ({ default: m.IdentificarRepuestoVision }))
+const GuiaRepuestosLanding = lazy(() =>
+  import('./GuiaRepuestosLanding').then((m) => ({ default: m.GuiaRepuestosLanding }))
 );
 const VendedoresCercaDeMi = lazy(() =>
   import('./VendedoresCercaDeMi').then((m) => ({ default: m.VendedoresCercaDeMi }))
@@ -58,7 +54,7 @@ interface LandingProps {
 
 // ?v= obliga al navegador a refrescar caché al cambiar banners (sube el número cuando cambien)
 const HERO_IMAGENES_AUTO = [
-  '/header-banner.png?v=5',
+  '/header-banner.png?v=6',
   '/header-banner-2.png?v=6',
   '/header-banner-3.png?v=3',
   '/header-banner-4.png?v=5',
@@ -142,11 +138,7 @@ export function Landing({
     texto: '',
   });
   const [busquedaRepuestosMountKey, setBusquedaRepuestosMountKey] = useState(0);
-  /** Modales de IA viven bajo .landing-ia-doble (z menor); sin esto el buscador queda encima del overlay. */
-  const [landingIaModalCapas, setLandingIaModalCapas] = useState(0);
-  const iaModalCapaDelta = useCallback((d: number) => {
-    setLandingIaModalCapas((n) => Math.max(0, n + d));
-  }, []);
+  const [guiaCapaActiva, setGuiaCapaActiva] = useState(false);
 
   const abrirPaginaBusquedaRepuestos = (texto: string) => {
     setBusquedaRepuestosMountKey((k) => k + 1);
@@ -186,7 +178,6 @@ export function Landing({
     setVistaBusquedaRepuestos({ activa: false, texto: '' });
     setCategoriaSeleccionada(null);
     setBusquedaRepuestosMountKey((k) => k + 1);
-    setLandingIaModalCapas(0);
   }, [vertical]);
 
   /** Abrir búsqueda al entrar con ?repuesto=uuid (enlace compartido). */
@@ -198,15 +189,18 @@ export function Landing({
   }, [productoIdDesdeUrl]);
 
   const overlayLandingActivo =
-    vistaBusquedaRepuestos.activa || Boolean(categoriaSeleccionada) || Boolean(tiendaIdDesdeUrl);
-  const ocultarWhatsappFlotante = overlayLandingActivo || landingIaModalCapas > 0;
+    vistaBusquedaRepuestos.activa ||
+    Boolean(categoriaSeleccionada) ||
+    Boolean(tiendaIdDesdeUrl) ||
+    guiaCapaActiva;
+  const ocultarWhatsappFlotante = overlayLandingActivo;
   const urlWhatsappSoporte = urlWhatsAppGeomotor(
     TELEFONO_SOPORTE_GEOMOTOR,
     mensajeWhatsappSoporteGeomotor()
   );
 
   useEffect(() => {
-    if (!overlayLandingActivo) return;
+    if (!overlayLandingActivo || guiaCapaActiva) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => {
@@ -224,13 +218,14 @@ export function Landing({
     };
   }, [
     overlayLandingActivo,
+    guiaCapaActiva,
     categoriaSeleccionada,
     vistaBusquedaRepuestos.activa,
     cerrarPaginaBusquedaRepuestos,
   ]);
 
   return (
-    <div className={`landing${esMoto ? ' landing--moto' : ''}`}>
+    <div className={`landing${esMoto ? ' landing--moto' : ''}${overlayLandingActivo ? ' landing--capa-overlay' : ''}`}>
       <header
         className="landing-header"
         aria-hidden={overlayLandingActivo}
@@ -320,21 +315,13 @@ export function Landing({
           key={`compact-${vertical}-${busquedaRepuestosMountKey}`}
           vertical={vertical}
           variant="compact"
-          compactDetrasCapaIa={landingIaModalCapas > 0}
           onIrAResultados={({ texto }) => abrirPaginaBusquedaRepuestos(texto)}
         />
       )}
 
       {!vistaBusquedaRepuestos.activa && (
-        <Suspense fallback={<p className="landing-lazy-fallback">Cargando herramientas…</p>}>
-          <div className="landing-ia-doble" key={vertical}>
-            {esMoto ? (
-              <MecanicoVirtualMoto onIaModalCapaDelta={iaModalCapaDelta} />
-            ) : (
-              <MecanicoVirtualObd vertical={vertical} onIaModalCapaDelta={iaModalCapaDelta} />
-            )}
-            <IdentificarRepuestoVision vertical={vertical} onIaModalCapaDelta={iaModalCapaDelta} />
-          </div>
+        <Suspense fallback={<p className="landing-lazy-fallback">Cargando guía de repuestos…</p>}>
+          <GuiaRepuestosLanding key={vertical} vertical={vertical} onCapaActiva={setGuiaCapaActiva} />
         </Suspense>
       )}
 

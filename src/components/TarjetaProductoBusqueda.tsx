@@ -42,6 +42,8 @@ export interface TarjetaProductoBusquedaProps<T extends ProductoTarjetaBusqueda 
   onExpand: () => void;
   onContraer: () => void;
   onContactar: (p: T) => void;
+  /** En ficha a pantalla completa el volver está fuera de la tarjeta. */
+  ocultarContraer?: boolean;
 }
 
 function IconoCompartir() {
@@ -62,6 +64,7 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
   onExpand,
   onContraer,
   onContactar,
+  ocultarContraer = false,
 }: TarjetaProductoBusquedaProps<T>) {
   const fotos = useMemo(() => urlsFotosProducto(p), [p.id, p.imagen_url, p.imagenes_extra]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(fotos[0] ?? null);
@@ -200,16 +203,18 @@ export function TarjetaProductoBusqueda<T extends ProductoTarjetaBusqueda>({
               </h4>
               <p className="busqueda-repuestos-card-precio busqueda-repuestos-card-precio--inline">{textoPrecio}</p>
             </div>
-            <div className="busqueda-repuestos-card-cabecera-expandida-acciones">
-              <button
-                type="button"
-                className="busqueda-repuestos-card-contraer"
-                onClick={onContraer}
-                aria-expanded
-              >
-                Contraer
-              </button>
-            </div>
+            {!ocultarContraer && (
+              <div className="busqueda-repuestos-card-cabecera-expandida-acciones">
+                <button
+                  type="button"
+                  className="busqueda-repuestos-card-contraer"
+                  onClick={onContraer}
+                  aria-expanded
+                >
+                  Contraer
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="busqueda-repuestos-card-panel-fotos" role="region" aria-label="Galería del producto">
