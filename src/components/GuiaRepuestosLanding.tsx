@@ -75,7 +75,6 @@ function GuiaRepuestosVertical({
 }) {
   const { user } = useAuth();
   const esMoto = vertical === VERTICAL_MOTO;
-  const nounVehiculo = esMoto ? 'moto' : 'vehículo';
   const catalogo = esMoto ? PIEZAS_GUIA_MOTO : PIEZAS_GUIA_AUTO;
   const top15 = esMoto ? PIEZAS_TOP15_MOTO : PIEZAS_TOP15_AUTO;
   const lookupPieza = esMoto ? piezaGuiaMotoPorId : piezaGuiaPorId;
