@@ -1,7 +1,7 @@
 {
   "rewrites": [
     {
-      "source": "/((?!\\.well-known/).*)",
+      "source": "/((?!\\.well-known/|robots\\.txt).*)",
       "destination": "/index.html"
     }
   ],

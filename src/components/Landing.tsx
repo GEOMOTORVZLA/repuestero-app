@@ -7,12 +7,6 @@ import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import { BusquedaRepuestos } from './BusquedaRepuestos';
 import { IconoCategoria } from './IconosCategorias';
-import imgBaterias from '../assets/categoria-baterias.png';
-import imgCauchos from '../assets/categoria-cauchos.png';
-import imgAmortiguadores from '../assets/categoria-amortiguadores.png';
-import imgCorreasBandas from '../assets/categoria-correas-bandas.png';
-import imgBujiasEncendido from '../assets/categoria-bujias-encendido.png';
-import imgLucesFaros from '../assets/categoria-luces-faros.png';
 import {
   PARAM_REPUESTO_COMPARTIDO,
   PARAM_TIENDA_COMPARTIDA,
@@ -53,18 +47,40 @@ interface LandingProps {
 }
 
 // ?v= obliga al navegador a refrescar caché al cambiar banners (sube el número cuando cambien)
-const HERO_IMAGENES_AUTO = [
-  '/header-banner.png?v=6',
-  '/header-banner-2.png?v=6',
-  '/header-banner-3.png?v=3',
-  '/header-banner-4.png?v=5',
+type HeroSlide = { key: string; src: string; sm: string };
+
+const HERO_IMAGENES_AUTO: HeroSlide[] = [
+  { key: 'a1', src: '/header-banner.webp?v=1', sm: '/header-banner-sm.webp?v=1' },
+  { key: 'a2', src: '/header-banner-2.webp?v=1', sm: '/header-banner-2-sm.webp?v=1' },
+  { key: 'a3', src: '/header-banner-3.webp?v=1', sm: '/header-banner-3-sm.webp?v=1' },
+  { key: 'a4', src: '/header-banner-4.webp?v=1', sm: '/header-banner-4-sm.webp?v=1' },
 ];
-/** Banners solo para /motos — archivos en `public/` (sube ?v= si cambias las imágenes). */
-const HERO_IMAGENES_MOTO = [
-  '/header-banner-moto.png?v=2',
-  '/header-banner-moto-2.png?v=2',
-  '/header-banner-moto-3.png?v=2',
+const HERO_IMAGENES_MOTO: HeroSlide[] = [
+  { key: 'm1', src: '/header-banner-moto.webp?v=1', sm: '/header-banner-moto-sm.webp?v=1' },
+  { key: 'm2', src: '/header-banner-moto-2.webp?v=1', sm: '/header-banner-moto-2-sm.webp?v=1' },
+  { key: 'm3', src: '/header-banner-moto-3.webp?v=1', sm: '/header-banner-moto-3-sm.webp?v=1' },
 ];
+
+const ICONO_CATEGORIA_AUTO: Record<string, string> = {
+  Filtros: '/categoria-filtros.webp?v=1',
+  Frenos: '/categoria-frenos.webp?v=1',
+  Baterías: '/categoria-baterias.webp?v=1',
+  'Cauchos y rines': '/categoria-cauchos.webp?v=1',
+  'Amortiguadores y suspensiones': '/categoria-amortiguadores.webp?v=1',
+  'Correas y bandas': '/categoria-correas-bandas.webp?v=1',
+  'Bujías y encendido': '/categoria-bujias-encendido.webp?v=1',
+  'Aceites y lubricantes': '/categoria-aceites-lubricantes.webp?v=1',
+  'Luces y faros': '/categoria-luces-faros.webp?v=1',
+  Embrague: '/categoria-embrague.webp?v=1',
+  'Aire acondicionado Automotriz': '/aire acondicionado.webp?v=1',
+  'Tren Delantero': '/tren delantero.webp?v=1',
+  Transmisiones: '/transmisiones.webp?v=1',
+  Autosonido: '/categoria-autosonido.webp?v=1',
+  Accesorios: '/categoria-accesorios.webp?v=1',
+  Carrocería: '/carroceria.webp?v=1',
+  'Motores y componentes': '/motores y componentes.webp?v=1',
+  'Motores a diesel y componentes': '/motores a diesel y componentes.webp?v=1',
+};
 
 const CATEGORIAS_REPUESTOS = [
   { nombre: 'Filtros' },
@@ -299,13 +315,36 @@ export function Landing({
 
       <section className="landing-hero-banner">
         <div className="landing-hero-slides">
-          {heroSlides.map((src, i) => (
-            <div
-              key={src}
-              className={`landing-hero-slide ${i === slideIndex ? 'activo' : ''}`}
-              style={{ backgroundImage: `url(${src})` }}
-            />
-          ))}
+          {heroSlides.map((slide, i) => {
+            const n = heroSlides.length;
+            const cargar = i === slideIndex || i === (slideIndex + 1) % n;
+            return (
+              <div
+                key={slide.key}
+                className={`landing-hero-slide ${i === slideIndex ? 'activo' : ''}`}
+              >
+                {cargar ? (
+                  <picture>
+                    <source
+                      type="image/webp"
+                      srcSet={`${slide.sm} 960w, ${slide.src} 1920w`}
+                      sizes="100vw"
+                    />
+                    <img
+                      src={slide.src}
+                      alt=""
+                      className="landing-hero-slide-img"
+                      width={1920}
+                      height={447}
+                      decoding="async"
+                      fetchPriority={i === 0 ? 'high' : 'low'}
+                      loading={i === 0 ? 'eager' : 'lazy'}
+                    />
+                  </picture>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
         <div className="landing-hero-overlay" />
       </section>
@@ -343,7 +382,6 @@ export function Landing({
             ? CATEGORIAS_MOTO_MAS_BUSCADAS.map((nombre) => ({ nombre }))
             : CATEGORIAS_REPUESTOS
           ).map((cat) => {
-            const srcPinMoto = esMoto ? imagenPinCategoriaMoto(cat.nombre) : undefined;
             return (
             <button
               key={cat.nombre}
@@ -352,127 +390,26 @@ export function Landing({
               onClick={() => setCategoriaSeleccionada(cat.nombre)}
             >
               <div className="landing-categoria-circulo">
-                {esMoto ? (
-                  srcPinMoto ? (
+                {(() => {
+                  const srcIcono = esMoto
+                    ? imagenPinCategoriaMoto(cat.nombre)
+                    : ICONO_CATEGORIA_AUTO[cat.nombre];
+                  if (!srcIcono) {
+                    return <IconoCategoria nombre={cat.nombre} className="landing-categoria-icono" />;
+                  }
+                  return (
                     <img
-                      src={encodeURI(srcPinMoto)}
-                      alt={cat.nombre}
-                      className="landing-categoria-icono landing-categoria-icono-img landing-categoria-icono-moto"
+                      src={encodeURI(srcIcono)}
+                      alt=""
+                      className={
+                        'landing-categoria-icono landing-categoria-icono-img' +
+                        (esMoto ? ' landing-categoria-icono-moto' : '')
+                      }
+                      loading="lazy"
+                      decoding="async"
                     />
-                  ) : (
-                    <IconoCategoria nombre={cat.nombre} className="landing-categoria-icono" />
-                  )
-                ) : cat.nombre === 'Filtros' ? (
-                  <img
-                    src="/categoria-filtros.png"
-                    alt="Filtros"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Frenos' ? (
-                  <img
-                    src="/categoria-frenos.png"
-                    alt="Frenos"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Baterías' ? (
-                  <img
-                    src={imgBaterias}
-                    alt="Baterías"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Cauchos y rines' ? (
-                  <img
-                    src={imgCauchos}
-                    alt="Cauchos y rines"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Amortiguadores y suspensiones' ? (
-                  <img
-                    src={imgAmortiguadores}
-                    alt="Amortiguadores y suspensiones"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Correas y bandas' ? (
-                  <img
-                    src={imgCorreasBandas}
-                    alt="Correas y bandas"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Bujías y encendido' ? (
-                  <img
-                    src={imgBujiasEncendido}
-                    alt="Bujías y encendido"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Luces y faros' ? (
-                  <img
-                    src={imgLucesFaros}
-                    alt="Luces y faros"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Embrague' ? (
-                  <img
-                    src="/categoria-embrague.png"
-                    alt="Embrague"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Aire acondicionado Automotriz' ? (
-                  <img
-                    src={encodeURI('/aire acondicionado.jpg')}
-                    alt="Aire acondicionado Automotriz"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Aceites y lubricantes' ? (
-                  <img
-                    src="/categoria-aceites-lubricantes.png"
-                    alt="Aceites y lubricantes"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Autosonido' ? (
-                  <img
-                    src="/categoria-autosonido.png"
-                    alt="Autosonido"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Accesorios' ? (
-                  <img
-                    src="/categoria-accesorios.png"
-                    alt="Accesorios"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Carrocería' ? (
-                  <img
-                    src={encodeURI('/carroceria.jpg')}
-                    alt="Carrocería"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Motores y componentes' ? (
-                  <img
-                    src={encodeURI('/motores y componentes.jpg')}
-                    alt="Motores y componentes"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Motores a diesel y componentes' ? (
-                  <img
-                    src={encodeURI('/motores a diesel y componentes.jpg')}
-                    alt="Motores a diesel y componentes"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Tren Delantero' ? (
-                  <img
-                    src={encodeURI('/tren delantero.jpg')}
-                    alt="Tren Delantero"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : cat.nombre === 'Transmisiones' ? (
-                  <img
-                    src={encodeURI('/transmisiones.jpg')}
-                    alt="Transmisiones"
-                    className="landing-categoria-icono landing-categoria-icono-img"
-                  />
-                ) : (
-                  <IconoCategoria nombre={cat.nombre} className="landing-categoria-icono" />
-                )}
+                  );
+                })()}
               </div>
               <span className="landing-categoria-nombre">{cat.nombre}</span>
             </button>

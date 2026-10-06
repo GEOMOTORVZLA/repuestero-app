@@ -28,20 +28,20 @@ export const CATEGORIAS_PRODUCTO_MOTO: string[] = [...CATEGORIAS_MOTO_MAS_BUSCAD
  * Sube `?v=2` en la ruta en Landing si cambias un asset y el navegador cachea fuerte.
  */
 export const IMAGEN_PIN_CATEGORIA_MOTO: Record<(typeof CATEGORIAS_MOTO_MAS_BUSCADAS)[number], string> = {
-  Frenos: '/frenos.png',
-  Transmisión: '/transmision.png',
-  Motor: '/Motor.png',
-  'Cauchos y tripas': '/Cauchos y tripas.png',
-  Iluminación: '/Iluminación.png',
-  'Manubrios y puños': '/manubrios y puños.png',
-  'Asientos y Carrocería': '/asiento y carroceria.png',
-  Maletas: '/maletas.png',
-  'Cascos y Ropa': '/cascos y ropa.png',
-  Alarmas: '/alarmas.png',
-  Amortiguadores: '/amortiguadores.jpg',
-  Bastones: '/bastones.jpg',
-  'Componentes eléctricos': '/componentes electricos.jpg',
-  Accesorios: '/accesorios moto.jpg',
+  Frenos: '/frenos.webp?v=1',
+  Transmisión: '/transmision.webp?v=1',
+  Motor: '/Motor.webp?v=1',
+  'Cauchos y tripas': '/Cauchos y tripas.webp?v=1',
+  Iluminación: '/Iluminación.webp?v=1',
+  'Manubrios y puños': '/manubrios y puños.webp?v=1',
+  'Asientos y Carrocería': '/asiento y carroceria.webp?v=1',
+  Maletas: '/maletas.webp?v=1',
+  'Cascos y Ropa': '/cascos y ropa.webp?v=1',
+  Alarmas: '/alarmas.webp?v=1',
+  Amortiguadores: '/amortiguadores.webp?v=1',
+  Bastones: '/bastones.webp?v=1',
+  'Componentes eléctricos': '/componentes electricos.webp?v=1',
+  Accesorios: '/accesorios moto.webp?v=1',
 };
 
 export function imagenPinCategoriaMoto(categoria: string): string | undefined {
