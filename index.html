@@ -16,9 +16,33 @@
       rel="preload"
       as="image"
       type="image/webp"
-      href="/header-banner-sm.webp"
+      href="/header-banner-sm.webp?v=1"
+      imagesrcset="/header-banner-sm.webp?v=1 960w, /header-banner.webp?v=1 1920w"
+      imagesizes="(max-width: 900px) 960px, 100vw"
       fetchpriority="high"
     />
+    <style>
+      /* Reserva el hero antes del CSS de React: evita el salto 447px → móvil (CLS). */
+      .landing-hero-banner {
+        position: relative;
+        width: 100%;
+        height: clamp(108px, 21vh, 162px);
+        overflow: hidden;
+        background: #1e293b;
+      }
+      @media (min-width: 480px) {
+        .landing-hero-banner { height: clamp(142px, 26vh, 210px); }
+      }
+      @media (min-width: 640px) {
+        .landing-hero-banner { height: clamp(175px, 30vh, 265px); }
+      }
+      @media (min-width: 900px) {
+        .landing-hero-banner { height: 400px; }
+      }
+      @media (min-width: 1100px) {
+        .landing-hero-banner { height: 447px; }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

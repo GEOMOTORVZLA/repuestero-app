@@ -328,15 +328,15 @@ export function Landing({
                     <source
                       type="image/webp"
                       srcSet={`${slide.sm} 960w, ${slide.src} 1920w`}
-                      sizes="100vw"
+                      sizes="(max-width: 900px) 960px, 100vw"
                     />
                     <img
-                      src={slide.src}
+                      src={slide.sm}
                       alt=""
                       className="landing-hero-slide-img"
                       width={1920}
                       height={447}
-                      decoding="async"
+                      decoding={i === 0 ? 'sync' : 'async'}
                       fetchPriority={i === 0 ? 'high' : 'low'}
                       loading={i === 0 ? 'eager' : 'lazy'}
                     />
@@ -359,7 +359,7 @@ export function Landing({
       )}
 
       {!vistaBusquedaRepuestos.activa && (
-        <Suspense fallback={<p className="landing-lazy-fallback">Cargando guía de repuestos…</p>}>
+        <Suspense fallback={<p className="landing-lazy-fallback landing-lazy-fallback--guia">Cargando guía de repuestos…</p>}>
           <GuiaRepuestosLanding key={vertical} vertical={vertical} onCapaActiva={setGuiaCapaActiva} />
         </Suspense>
       )}
