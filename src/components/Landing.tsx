@@ -150,6 +150,8 @@ export function Landing({
   const esMoto = vertical === 'moto';
   const heroSlides = useMemo(() => (esMoto ? HERO_IMAGENES_MOTO : HERO_IMAGENES_AUTO), [esMoto]);
   const [slideIndex, setSlideIndex] = useState(0);
+  /** Evita bajar el 2.º banner en el primer pintado (LCP). */
+  const [precargarSiguienteHero, setPrecargarSiguienteHero] = useState(false);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string | null>(null);
   /** Pantalla dedicada de resultados (después de buscar desde la landing) */
   const [vistaBusquedaRepuestos, setVistaBusquedaRepuestos] = useState<{ activa: boolean; texto: string }>({
@@ -186,14 +188,23 @@ export function Landing({
 
   useEffect(() => {
     const n = heroSlides.length;
-    const id = setInterval(() => {
-      setSlideIndex((i) => (i + 1) % n);
-    }, 5000);
-    return () => clearInterval(id);
+    let intervalId: number | undefined;
+    const precargaId = window.setTimeout(() => setPrecargarSiguienteHero(true), 6000);
+    const rotacionId = window.setTimeout(() => {
+      intervalId = window.setInterval(() => {
+        setSlideIndex((i) => (i + 1) % n);
+      }, 5000);
+    }, 8000);
+    return () => {
+      window.clearTimeout(precargaId);
+      window.clearTimeout(rotacionId);
+      if (intervalId !== undefined) window.clearInterval(intervalId);
+    };
   }, [heroSlides]);
 
   useEffect(() => {
     setSlideIndex(0);
+    setPrecargarSiguienteHero(false);
     setVistaBusquedaRepuestos({ activa: false, texto: '' });
     setCategoriaSeleccionada(null);
     setBusquedaRepuestosMountKey((k) => k + 1);
@@ -320,7 +331,9 @@ export function Landing({
         <div className="landing-hero-slides">
           {heroSlides.map((slide, i) => {
             const n = heroSlides.length;
-            const cargar = i === slideIndex || i === (slideIndex + 1) % n;
+            const esLcp = i === 0 && slideIndex === 0;
+            const cargar =
+              i === slideIndex || (precargarSiguienteHero && i === (slideIndex + 1) % n);
             return (
               <div
                 key={slide.key}
@@ -339,9 +352,9 @@ export function Landing({
                       className="landing-hero-slide-img"
                       width={1920}
                       height={447}
-                      decoding={i === 0 ? 'sync' : 'async'}
-                      fetchPriority={i === 0 ? 'high' : 'low'}
-                      loading={i === 0 ? 'eager' : 'lazy'}
+                      decoding={esLcp ? 'sync' : 'async'}
+                      fetchPriority={esLcp ? 'high' : 'low'}
+                      loading={esLcp ? 'eager' : 'lazy'}
                     />
                   </picture>
                 ) : null}
