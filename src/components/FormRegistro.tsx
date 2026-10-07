@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import {
@@ -85,6 +85,16 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
   const [cargando, setCargando] = useState(false);
   const [metodosPago, setMetodosPago] = useState<string[]>([]);
   const [aceptaPoliticaDivulgacion, setAceptaPoliticaDivulgacion] = useState(false);
+  const [correoListoParaEscribir, setCorreoListoParaEscribir] = useState(false);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setEmail('');
+      setPassword('');
+      setPasswordConfirm('');
+    }, 50);
+    return () => window.clearTimeout(t);
+  }, []);
   const especialidadesTallerOpciones =
     verticalNegocio === 'moto' ? ESPECIALIDADES_TALLER_MOTO : ESPECIALIDADES_TALLER;
 
@@ -532,7 +542,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
         </button>
         <h2 className="form-registro-titulo">{titulo}</h2>
 
-        <form onSubmit={handleSubmit} className="form-registro-form">
+        <form onSubmit={handleSubmit} className="form-registro-form" autoComplete="off">
           <div className="form-registro-campo form-registro-tipo-persona">
             <label>Tipo de persona</label>
             <div className="form-registro-botones-radio">
@@ -699,15 +709,22 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           </div>
 
           <div className="form-registro-campo">
-            <label htmlFor="email">Correo electrónico</label>
+            <label htmlFor="registro-correo">Correo electrónico</label>
             <input
-              id="email"
+              id="registro-correo"
+              name="geomotor-registro-correo"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onFocus={() => setCorreoListoParaEscribir(true)}
               placeholder="correo@ejemplo.com"
               required
               disabled={cargando}
+              autoComplete="off"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              readOnly={!correoListoParaEscribir}
             />
           </div>
 
@@ -1057,10 +1074,11 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           </div>
 
           <div className="form-registro-campo">
-            <label htmlFor="password">Contraseña</label>
+            <label htmlFor="registro-clave">Contraseña</label>
             <div className="form-registro-password-wrap">
               <input
-                id="password"
+                id="registro-clave"
+                name="geomotor-registro-clave"
                 type={mostrarPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -1068,6 +1086,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
                 required
                 minLength={6}
                 disabled={cargando}
+                autoComplete="new-password"
               />
               <button
                 type="button"
@@ -1080,9 +1099,10 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           </div>
 
           <div className="form-registro-campo">
-            <label htmlFor="passwordConfirm">Confirmar contraseña</label>
+            <label htmlFor="registro-clave-confirm">Confirmar contraseña</label>
             <input
-              id="passwordConfirm"
+              id="registro-clave-confirm"
+              name="geomotor-registro-clave-confirm"
               type={mostrarPassword ? 'text' : 'password'}
               value={passwordConfirm}
               onChange={(e) => setPasswordConfirm(e.target.value)}
@@ -1090,6 +1110,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
               required
               minLength={6}
               disabled={cargando}
+              autoComplete="new-password"
             />
           </div>
 

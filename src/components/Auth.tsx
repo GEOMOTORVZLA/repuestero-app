@@ -40,6 +40,14 @@ export function Auth({ onVolver, onIrARegistro, restablecerPassword = false, men
     }
   }, [mensajeInicialError]);
 
+  useEffect(() => {
+    if (modo === 'registro') {
+      setEmail('');
+      setPassword('');
+      setPasswordConfirm('');
+    }
+  }, [modo]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMensaje('');
@@ -185,18 +193,27 @@ export function Auth({ onVolver, onIrARegistro, restablecerPassword = false, men
               <p className="auth-o">o con correo y contraseña</p>
             </>
           )}
-          <form onSubmit={handleSubmit} className="auth-form">
+          <form
+            onSubmit={handleSubmit}
+            className="auth-form"
+            autoComplete={modo === 'login' ? 'on' : 'off'}
+          >
             {modo !== 'restablecer' && (
               <div className="auth-campo">
                 <label htmlFor="auth-email">Correo electrónico</label>
                 <input
                   id="auth-email"
+                  name={modo === 'login' ? 'username' : 'geomotor-auth-registro-correo'}
                   type="email"
                   placeholder="correo@ejemplo.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   disabled={cargando}
+                  autoComplete={modo === 'login' ? 'username' : 'off'}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                 />
               </div>
             )}
@@ -208,6 +225,7 @@ export function Auth({ onVolver, onIrARegistro, restablecerPassword = false, men
                 <div className="auth-password-wrap">
                   <input
                     id="auth-password"
+                    name={modo === 'login' ? 'password' : 'geomotor-auth-registro-clave'}
                     type={mostrarPassword ? 'text' : 'password'}
                     placeholder="Mínimo 6 caracteres"
                     value={password}
@@ -215,6 +233,7 @@ export function Auth({ onVolver, onIrARegistro, restablecerPassword = false, men
                     required
                     minLength={6}
                     disabled={cargando}
+                    autoComplete={modo === 'login' ? 'current-password' : 'new-password'}
                   />
                   <button
                     type="button"
