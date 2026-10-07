@@ -17,6 +17,9 @@ const DashboardVendedor = lazy(() =>
 const DashboardTaller = lazy(() =>
   import('./DashboardTaller').then((m) => ({ default: m.DashboardTaller }))
 );
+const DashboardGrua = lazy(() =>
+  import('./DashboardGrua').then((m) => ({ default: m.DashboardGrua }))
+);
 
 interface DashboardProps {
   /** Vuelve a la página principal (landing) sin cerrar sesión */
@@ -45,6 +48,8 @@ export function Dashboard({ onVolverInicio, vertical = VERTICAL_AUTO }: Dashboar
         <DashboardAdmin vertical={vertical} onVolverInicio={onVolverInicio} />
       ) : panelTipo === 'taller' ? (
         <DashboardTaller onVolverInicio={onVolverInicio} />
+      ) : panelTipo === 'grua' ? (
+        <DashboardGrua onVolverInicio={onVolverInicio} />
       ) : (
         <DashboardVendedor onVolverInicio={onVolverInicio} vertical={vertical} />
       )}

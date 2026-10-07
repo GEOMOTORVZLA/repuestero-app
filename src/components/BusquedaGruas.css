@@ -1,0 +1,121 @@
+.busqueda-gruas {
+  margin-top: 0.35rem;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.busqueda-gruas-tipos {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+  margin: 0 0 0.85rem;
+}
+
+@media (min-width: 640px) {
+  .busqueda-gruas-tipos {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.busqueda-gruas-tipo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.28rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #fdba74;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #9a3412;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.busqueda-gruas-tipo:hover {
+  border-color: #f97316;
+}
+
+.busqueda-gruas-tipo--activo {
+  background: #c2410c;
+  border-color: #c2410c;
+  color: #fff;
+}
+
+.busqueda-gruas-tipo-nombre {
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.busqueda-gruas-tipo-desc {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  opacity: 0.92;
+}
+
+.busqueda-gruas-tipos--overlay {
+  margin-top: 0.15rem;
+}
+
+.busqueda-gruas-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+}
+
+.busqueda-gruas-badges--overlay {
+  margin-bottom: 1.1rem;
+}
+
+.busqueda-gruas-badge {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.busqueda-gruas-badge--activo {
+  background: #1e3a5f;
+  border-color: #1e3a5f;
+  color: #fff;
+}
+
+.busqueda-gruas-btn {
+  background: #c2410c;
+}
+
+.busqueda-gruas-btn:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(194, 65, 12, 0.28);
+}
+
+.busqueda-gruas-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.busqueda-gruas-chip {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: #fff7ed;
+  color: #c2410c;
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
+}
+
+.busqueda-gruas-chip--tipo {
+  background: #f1f5f9;
+  color: #334155;
+  text-transform: none;
+  font-weight: 600;
+}

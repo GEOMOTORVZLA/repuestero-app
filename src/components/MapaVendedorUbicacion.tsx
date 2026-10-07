@@ -9,7 +9,7 @@ interface MapVendedorUbicacionProps {
   lat: number;
   lng: number;
   nombreVendedor: string;
-  tipoPunto?: 'tienda' | 'taller';
+  tipoPunto?: 'tienda' | 'taller' | 'grua';
   userLat?: number;
   userLng?: number;
 }
@@ -84,8 +84,10 @@ export function MapVendedorUbicacion({
   const center = { lat, lng };
   const distanciaRectaKm =
     userLat != null && userLng != null ? distanciaKm(userLat, userLng, lat, lng).toFixed(1) : null;
-  const colorPunto = tipoPunto === 'taller' ? '#1e5bff' : '#111111';
-  const textoTipo = tipoPunto === 'taller' ? 'Taller' : 'Vendedor';
+  const colorPunto =
+    tipoPunto === 'taller' ? '#1e5bff' : tipoPunto === 'grua' ? '#c2410c' : '#111111';
+  const textoTipo =
+    tipoPunto === 'taller' ? 'Taller' : tipoPunto === 'grua' ? 'Grúa' : 'Vendedor';
 
   return (
     <div className="mapa-vendedor-ubicacion">

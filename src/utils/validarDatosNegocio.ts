@@ -115,6 +115,15 @@ export function perfilTallerMetadataListo(
   return false;
 }
 
+export function perfilGruaMetadataListo(
+  perfil: Record<string, unknown> | null | undefined
+): boolean {
+  if (!perfilVendedorMetadataListo(perfil)) return false;
+  const tipos = perfil?.tipos;
+  if (Array.isArray(tipos)) return tipos.some((x) => typeof x === 'string' && x.trim());
+  return false;
+}
+
 export type NegocioAdminAprobacion = {
   nombre?: string | null;
   nombre_comercial?: string | null;

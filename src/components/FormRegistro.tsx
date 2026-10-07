@@ -11,6 +11,7 @@ import {
 import { MARCAS_VEHICULOS } from '../data/marcasVehiculos';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import type { TipoRegistro } from './SelectorTipoRegistro';
+import { TIPOS_GRUA, type TipoGruaId } from '../data/tiposGrua';
 import {
   geocodificacionInversaParaRegistro,
   mensajeUsuarioGeocodificacion,
@@ -38,6 +39,10 @@ import './FormRegistro.css';
 
 const METODOS_PAGO = ['Efectivo', 'Pagomovil', 'Transferencia', 'Zelle', 'Binance', 'Cashea'] as const;
 
+function esRegistroNegocio(tipo: TipoRegistro): boolean {
+  return tipo === 'vendedor' || tipo === 'taller' || tipo === 'grua';
+}
+
 interface FormRegistroProps {
   tipo: TipoRegistro;
   onVolver: () => void;
@@ -61,6 +66,9 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
   const [numeroRif, setNumeroRif] = useState('');
   const [email, setEmail] = useState('');
   const [especialidadesTaller, setEspecialidadesTaller] = useState<string[]>([]);
+  const [tiposGruaSel, setTiposGruaSel] = useState<TipoGruaId[]>([]);
+  const [servicio24h, setServicio24h] = useState(false);
+  const [auxilioVial, setAuxilioVial] = useState(false);
   const [marcaTaller, setMarcaTaller] = useState(MARCAS_TALLER[0]);
   const [acercaDeTaller, setAcercaDeTaller] = useState('');
   const [estadoTaller, setEstadoTaller] = useState('');
@@ -101,9 +109,11 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
   const titulo =
     tipo === 'vendedor'
       ? 'Registro de Vendedor'
-      : tipo === 'usuario'
-        ? 'Registro de Usuario'
-        : 'Registro de Taller';
+      : tipo === 'taller'
+        ? 'Registro de Taller'
+        : tipo === 'grua'
+          ? 'Registro de Grúa'
+          : 'Registro de Usuario';
 
   const actualizarPosicionDesdeMapa = useCallback((lat: number, lng: number) => {
     setLatitudGps(lat.toFixed(6));
@@ -139,7 +149,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
       let texto: string;
       let geoExito = false;
 
-      if (apiKey && (tipo === 'vendedor' || tipo === 'taller' || tipo === 'usuario')) {
+      if (apiKey && (esRegistroNegocio(tipo) || tipo === 'usuario')) {
         const geoRes = await geocodificacionInversaParaRegistro(apiKey, lat, lng);
         if (!geoRes.ok) {
           texto = `${baseGps}${avisoGpsImpreciso} ${mensajeUsuarioGeocodificacion(geoRes)}`;
@@ -163,7 +173,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
         } else {
           texto = `${baseGps}${avisoGpsImpreciso} No se pudo enlazar la dirección con estado/ciudad de Venezuela; complétalos a mano.`;
         }
-      } else if (!apiKey && (tipo === 'vendedor' || tipo === 'taller')) {
+      } else if (!apiKey && (esRegistroNegocio(tipo))) {
         texto = `${baseGps}${avisoGpsImpreciso} Configura VITE_GOOGLE_MAPS_API_KEY para rellenar automáticamente estado y ciudad con Google.`;
       } else {
         texto = `${baseGps}${avisoGpsImpreciso}`;
@@ -200,7 +210,11 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
       setMensaje('Selecciona al menos una especialidad del taller.');
       return;
     }
-    if ((tipo === 'vendedor' || tipo === 'taller') && !aceptaPoliticaDivulgacion) {
+    if (tipo === 'grua' && tiposGruaSel.length === 0) {
+      setMensaje('Selecciona al menos un tipo de grúa o servicio.');
+      return;
+    }
+    if ((esRegistroNegocio(tipo)) && !aceptaPoliticaDivulgacion) {
       setMensaje('Debes leer y aceptar la Política de divulgación de datos para completar el registro.');
       return;
     }
@@ -209,11 +223,11 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
     const lngParsed = parseCoordenadaRegistro(longitudGps);
     const telefonoCompletoPre = restoTel ? `${codigoTel}${restoTel.replace(/\D/g, '')}` : null;
     const rifCompletoPre =
-      tipo === 'vendedor' || tipo === 'taller'
+      esRegistroNegocio(tipo)
         ? rifDesdeFormularioRegistro(tipoRif, numeroRif)
         : null;
 
-    if (tipo === 'vendedor' || tipo === 'taller') {
+    if (esRegistroNegocio(tipo)) {
       if (!esRestoTelefonoValido(restoTel)) {
         setMensaje('Indica el teléfono de empresa completo (7 dígitos después del código de área).');
         return;
@@ -239,7 +253,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
     }
 
     const politicaAceptacion =
-      tipo === 'vendedor' || tipo === 'taller'
+      esRegistroNegocio(tipo)
         ? {
             politica_divulgacion_aceptada: true as const,
             politica_divulgacion_version: POLITICA_DIVULGACION_VERSION,
@@ -251,9 +265,9 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
     // los datos del vendedor/taller aunque Supabase requiera confirmación de email
     // (cuando no hay sesión inmediata todavía).
     const latMeta =
-      tipo === 'vendedor' || tipo === 'taller' ? (latParsed as number) : (latParsed ?? 0);
+      esRegistroNegocio(tipo) ? (latParsed as number) : (latParsed ?? 0);
     const lngMeta =
-      tipo === 'vendedor' || tipo === 'taller' ? (lngParsed as number) : (lngParsed ?? 0);
+      esRegistroNegocio(tipo) ? (lngParsed as number) : (lngParsed ?? 0);
     const telefonoCompletoMeta = telefonoCompletoPre;
     const rifCompletoMeta =
       tipo === 'vendedor'
@@ -304,6 +318,29 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
                 ...politicaAceptacion,
               },
             }
+          : tipo === 'grua'
+            ? {
+                tipo_cuenta: 'grua',
+                perfil_grua: {
+                  nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi grúa',
+                  nombre_comercial:
+                    nombreComercial.trim() || nombreJuridico.trim() || 'Mi grúa',
+                  tipo_persona: tipoPersona,
+                  rif: rifUsuarioOComun || null,
+                  tipos: tiposGruaSel,
+                  servicio_24h: servicio24h,
+                  auxilio_vial: auxilioVial,
+                  acerca_de: acercaDeTaller.trim() || null,
+                  estado: estadoTaller.trim() || null,
+                  ciudad: ciudadTaller.trim() || null,
+                  telefono: telefonoCompletoMeta,
+                  email: email.trim() || null,
+                  latitud: latMeta,
+                  longitud: lngMeta,
+                  metodos_pago: metodosPago.length ? metodosPago : null,
+                  ...politicaAceptacion,
+                },
+              }
           : tipo === 'usuario'
             ? {
                 tipo_cuenta: 'comprador',
@@ -349,7 +386,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
     if (!sessionUserId) {
       setCargando(false);
       setMensaje(
-        tipo === 'vendedor' || tipo === 'taller'
+        esRegistroNegocio(tipo)
           ? 'Te enviamos un correo de confirmación. Ábrelo y pulsa el enlace; luego inicia sesión con tu usuario y clave. Tu negocio se registrará automáticamente con los datos que ya ingresaste.'
           : 'Te enviamos un correo de confirmación. Ábrelo y pulsa el enlace; después inicia sesión con tu usuario y clave.'
       );
@@ -428,6 +465,45 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           setMensaje(insertError.message || 'Error al guardar el taller. Revisa que en Supabase existan las columnas marca_vehiculo y acerca_de (ejecuta supabase-talleres-marca-acerca.sql).');
           return;
         }
+      } else if (tipo === 'grua') {
+        const { data: gruaYa } = await supabase
+          .from('gruas')
+          .select('id')
+          .eq('user_id', sessionUserId)
+          .limit(1);
+        if (gruaYa?.length) {
+          setCargando(false);
+          setMensaje('Grúa registrada exitosamente.');
+          onExito();
+          return;
+        }
+        const { error: insertError } = await supabase.from('gruas').insert({
+          user_id: sessionUserId,
+          nombre: nombreJuridico.trim() || nombreComercial.trim() || 'Mi grúa',
+          nombre_comercial: nombreComercial.trim() || nombreJuridico.trim() || 'Mi grúa',
+          tipo_persona: tipoPersona,
+          rif: rifUsuarioOComun || null,
+          tipos: tiposGruaSel,
+          servicio_24h: servicio24h,
+          auxilio_vial: auxilioVial,
+          acerca_de: acercaDeTaller.trim() || null,
+          estado: estadoTaller.trim() || null,
+          ciudad: ciudadTaller.trim() || null,
+          telefono: telefonoCompleto,
+          email: email.trim() || null,
+          latitud: lat,
+          longitud: lng,
+          metodos_pago: metodosPago.length ? metodosPago : null,
+          ...(politicaAceptacion ?? {}),
+        });
+        if (insertError) {
+          setCargando(false);
+          setMensaje(
+            insertError.message ||
+              'Error al guardar la grúa. Ejecuta supabase-gruas-table.sql en el SQL Editor de Supabase.'
+          );
+          return;
+        }
       }
     }
 
@@ -439,7 +515,9 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
         ? 'Vendedor registrado exitosamente.'
         : tipo === 'taller'
           ? 'Taller registrado exitosamente.'
-          : 'Cuenta registrada exitosamente.';
+          : tipo === 'grua'
+            ? 'Grúa registrada exitosamente.'
+            : 'Cuenta registrada exitosamente.';
     setMensaje(tituloExito);
     onExito();
   };
@@ -447,7 +525,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
   return (
     <div className="form-registro">
       <div
-        className={`form-registro-card${tipo === 'vendedor' || tipo === 'taller' ? ' form-registro-card--con-mapa' : ''}`}
+        className={`form-registro-card${esRegistroNegocio(tipo) ? ' form-registro-card--con-mapa' : ''}`}
       >
         <button type="button" className="form-registro-volver" onClick={onVolver}>
           ← Volver
@@ -502,7 +580,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           <div className="form-registro-campo form-registro-telefono">
             <label>
               {tipo === 'usuario' ? 'Teléfono particular' : 'Teléfono empresa'}
-              {(tipo === 'vendedor' || tipo === 'taller') && ' *'}
+              {(esRegistroNegocio(tipo)) && ' *'}
             </label>
             <div className="form-registro-telefono-tipo">
               <button
@@ -584,7 +662,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           <div className="form-registro-campo form-registro-rif">
             <label>
               RIF
-              {(tipo === 'vendedor' || tipo === 'taller') && ' *'}
+              {(esRegistroNegocio(tipo)) && ' *'}
             </label>
             <div className="form-registro-rif-inputs">
               <div className="form-registro-rif-tipo-wrap">
@@ -633,7 +711,107 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
             />
           </div>
 
-          {tipo === 'taller' ? (
+          {tipo === 'grua' ? (
+            <>
+              <div className="form-registro-campo form-registro-metodos-pago">
+                <label>Tipos de grúa y servicio</label>
+                <p className="form-registro-metodos-pago-hint">
+                  Marca todos los tipos que operas; el usuario en emergencia filtrará por ellos.
+                </p>
+                <div className="form-registro-metodos-pago-opciones">
+                  {TIPOS_GRUA.map((tg) => (
+                    <label key={tg.id} className="form-registro-metodos-pago-opcion">
+                      <input
+                        type="checkbox"
+                        value={tg.id}
+                        checked={tiposGruaSel.includes(tg.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setTiposGruaSel((prev) => [...prev, tg.id]);
+                          } else {
+                            setTiposGruaSel((prev) => prev.filter((x) => x !== tg.id));
+                          }
+                        }}
+                        disabled={cargando}
+                      />
+                      {tg.nombre}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="form-registro-campo form-registro-metodos-pago">
+                <label>Servicios adicionales</label>
+                <div className="form-registro-metodos-pago-opciones">
+                  <label className="form-registro-metodos-pago-opcion">
+                    <input
+                      type="checkbox"
+                      checked={servicio24h}
+                      onChange={(e) => setServicio24h(e.target.checked)}
+                      disabled={cargando}
+                    />
+                    Servicio 24 horas
+                  </label>
+                  <label className="form-registro-metodos-pago-opcion">
+                    <input
+                      type="checkbox"
+                      checked={auxilioVial}
+                      onChange={(e) => setAuxilioVial(e.target.checked)}
+                      disabled={cargando}
+                    />
+                    Auxilio vial (sin arrastre)
+                  </label>
+                </div>
+              </div>
+              <div className="form-registro-campo">
+                <label htmlFor="acercaDeGrua">Acerca de nosotros</label>
+                <textarea
+                  id="acercaDeGrua"
+                  value={acercaDeTaller}
+                  onChange={(e) => setAcercaDeTaller(e.target.value)}
+                  placeholder="Cobertura, unidades y cómo atiendes emergencias..."
+                  rows={4}
+                  disabled={cargando}
+                  className="form-registro-textarea"
+                />
+              </div>
+              <div className="form-registro-campo">
+                <label htmlFor="estadoGrua">Estado *</label>
+                <select
+                  id="estadoGrua"
+                  value={estadoTaller}
+                  onChange={(e) => {
+                    setEstadoTaller(e.target.value);
+                    setCiudadTaller('');
+                  }}
+                  disabled={cargando}
+                >
+                  <option value="">Selecciona el estado</option>
+                  {ESTADOS_VENEZUELA.map((e) => (
+                    <option key={e} value={e}>
+                      {e}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-registro-campo">
+                <label htmlFor="ciudadGrua">Ciudad / Municipio *</label>
+                <select
+                  id="ciudadGrua"
+                  value={ciudadTaller}
+                  onChange={(e) => setCiudadTaller(e.target.value)}
+                  disabled={cargando || !estadoTaller}
+                >
+                  <option value="">Selecciona ciudad o municipio</option>
+                  {(estadoTaller ? getCiudadesPorEstado(estadoTaller) : []).map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <p className="form-registro-hint">Estado y ciudad permiten encontrarte en una emergencia en tu zona.</p>
+              </div>
+            </>
+          ) : tipo === 'taller' ? (
             <>
               <div className="form-registro-campo form-registro-metodos-pago">
                 <label>Especialidades del taller</label>
@@ -766,7 +944,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
             </>
           )}
 
-          {(tipo === 'vendedor' || tipo === 'taller') && (
+          {(esRegistroNegocio(tipo)) && (
             <div className="form-registro-campo form-registro-metodos-pago">
               <label>Formas de pago que aceptas</label>
               <p className="form-registro-metodos-pago-hint">
@@ -798,10 +976,19 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           <div className="form-registro-campo form-registro-gps">
             <label>
               Ubicación por coordenadas (GPS)
-              {(tipo === 'vendedor' || tipo === 'taller') && ' *'}
+              {(esRegistroNegocio(tipo)) && ' *'}
             </label>
             <p className="form-registro-gps-hint">
-              {tipo === 'vendedor' || tipo === 'taller' ? (
+              {tipo === 'grua' ? (
+                <>
+                  Esta es la ubicación donde descansa la grúa mientras espera un servicio asignado. Pulsa{' '}
+                  <strong>Obtener ubicación actual</strong> y verifica que el punto coincida con esa base; esta
+                  información es <strong>IMPORTANTE</strong> para que el sistema te ubique cuando un usuario pida
+                  emergencia. El mapa de abajo muestra el punto: puedes arrastrar el marcador o tocar el mapa para
+                  ajustar; latitud y longitud se sincronizan. Con Google Maps también rellenamos estado y ciudad al usar
+                  el botón.
+                </>
+              ) : esRegistroNegocio(tipo) ? (
                 <>
                   Pulsa <strong>Obtener ubicación actual</strong> para el GPS en tiempo real; tómate tu tiempo y verifica
                   que la ubicación que estás colocando es la que coincide con tu local, esta información es{' '}
@@ -852,7 +1039,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
                 autoComplete="off"
               />
             </div>
-            {(tipo === 'vendedor' || tipo === 'taller') && (
+            {(esRegistroNegocio(tipo)) && (
               <RegistroUbicacionMapa
                 latitudStr={latitudGps}
                 longitudStr={longitudGps}
@@ -906,7 +1093,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
             />
           </div>
 
-          {(tipo === 'vendedor' || tipo === 'taller') && (
+          {(esRegistroNegocio(tipo)) && (
             <div className="form-registro-campo form-registro-politica">
               <label className="form-registro-politica-label" htmlFor="acepta-politica-divulgacion">
                 <input

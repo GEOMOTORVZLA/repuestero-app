@@ -35,6 +35,9 @@ const ListaRepuestosPorCategoria = lazy(() =>
 const BusquedaTalleres = lazy(() =>
   import('./BusquedaTalleres').then((m) => ({ default: m.BusquedaTalleres }))
 );
+const BusquedaGruas = lazy(() =>
+  import('./BusquedaGruas').then((m) => ({ default: m.BusquedaGruas }))
+);
 
 interface LandingProps {
   vertical?: VerticalVehiculo;
@@ -307,7 +310,7 @@ export function Landing({
                   Crear cuenta
                 </button>
               </div>
-              <p className="landing-header-auth-aviso">Solo para vendedores y talleres</p>
+              <p className="landing-header-auth-aviso">Solo para vendedores, talleres y grúas</p>
             </div>
           )}
         </div>
@@ -418,14 +421,42 @@ export function Landing({
         </div>
       </section>
 
+      <section className="landing-emergencia">
+        <h2 className="landing-seccion-titulo">GRÚAS Y EMERGENCIAS VIALES</h2>
+        <div className="landing-emergencia-contenido">
+          <img
+            src="/sticker-emergencia.webp"
+            alt="Emergencia"
+            className="landing-emergencia-sticker"
+            width={420}
+            height={320}
+            loading="lazy"
+            decoding="async"
+          />
+          <div className="landing-emergencia-texto">
+            <p>
+              Si te quedaste varado, busca grúa o auxilio vial en tu estado.
+            </p>
+            <Suspense fallback={<p className="landing-lazy-fallback">Cargando emergencias…</p>}>
+              <BusquedaGruas key={vertical} vertical={vertical} />
+            </Suspense>
+          </div>
+        </div>
+      </section>
+
       <section className="landing-taller">
         <h2 className="landing-seccion-titulo">ENCUENTRA EL TALLER QUE NECESITAS AQUI</h2>
         <div className="landing-taller-contenido">
-          <img src={esMoto ? "/taller-moto-catalogo.png" : "/taller.png"} alt="Taller" className="landing-taller-imagen" />
+          <img
+            src="/sticker-taller-v2.webp"
+            alt="Taller"
+            className="landing-taller-sticker"
+            width={432}
+            height={438}
+            loading="lazy"
+            decoding="async"
+          />
           <div className="landing-taller-texto">
-            <p>
-              Porque sabemos que necesitas saber dónde puedes instalar ese repuesto que vas a comprar o hacer esa reparación que tu vehículo necesita, aquí te ofrecemos una lista de los talleres por categoría y ramo que se encuentran en tu ciudad, no dejes de consultarlo.
-            </p>
             <Suspense fallback={<p className="landing-lazy-fallback">Cargando talleres…</p>}>
               <BusquedaTalleres vertical={vertical} />
             </Suspense>

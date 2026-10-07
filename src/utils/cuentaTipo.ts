@@ -1,7 +1,7 @@
 import type { User } from '@supabase/supabase-js';
 
 /** Panel de negocio: comprador, vendedor (tienda/productos) o taller (solo servicio). */
-export type TipoPanelNegocio = 'comprador' | 'vendedor' | 'taller';
+export type TipoPanelNegocio = 'comprador' | 'vendedor' | 'taller' | 'grua';
 
 /**
  * @deprecated Usar TipoPanelNegocio. Se mantiene para compatibilidad en historial de contactos.
@@ -26,8 +26,10 @@ export function getTipoPanelNegocio(user: User | null | undefined): TipoPanelNeg
   if (raw === 'comprador' || raw === 'usuario') return 'comprador';
   if (raw === 'taller') return 'taller';
   if (raw === 'vendedor') return 'vendedor';
+  if (raw === 'grua') return 'grua';
   if (md.perfil_vendedor) return 'vendedor';
   if (md.perfil_taller) return 'taller';
+  if (md.perfil_grua) return 'grua';
   return 'comprador';
 }
 
@@ -43,9 +45,13 @@ export function esCuentaVendedor(user: User | null | undefined): boolean {
   return getTipoPanelNegocio(user) === 'vendedor';
 }
 
+export function esCuentaGrua(user: User | null | undefined): boolean {
+  return getTipoPanelNegocio(user) === 'grua';
+}
+
 export function esPanelNegocio(user: User | null | undefined): boolean {
   const t = getTipoPanelNegocio(user);
-  return t === 'vendedor' || t === 'taller';
+  return t === 'vendedor' || t === 'taller' || t === 'grua';
 }
 
 /**

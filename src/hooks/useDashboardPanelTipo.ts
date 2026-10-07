@@ -7,7 +7,7 @@ import {
   type TipoPanelNegocio,
 } from '../utils/cuentaTipo';
 
-export type DashboardPanelTipo = 'loading' | 'admin' | 'comprador' | 'vendedor' | 'taller';
+export type DashboardPanelTipo = 'loading' | 'admin' | 'comprador' | 'vendedor' | 'taller' | 'grua';
 
 /**
  * Comprador vs vendedor vs taller: metadata primero; si es ambiguo, filas en tiendas/talleres.
@@ -47,6 +47,12 @@ export function useDashboardPanelTipo(user: User | null | undefined): DashboardP
       const { data: talleres } = await supabase.from('talleres').select('id').eq('user_id', u.id).limit(1);
       if (!cancelled && talleres?.length) {
         setTipo('taller');
+        return;
+      }
+
+      const { data: gruas } = await supabase.from('gruas').select('id').eq('user_id', u.id).limit(1);
+      if (!cancelled && gruas?.length) {
+        setTipo('grua');
         return;
       }
 

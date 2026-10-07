@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { esUsuarioAdmin } from '../utils/cuentaTipo';
 import {
   parseCoordenadaRegistro,
+  perfilGruaMetadataListo,
   perfilTallerMetadataListo,
   perfilVendedorMetadataListo,
 } from '../utils/validarDatosNegocio';
@@ -17,6 +18,27 @@ type PerfilVendedorMeta = {
   estado?: string | null;
   ciudad?: string | null;
   telefono?: string | null;
+  latitud?: number;
+  longitud?: number;
+  metodos_pago?: string[] | null;
+  politica_divulgacion_aceptada?: boolean;
+  politica_divulgacion_version?: string | null;
+  politica_divulgacion_aceptada_en?: string | null;
+};
+
+type PerfilGruaMeta = {
+  nombre?: string;
+  nombre_comercial?: string;
+  tipo_persona?: string;
+  rif?: string | null;
+  tipos?: string[] | null;
+  servicio_24h?: boolean;
+  auxilio_vial?: boolean;
+  acerca_de?: string | null;
+  estado?: string | null;
+  ciudad?: string | null;
+  telefono?: string | null;
+  email?: string | null;
   latitud?: number;
   longitud?: number;
   metodos_pago?: string[] | null;
@@ -181,6 +203,67 @@ async function runEnsureNegocio(user: User): Promise<void> {
             : null,
       });
       if (error) console.error('[ensureNegocioTrasRegistro] talleres:', error.message);
+      return;
+    }
+
+    if (tipo === 'grua') {
+      const perfil = md.perfil_grua as PerfilGruaMeta | undefined;
+      if (!perfil || typeof perfil !== 'object') return;
+
+      const { data: filasGrua } = await supabase
+        .from('gruas')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1);
+      if (filasGrua?.length) return;
+
+      const tipos = Array.isArray(perfil.tipos)
+        ? perfil.tipos.filter((x) => typeof x === 'string' && x.trim())
+        : [];
+      if (!perfilGruaMetadataListo(perfil as Record<string, unknown>)) {
+        console.warn(
+          '[ensureNegocioTrasRegistro] perfil_grua incompleto; no se crea grúa hasta completar datos.'
+        );
+        return;
+      }
+
+      const nombre =
+        (perfil.nombre && String(perfil.nombre).trim()) ||
+        (perfil.nombre_comercial && String(perfil.nombre_comercial).trim()) ||
+        'Mi grúa';
+      const nombreComercial =
+        (perfil.nombre_comercial && String(perfil.nombre_comercial).trim()) ||
+        (perfil.nombre && String(perfil.nombre).trim()) ||
+        'Mi grúa';
+
+      const { error } = await supabase.from('gruas').insert({
+        user_id: user.id,
+        nombre,
+        nombre_comercial: nombreComercial,
+        tipo_persona: perfil.tipo_persona === 'juridico' ? 'juridico' : 'natural',
+        rif: perfil.rif ?? null,
+        tipos,
+        servicio_24h: perfil.servicio_24h === true,
+        auxilio_vial: perfil.auxilio_vial === true,
+        acerca_de: perfil.acerca_de ?? null,
+        estado: perfil.estado ?? null,
+        ciudad: perfil.ciudad ?? null,
+        telefono: perfil.telefono ?? null,
+        email: perfil.email ?? user.email ?? null,
+        latitud: parseCoordenadaRegistro(perfil.latitud) as number,
+        longitud: parseCoordenadaRegistro(perfil.longitud) as number,
+        metodos_pago: perfil.metodos_pago?.length ? perfil.metodos_pago : null,
+        politica_divulgacion_aceptada: perfil.politica_divulgacion_aceptada === true,
+        politica_divulgacion_version:
+          typeof perfil.politica_divulgacion_version === 'string'
+            ? perfil.politica_divulgacion_version
+            : null,
+        politica_divulgacion_aceptada_en:
+          typeof perfil.politica_divulgacion_aceptada_en === 'string'
+            ? perfil.politica_divulgacion_aceptada_en
+            : null,
+      });
+      if (error) console.error('[ensureNegocioTrasRegistro] gruas:', error.message);
     }
   } catch (e) {
     console.error('[ensureNegocioTrasRegistro]', e);
@@ -250,14 +333,17 @@ async function usuarioPuedeEntrarConGoogle(user: User): Promise<boolean> {
 
   const md = (user.user_metadata ?? {}) as Record<string, unknown>;
 
-  const [tRes, lRes] = await Promise.all([
+  const [tRes, lRes, gRes] = await Promise.all([
     supabase.from('tiendas').select('aprobacion_estado, bloqueado').eq('user_id', user.id),
     supabase.from('talleres').select('aprobacion_estado, bloqueado').eq('user_id', user.id),
+    supabase.from('gruas').select('aprobacion_estado, bloqueado').eq('user_id', user.id),
   ]);
 
   if (filaNegocioAprobada(tRes.data as { aprobacion_estado?: string | null; bloqueado?: boolean | null }[]))
     return true;
   if (filaNegocioAprobada(lRes.data as { aprobacion_estado?: string | null; bloqueado?: boolean | null }[]))
+    return true;
+  if (filaNegocioAprobada(gRes.data as { aprobacion_estado?: string | null; bloqueado?: boolean | null }[]))
     return true;
 
   const tipo = md.tipo_cuenta;

@@ -11,6 +11,10 @@ export function mensajeWhatsappTaller(): string {
   return 'Hola, te escribo desde Geomotor. Vi tu taller en la plataforma y quiero consultarte.';
 }
 
+export function mensajeWhatsappGrua(): string {
+  return 'Hola, te escribo desde Geomotor. Necesito una grúa / auxilio vial y vi tu servicio en la plataforma.';
+}
+
 /** Soporte / contacto oficial Geomotor (landing). */
 export function mensajeWhatsappSoporteGeomotor(): string {
   return 'Hola Geomotor, escribo desde la app y quiero más información.';

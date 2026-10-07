@@ -93,7 +93,7 @@ function AppShell() {
       }
 
       if (!user) {
-        if (crearCuentaTipo === 'vendedor' || crearCuentaTipo === 'taller') {
+        if (crearCuentaTipo === 'vendedor' || crearCuentaTipo === 'taller' || crearCuentaTipo === 'grua') {
           setCrearCuentaTipo('selector');
           return;
         }
@@ -200,7 +200,7 @@ function AppShell() {
           </div>
         );
       }
-      if (crearCuentaTipo === 'vendedor' || crearCuentaTipo === 'taller') {
+      if (crearCuentaTipo === 'vendedor' || crearCuentaTipo === 'taller' || crearCuentaTipo === 'grua') {
         return (
           <div className="app">
             <FormRegistro
