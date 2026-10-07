@@ -19,6 +19,7 @@ import { formatearPrecioProducto } from '../utils/precioProducto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO, VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import { mensajeNegocioNoListoParaAprobar } from '../utils/validarDatosNegocio';
+import { nombreTipoGrua } from '../data/tiposGrua';
 import { ImportarProductosCSV } from './ImportarProductosCSV';
 import { VisorMostrador } from './VisorMostrador';
 import {
@@ -47,12 +48,16 @@ const ADMIN_TIENDAS_SELECT =
 const ADMIN_TALLERES_SELECT =
   'id, user_id, nombre, nombre_comercial, rif, especialidad, telefono, email, estado, ciudad, latitud, longitud, bloqueado, aprobacion_estado, created_at, membresia_hasta';
 
+const ADMIN_GRUAS_SELECT =
+  'id, user_id, nombre, nombre_comercial, rif, tipos, servicio_24h, auxilio_vial, telefono, email, estado, ciudad, direccion, latitud, longitud, acerca_de, bloqueado, aprobacion_estado, created_at, membresia_hasta';
+
 type AdminKpiDetalle =
   | 'usuarios_total'
   | 'vendedores_total'
   | 'vendedores_suspendidos_impago'
   | 'talleres_suspendidos_impago'
   | 'talleres_total'
+  | 'gruas_total'
   | 'compradores_total'
   | 'productos_activos'
   | 'productos_pausados_stock0'
@@ -63,6 +68,7 @@ type AdminKpiDetalle =
   | 'catalogo_moto'
   | 'vendedores_pendientes'
   | 'talleres_pendientes'
+  | 'gruas_pendientes'
   | 'productos_pendientes_web';
 
 type MotivoPausaProducto = 'stock0' | 'fecha' | 'vendedor';
@@ -107,6 +113,7 @@ const KPI_DETALLE_TITULO: Record<AdminKpiDetalle, string> = {
   vendedores_suspendidos_impago: 'Vendedores suspendidos por impago',
   talleres_suspendidos_impago: 'Talleres suspendidos por impago',
   talleres_total: 'Talleres (total)',
+  gruas_total: 'Grúas (total)',
   compradores_total: 'Compradores (total)',
   productos_activos: 'Productos activos',
   productos_pausados_stock0: 'Pausados por inventario 0',
@@ -117,6 +124,7 @@ const KPI_DETALLE_TITULO: Record<AdminKpiDetalle, string> = {
   catalogo_moto: 'Catálogo motocicleta',
   vendedores_pendientes: 'Vendedores nuevos (últimos 5 días)',
   talleres_pendientes: 'Talleres nuevos (últimos 5 días)',
+  gruas_pendientes: 'Grúas nuevas (últimos 5 días)',
   productos_pendientes_web: 'Productos por autorizar (web)',
 };
 
@@ -138,6 +146,7 @@ type AdminTab =
   | 'mostrador'
   | 'vendedores'
   | 'talleres'
+  | 'gruas'
   | 'compradores';
 
 const KPI_DETALLE_IR_TAB: Partial<Record<AdminKpiDetalle, AdminTab>> = {
@@ -146,6 +155,7 @@ const KPI_DETALLE_IR_TAB: Partial<Record<AdminKpiDetalle, AdminTab>> = {
   vendedores_suspendidos_impago: 'vendedores',
   talleres_suspendidos_impago: 'talleres',
   talleres_total: 'talleres',
+  gruas_total: 'gruas',
   compradores_total: 'compradores',
   productos_activos: 'productos',
   productos_pausados_stock0: 'productos',
@@ -156,6 +166,7 @@ const KPI_DETALLE_IR_TAB: Partial<Record<AdminKpiDetalle, AdminTab>> = {
   catalogo_moto: 'productos',
   vendedores_pendientes: 'vendedores',
   talleres_pendientes: 'talleres',
+  gruas_pendientes: 'gruas',
   productos_pendientes_web: 'productos',
 };
 
@@ -206,6 +217,7 @@ type AdminConteoEstado = {
   orden?: number;
   vendedores: number;
   talleres: number;
+  gruas?: number;
   compradores: number;
 };
 
@@ -218,6 +230,7 @@ function etiquetaPestañaAdmin(t: AdminTab): string {
     mostrador: 'Visor de mostrador',
     vendedores: 'Vendedores',
     talleres: 'Talleres',
+    gruas: 'Grúas',
     compradores: 'Compradores',
   };
   return m[t];
@@ -229,6 +242,7 @@ type AdminKpis = {
   vendedores_suspendidos_impago?: number;
   talleres_suspendidos_impago?: number;
   talleres_total: number;
+  gruas_total?: number;
   compradores_total: number;
   productos_total: number;
   productos_activos: number;
@@ -503,6 +517,41 @@ type AdminTaller = {
   created_at?: string | null;
   membresia_hasta?: string | null;
 };
+
+type AdminGrua = {
+  id: string;
+  user_id: string;
+  nombre: string | null;
+  nombre_comercial: string | null;
+  rif: string | null;
+  tipos: string[] | null;
+  servicio_24h: boolean | null;
+  auxilio_vial: boolean | null;
+  telefono: string | null;
+  email?: string | null;
+  estado: string | null;
+  ciudad: string | null;
+  direccion?: string | null;
+  latitud?: number | null;
+  longitud?: number | null;
+  acerca_de?: string | null;
+  bloqueado: boolean | null;
+  aprobacion_estado?: string | null;
+  created_at?: string | null;
+  membresia_hasta?: string | null;
+};
+
+function itemsTiposGruaAdmin(tipos: string[] | null | undefined): string[] {
+  if (!tipos?.length) return [];
+  return tipos.map((id) => nombreTipoGrua(id));
+}
+
+function etiquetaServicioGruaAdmin(g: Pick<AdminGrua, 'servicio_24h' | 'auxilio_vial'>): string {
+  const bits: string[] = [];
+  if (g.servicio_24h) bits.push('24 h');
+  if (g.auxilio_vial) bits.push('Auxilio');
+  return bits.length ? bits.join(' · ') : '—';
+}
 
 interface DashboardAdminProps {
   onVolverInicio?: () => void;
@@ -933,6 +982,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [productos, setProductos] = useState<AdminProducto[]>([]);
   const [vendedores, setVendedores] = useState<AdminTienda[]>([]);
   const [talleres, setTalleres] = useState<AdminTaller[]>([]);
+  const [gruas, setGruas] = useState<AdminGrua[]>([]);
   const [accionando, setAccionando] = useState<string | null>(null);
   const [kpis, setKpis] = useState<AdminKpis | null>(null);
   const [flujoContactos, setFlujoContactos] = useState<AdminFlujoContactos | null>(null);
@@ -948,6 +998,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [hayMasTalleresAdmin, setHayMasTalleresAdmin] = useState(false);
   const [offsetTalleresAdmin, setOffsetTalleresAdmin] = useState(0);
   const [cargandoMasTalleresAdmin, setCargandoMasTalleresAdmin] = useState(false);
+  const [hayMasGruasAdmin, setHayMasGruasAdmin] = useState(false);
+  const [offsetGruasAdmin, setOffsetGruasAdmin] = useState(0);
+  const [cargandoMasGruasAdmin, setCargandoMasGruasAdmin] = useState(false);
   const [hayMasUsuariosAdmin, setHayMasUsuariosAdmin] = useState(false);
   const [offsetUsuariosAdmin, setOffsetUsuariosAdmin] = useState(0);
   const [cargandoMasUsuariosAdmin, setCargandoMasUsuariosAdmin] = useState(false);
@@ -961,6 +1014,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     'todos'
   );
   const [busquedaTalleres, setBusquedaTalleres] = useState('');
+  const [filtroListaGruas, setFiltroListaGruas] = useState<'todos' | 'nuevos_5d' | 'suspendidos'>('todos');
+  const [busquedaGruas, setBusquedaGruas] = useState('');
   const [fotoActivaAdminProducto, setFotoActivaAdminProducto] = useState<Record<string, number>>({});
   const [productoEditandoAdmin, setProductoEditandoAdmin] = useState<AdminProducto | null>(null);
   const [modalProductosVendedor, setModalProductosVendedor] = useState<{
@@ -1006,7 +1061,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     userId: string;
   } | null>(null);
   const [ubicacionNegocioModal, setUbicacionNegocioModal] = useState<{
-    tipo: 'tienda' | 'taller';
+    tipo: 'tienda' | 'taller' | 'grua';
     id: string;
     nombre: string;
     latitud: number | null;
@@ -1363,6 +1418,36 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     setOffsetTalleresAdmin(hayMas ? ADMIN_LIST_PAGE : rows.length);
   };
 
+  const cargarGruas = async (buscar: string) => {
+    const t = buscar.trim();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q: any = supabase.from('gruas').select(ADMIN_GRUAS_SELECT);
+    if (t) {
+      const esc = escapeIlikePatron(t);
+      q = q.or(
+        `rif.ilike.%${esc}%,nombre.ilike.%${esc}%,nombre_comercial.ilike.%${esc}%,telefono.ilike.%${esc}%,email.ilike.%${esc}%`
+      );
+    }
+    const gRes = await q
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(0, ADMIN_LIST_PAGE - 1);
+    if (gRes.error) setError(gRes.error.message);
+    const rows = (gRes.data ?? []) as AdminGrua[];
+    const hayMas = rows.length === ADMIN_LIST_PAGE;
+    if (!t) {
+      rows.sort((a, b) => {
+        const sa = perfilSuspendidoPorImpago(a) ? 0 : 1;
+        const sb = perfilSuspendidoPorImpago(b) ? 0 : 1;
+        if (sa !== sb) return sa - sb;
+        return cmpIsoDesc(a.created_at, b.created_at);
+      });
+    }
+    setGruas(rows);
+    setHayMasGruasAdmin(hayMas);
+    setOffsetGruasAdmin(hayMas ? ADMIN_LIST_PAGE : rows.length);
+  };
+
   const cargarMasTalleres = async () => {
     if (cargandoMasTalleresAdmin || !hayMasTalleresAdmin) return;
     setCargandoMasTalleresAdmin(true);
@@ -1393,6 +1478,36 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     }
   };
 
+  const cargarMasGruas = async () => {
+    if (cargandoMasGruasAdmin || !hayMasGruasAdmin) return;
+    setCargandoMasGruasAdmin(true);
+    try {
+      const t = busquedaGruas.trim();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q: any = supabase.from('gruas').select(ADMIN_GRUAS_SELECT);
+      if (t) {
+        const esc = escapeIlikePatron(t);
+        q = q.or(
+          `rif.ilike.%${esc}%,nombre.ilike.%${esc}%,nombre_comercial.ilike.%${esc}%,telefono.ilike.%${esc}%,email.ilike.%${esc}%`
+        );
+      }
+      const gRes = await q
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(offsetGruasAdmin, offsetGruasAdmin + ADMIN_LIST_PAGE - 1);
+      if (gRes.error) {
+        setError(gRes.error.message);
+        return;
+      }
+      const rows = (gRes.data ?? []) as AdminGrua[];
+      setGruas((prev) => concatenarUnicosPorId(prev, rows));
+      setHayMasGruasAdmin(rows.length === ADMIN_LIST_PAGE);
+      setOffsetGruasAdmin((prev) => prev + rows.length);
+    } finally {
+      setCargandoMasGruasAdmin(false);
+    }
+  };
+
   const cargar = async (opts?: { silencioso?: boolean }) => {
     const silencioso = opts?.silencioso === true;
     if (!silencioso) {
@@ -1405,6 +1520,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       cargarCompradores(''),
       cargarVendedores(''),
       cargarTalleres(''),
+      cargarGruas(''),
     ]);
     // Productos: solo primera página (o al entrar a la pestaña); ya no se descarga el catálogo entero.
     if (tab === 'productos' || productosTabCargada) {
@@ -1456,6 +1572,14 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     }, 400);
     return () => window.clearTimeout(tm);
   }, [busquedaTalleres, tab]);
+
+  useEffect(() => {
+    if (tab !== 'gruas') return;
+    const tm = window.setTimeout(() => {
+      void cargarGruas(busquedaGruas);
+    }, 400);
+    return () => window.clearTimeout(tm);
+  }, [busquedaGruas, tab]);
 
   useEffect(() => {
     if (tab !== 'mostrador') return;
@@ -1697,8 +1821,12 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       const r = t.rif?.trim();
       if (r) m.set(t.user_id, r);
     }
+    for (const g of gruas) {
+      const r = g.rif?.trim();
+      if (r) m.set(g.user_id, r);
+    }
     return m;
-  }, [vendedores, talleres]);
+  }, [vendedores, talleres, gruas]);
 
   const vendedoresParaFiltroProductos = useMemo(() => {
     return [...vendedores].sort((a, b) => {
@@ -1821,12 +1949,44 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     () => talleres.filter((t) => (t.aprobacion_estado ?? 'aprobado') === 'pendiente'),
     [talleres]
   );
+
+  const gruasVisibles = useMemo(() => {
+    let list = [...gruas];
+    if (filtroListaGruas === 'suspendidos') {
+      list = list.filter(perfilSuspendidoPorImpago);
+    } else if (filtroListaGruas === 'nuevos_5d') {
+      list = list.filter((g) => esRegistroNegocioNuevo(g.created_at));
+    }
+    list.sort((a, b) => {
+      const sa = perfilSuspendidoPorImpago(a) ? 0 : 1;
+      const sb = perfilSuspendidoPorImpago(b) ? 0 : 1;
+      if (sa !== sb) return sa - sb;
+      return cmpIsoDesc(a.created_at, b.created_at);
+    });
+    return list;
+  }, [gruas, filtroListaGruas]);
+
+  const gruasSuspendidasEnLista = useMemo(
+    () => gruas.filter(perfilSuspendidoPorImpago).length,
+    [gruas]
+  );
+
+  const gruasNuevas5DiasEnLista = useMemo(
+    () => gruas.filter((g) => esRegistroNegocioNuevo(g.created_at)).length,
+    [gruas]
+  );
+
+  const gruasPendientesVisibles = useMemo(
+    () => gruas.filter((g) => (g.aprobacion_estado ?? 'aprobado') === 'pendiente'),
+    [gruas]
+  );
   const productosPendientesWeb = kpis?.productos_pendientes_web ?? productos.filter(
     (p) => (p.aprobacion_publica ?? 'aprobado') === 'pendiente'
   ).length;
   /** Conteo operativo post auto-aprobación: registros recientes a revisar. */
   const vendedoresNuevos5Dias = vendedoresNuevos5DiasEnLista;
   const talleresNuevos5Dias = talleresNuevos5DiasEnLista;
+  const gruasNuevas5Dias = gruasNuevas5DiasEnLista;
   const vendedoresSuspendidosImpago =
     kpis?.vendedores_suspendidos_impago ?? vendedores.filter(perfilSuspendidoPorImpago).length;
   const talleresSuspendidosImpago =
@@ -1852,10 +2012,13 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     const tPend = t.filter((x) => (x.aprobacion_estado ?? 'aprobado') === 'pendiente');
     const tSuspendImpago = t.filter((x) => perfilSuspendidoPorImpago(x));
     const tNuevos5d = t.filter((x) => esRegistroNegocioNuevo(x.created_at));
+    const g = [...gruas].sort((a, b) => cmpIsoDesc(a.created_at, b.created_at));
+    const gNuevos5d = g.filter((x) => esRegistroNegocioNuevo(x.created_at));
     return {
       u,
       v,
       t,
+      g,
       c,
       pReciente,
       pActivos,
@@ -1872,8 +2035,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       tPend,
       tSuspendImpago,
       tNuevos5d,
+      gNuevos5d,
     };
-  }, [usuarios, vendedores, talleres, compradores, productos]);
+  }, [usuarios, vendedores, talleres, gruas, compradores, productos]);
 
   const email = user?.email ?? '';
 
@@ -2052,25 +2216,33 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     const { tipo, id } = ubicacionNegocioModal;
     setAccionando(`ubic-${tipo}-${id}`);
     const rpc =
-      tipo === 'tienda' ? 'admin_set_tienda_ubicacion' : 'admin_set_taller_ubicacion';
+      tipo === 'tienda'
+        ? 'admin_set_tienda_ubicacion'
+        : tipo === 'taller'
+          ? 'admin_set_taller_ubicacion'
+          : 'admin_set_grua_ubicacion';
     const params =
       tipo === 'tienda'
         ? { p_tienda_id: id, p_latitud: latitud, p_longitud: longitud }
-        : { p_taller_id: id, p_latitud: latitud, p_longitud: longitud };
+        : tipo === 'taller'
+          ? { p_taller_id: id, p_latitud: latitud, p_longitud: longitud }
+          : { p_grua_id: id, p_latitud: latitud, p_longitud: longitud };
     const { error: rpcError } = await supabase.rpc(rpc, params);
     if (rpcError) {
       setError(
-        `No se pudo actualizar la ubicación: ${rpcError.message}. ¿Ejecutaste en Supabase admin_set_tienda_ubicacion y admin_set_taller_ubicacion (supabase-admin-panel.sql)?`
+        `No se pudo actualizar la ubicación: ${rpcError.message}. ¿Ejecutaste en Supabase las funciones admin_set_*_ubicacion (supabase-admin-panel.sql o supabase-admin-gruas.sql)?`
       );
     } else {
       if (tipo === 'tienda') {
         setVendedores((prev) =>
           prev.map((t) => (t.id === id ? { ...t, latitud, longitud } : t))
         );
-      } else {
+      } else if (tipo === 'taller') {
         setTalleres((prev) =>
           prev.map((t) => (t.id === id ? { ...t, latitud, longitud } : t))
         );
+      } else {
+        setGruas((prev) => prev.map((g) => (g.id === id ? { ...g, latitud, longitud } : g)));
       }
       setUbicacionNegocioModal(null);
     }
@@ -2149,6 +2321,42 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     setAccionando(null);
   };
 
+  const setGruaBloqueada = async (gruaId: string, bloqueado: boolean) => {
+    setAccionando(`grua-${gruaId}`);
+    const { error: rpcError } = await supabase.rpc('admin_set_grua_bloqueada', {
+      p_grua_id: gruaId,
+      p_bloqueada: bloqueado,
+    });
+    if (rpcError) {
+      setError(
+        `No se pudo actualizar la grúa: ${rpcError.message}. ¿Ejecutaste supabase-admin-gruas.sql?`
+      );
+    } else {
+      setGruas((prev) => prev.map((g) => (g.id === gruaId ? { ...g, bloqueado } : g)));
+      void cargarKpis();
+    }
+    setAccionando(null);
+  };
+
+  const setGruaMembresiaHasta = async (gruaId: string, membresiaHasta: string) => {
+    setAccionando(`membresia-grua-${gruaId}`);
+    const { error: rpcError } = await supabase.rpc('admin_set_grua_membresia_hasta', {
+      p_grua_id: gruaId,
+      p_membresia_hasta: membresiaHasta,
+    });
+    if (rpcError) {
+      setError(
+        `No se pudo actualizar la membresía de la grúa: ${rpcError.message}. ¿Ejecutaste supabase-admin-gruas.sql?`
+      );
+    } else {
+      setGruas((prev) =>
+        prev.map((g) => (g.id === gruaId ? { ...g, membresia_hasta: membresiaHasta } : g))
+      );
+      void cargarKpis();
+    }
+    setAccionando(null);
+  };
+
   const setTiendaAprobacion = async (tiendaId: string, estado: AprobacionEstado) => {
     const tienda = vendedores.find((v) => v.id === tiendaId);
     if (estado === 'aprobado' && tienda) {
@@ -2195,6 +2403,31 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
       );
     } else {
       await cargarTalleres(busquedaTalleres);
+      void cargarKpis();
+    }
+    setAccionando(null);
+  };
+
+  const setGruaAprobacion = async (gruaId: string, estado: AprobacionEstado) => {
+    const grua = gruas.find((g) => g.id === gruaId);
+    if (estado === 'aprobado' && grua) {
+      const err = mensajeNegocioNoListoParaAprobar(grua);
+      if (err) {
+        setError(`No se puede aprobar: ${grua.nombre_comercial || grua.nombre || gruaId}. ${err}`);
+        return;
+      }
+    }
+    setAccionando(`aprob-grua-${gruaId}`);
+    const { error: rpcError } = await supabase.rpc('admin_set_grua_aprobacion', {
+      p_grua_id: gruaId,
+      p_estado: estado,
+    });
+    if (rpcError) {
+      setError(
+        `No se pudo actualizar la grúa. ¿Ejecutaste supabase-admin-gruas.sql? ${rpcError.message}`
+      );
+    } else {
+      await cargarGruas(busquedaGruas);
       void cargarKpis();
     }
     setAccionando(null);
@@ -2327,6 +2560,40 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     setAccionando(null);
   };
 
+  const aprobarGruasPendientesVisibles = async () => {
+    const pendientes = gruasPendientesVisibles;
+    if (!pendientes.length) return;
+    if (!window.confirm(`¿Autorizar ${pendientes.length} grúa(s) pendiente(s) visibles?`)) return;
+
+    setAccionando('bulk-gruas-aprobar');
+    setError(null);
+    const okIds: string[] = [];
+    const errores: string[] = [];
+
+    for (const g of pendientes) {
+      const errDatos = mensajeNegocioNoListoParaAprobar(g);
+      if (errDatos) {
+        errores.push(`${g.nombre_comercial || g.nombre || g.id}: ${errDatos}`);
+        continue;
+      }
+      const { error: rpcError } = await supabase.rpc('admin_set_grua_aprobacion', {
+        p_grua_id: g.id,
+        p_estado: 'aprobado',
+      });
+      if (rpcError) errores.push(`${g.nombre_comercial || g.nombre || g.id}: ${rpcError.message}`);
+      else okIds.push(g.id);
+    }
+
+    if (okIds.length) {
+      await cargarGruas(busquedaGruas);
+      void cargarKpis();
+    }
+    if (errores.length) {
+      setError(`Se aprobaron ${okIds.length} grúa(s), pero fallaron ${errores.length}: ${errores.slice(0, 3).join(' | ')}`);
+    }
+    setAccionando(null);
+  };
+
   const setUsuarioAdmin = async (userId: string, esAdmin: boolean) => {
     setAccionando(`usuario-${userId}`);
     const { error: rpcError } = await supabase.rpc('admin_set_user_role', {
@@ -2400,6 +2667,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
         cargarCompradores(busquedaCompradores),
         cargarVendedores(busquedaVendedores),
         cargarTalleres(busquedaTalleres),
+        cargarGruas(busquedaGruas),
       ]);
       setMostradorTodos(null);
     }
@@ -2422,6 +2690,10 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     if (desdeKpi === 'talleres_pendientes') {
       setFiltroListaTalleres('nuevos_5d');
       setBusquedaTalleres('');
+    }
+    if (desdeKpi === 'gruas_pendientes') {
+      setFiltroListaGruas('nuevos_5d');
+      setBusquedaGruas('');
     }
     if (desdeKpi === 'catalogo_moto' || desdeKpi === 'catalogo_auto') {
       const vert = desdeKpi === 'catalogo_moto' ? 'moto' : 'auto';
@@ -2551,6 +2823,51 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                   <td>{etiquetaEstadoImpagoPerfil(t).texto}</td>
                   <td>{fmtMembresiaHasta(t.membresia_hasta)}</td>
                   <td>{fmtFecha(t.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="dashboard-kpi-modal-meta">Registros en esta vista: {total}</p>
+      </>
+    );
+  }
+
+  function tablaGruas(lista: AdminGrua[], vacio: string) {
+    const { rows, total, trunc } = capFilasKpiModal(lista);
+    if (total === 0) return <p className="dashboard-texto-placeholder">{vacio}</p>;
+    return (
+      <>
+        {truncNotice(trunc)}
+        <div className="dashboard-kpi-modal-table-wrap">
+          <table className="dashboard-admin-table">
+            <thead>
+              <tr>
+                <th>Nombre comercial</th>
+                <th>RIF</th>
+                <th>Teléfono</th>
+                <th>Correo</th>
+                <th>Ubicación (lat, lng)</th>
+                <th>Ciudad</th>
+                <th>Aprobación</th>
+                <th>Estado pago</th>
+                <th>Membresía hasta</th>
+                <th>Alta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((g) => (
+                <tr key={g.id}>
+                  <td>{g.nombre_comercial?.trim() || g.nombre || '—'}</td>
+                  <td className="dashboard-admin-rif-td">{celdaRifAdmin(g.rif)}</td>
+                  <td>{g.telefono || '—'}</td>
+                  <td>{emailNegocioAdmin(g, emailsPorUserId)}</td>
+                  <td className="dashboard-admin-coords">{celdaUbicacionAdmin(g.latitud, g.longitud)}</td>
+                  <td>{g.ciudad || '—'}</td>
+                  <td>{etiquetaAprobacion(g.aprobacion_estado)}</td>
+                  <td>{etiquetaEstadoImpagoPerfil(g).texto}</td>
+                  <td>{fmtMembresiaHasta(g.membresia_hasta)}</td>
+                  <td>{fmtFecha(g.created_at)}</td>
                 </tr>
               ))}
             </tbody>
@@ -2769,6 +3086,13 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
             {tablaTalleres(L.t, 'No hay talleres en el listado cargado.')}
           </>
         );
+      case 'gruas_total':
+        return (
+          <>
+            {notaCargaVsKpi(kpis?.gruas_total, gruas.length, ADMIN_LIST_PAGE, 'grúas')}
+            {tablaGruas(L.g, 'No hay grúas en el listado cargado.')}
+          </>
+        );
       case 'compradores_total': {
         const { rows, total, trunc } = capFilasKpiModal(L.c);
         return (
@@ -2937,6 +3261,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
         return tablaTiendas(L.vNuevos5d, 'No hay vendedores registrados en los últimos 5 días.');
       case 'talleres_pendientes':
         return tablaTalleres(L.tNuevos5d, 'No hay talleres registrados en los últimos 5 días.');
+      case 'gruas_pendientes':
+        return tablaGruas(L.gNuevos5d, 'No hay grúas registradas en los últimos 5 días.');
       case 'productos_pendientes_web':
         return tablaProductos(L.pPendWeb, 'No hay productos pendientes de aprobación para la web.');
       default:
@@ -2966,6 +3292,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           <button type="button" className={`dashboard-menu-item ${tab === 'fotos' ? 'activo' : ''}`} onClick={() => setTab('fotos')}>Gestión de fotos</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'vendedores' ? 'activo' : ''}`} onClick={() => setTab('vendedores')}>Vendedores</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'talleres' ? 'activo' : ''}`} onClick={() => setTab('talleres')}>Talleres</button>
+          <button type="button" className={`dashboard-menu-item ${tab === 'gruas' ? 'activo' : ''}`} onClick={() => setTab('gruas')}>Grúas</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'compradores' ? 'activo' : ''}`} onClick={() => setTab('compradores')}>Compradores</button>
         </nav>
       </aside>
@@ -2975,7 +3302,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           <div className="dashboard-header-titulos">
             <h1 className="dashboard-titulo">Panel administrador</h1>
             <p className="dashboard-subtitulo">
-              Usuarios, perfiles, productos y <strong>autorización</strong> para la web (vendedores, talleres y cada
+              Usuarios, perfiles, productos y <strong>autorización</strong> para la web (vendedores, talleres, grúas y cada
               publicación).
             </p>
           </div>
@@ -3035,6 +3362,14 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         <button
                           type="button"
                           className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('gruas_pendientes')}
+                        >
+                          <p className="dashboard-kpi-label">Grúas nuevas (5 días)</p>
+                          <p className="dashboard-kpi-valor">{gruasNuevas5Dias}</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--alerta dashboard-kpi-card--clickable"
                           onClick={() => setKpiDetalle('productos_pendientes_web')}
                         >
                           <p className="dashboard-kpi-label">Productos por autorizar (web)</p>
@@ -3069,6 +3404,14 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                         >
                           <p className="dashboard-kpi-label">Talleres (total)</p>
                           <p className="dashboard-kpi-valor">{kpis?.talleres_total ?? talleres.length}</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="dashboard-kpi-card dashboard-kpi-card--clickable"
+                          onClick={() => setKpiDetalle('gruas_total')}
+                        >
+                          <p className="dashboard-kpi-label">Grúas (total)</p>
+                          <p className="dashboard-kpi-valor">{kpis?.gruas_total ?? gruas.length}</p>
                         </button>
                         <button
                           type="button"
@@ -3225,38 +3568,86 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       <h3 className="dashboard-kpi-grupo-titulo">Cuentas por estado</h3>
                       <p className="dashboard-kpi-grid-hint">
                         Según el estado indicado en el registro. Solo visible para administrador. Ejecuta{' '}
-                        <code>supabase-admin-conteo-por-estado.sql</code> en Supabase si esta tabla no carga.
+                        <code>supabase-admin-gruas-metricas.sql</code> si falta la columna de grúas.
                       </p>
                       {conteoPorEstadoError ? (
                         <p className="dashboard-admin-productos-hint">
                           No se pudo cargar el conteo por estado. Detalle: {conteoPorEstadoError}
                         </p>
                       ) : (
-                        <div className="dashboard-admin-table-wrap dashboard-admin-conteo-estado-wrap">
-                          <table className="dashboard-admin-table">
-                            <thead>
-                              <tr>
-                                <th>Estado</th>
-                                <th>Vendedores</th>
-                                <th>Talleres</th>
-                                <th>Compradores</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {(conteoPorEstado ?? []).map((fila) => (
-                                <tr key={fila.estado}>
-                                  <td className="dashboard-admin-texto-td">{fila.estado}</td>
-                                  <td>{fila.vendedores ?? 0}</td>
-                                  <td>{fila.talleres ?? 0}</td>
-                                  <td>{fila.compradores ?? 0}</td>
+                        <>
+                          <div className="dashboard-admin-table-wrap dashboard-admin-conteo-estado-wrap">
+                            <table className="dashboard-admin-table">
+                              <thead>
+                                <tr>
+                                  <th>Estado</th>
+                                  <th>Vendedores</th>
+                                  <th>Talleres</th>
+                                  <th>Grúas</th>
+                                  <th>Compradores</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                          {(conteoPorEstado == null || conteoPorEstado.length === 0) && (
-                            <p className="dashboard-texto-placeholder">Sin datos de estados todavía.</p>
-                          )}
-                        </div>
+                              </thead>
+                              <tbody>
+                                {(conteoPorEstado ?? []).map((fila) => (
+                                  <tr key={fila.estado}>
+                                    <td className="dashboard-admin-texto-td">{fila.estado}</td>
+                                    <td>{fila.vendedores ?? 0}</td>
+                                    <td>{fila.talleres ?? 0}</td>
+                                    <td>{fila.gruas ?? 0}</td>
+                                    <td>{fila.compradores ?? 0}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            {(conteoPorEstado == null || conteoPorEstado.length === 0) && (
+                              <p className="dashboard-texto-placeholder">Sin datos de estados todavía.</p>
+                            )}
+                          </div>
+                          <div className="dashboard-flujo-tablas">
+                            <div>
+                              <h4 className="dashboard-kpi-grupo-titulo">Talleres por estado</h4>
+                              <div className="dashboard-admin-table-wrap">
+                                <table className="dashboard-admin-table">
+                                  <thead>
+                                    <tr>
+                                      <th>Estado</th>
+                                      <th>Talleres</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(conteoPorEstado ?? []).map((fila) => (
+                                      <tr key={`tall-${fila.estado}`}>
+                                        <td className="dashboard-admin-texto-td">{fila.estado}</td>
+                                        <td>{fila.talleres ?? 0}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                            <div>
+                              <h4 className="dashboard-kpi-grupo-titulo">Grúas por estado</h4>
+                              <div className="dashboard-admin-table-wrap">
+                                <table className="dashboard-admin-table">
+                                  <thead>
+                                    <tr>
+                                      <th>Estado</th>
+                                      <th>Grúas</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(conteoPorEstado ?? []).map((fila) => (
+                                      <tr key={`grua-${fila.estado}`}>
+                                        <td className="dashboard-admin-texto-td">{fila.estado}</td>
+                                        <td>{fila.gruas ?? 0}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                        </>
                       )}
                     </div>
                   </div>
@@ -4473,6 +4864,271 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                 </section>
               )}
 
+              {tab === 'gruas' && (
+                <section className="dashboard-seccion">
+                  <h2 className="dashboard-seccion-titulo">Perfiles de grúas</h2>
+                  <div className="dashboard-admin-busqueda-fila">
+                    <label htmlFor="admin-buscar-gruas" className="dashboard-admin-busqueda-label">
+                      Buscar (RIF, nombre, comercial o teléfono)
+                    </label>
+                    <input
+                      id="admin-buscar-gruas"
+                      type="search"
+                      className="dashboard-admin-busqueda-input"
+                      placeholder="Ej: grúa, 0414…"
+                      value={busquedaGruas}
+                      onChange={(e) => setBusquedaGruas(e.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    <span className="dashboard-admin-busqueda-hint">
+                      Hasta {ADMIN_LIST_PAGE} por consulta. Filtro: <strong>últimos 5 días</strong>. Si está
+                      mal: <strong>Ocultar</strong>. Membresía: <strong>+30d</strong> / <strong>+1a</strong>.
+                    </span>
+                  </div>
+                  <div className="dashboard-admin-acciones-masivas">
+                    <div className="dashboard-admin-filtro-vertical">
+                      <label htmlFor="admin-filtro-lista-gruas">Filtrar listado</label>
+                      <select
+                        id="admin-filtro-lista-gruas"
+                        value={filtroListaGruas}
+                        onChange={(e) =>
+                          setFiltroListaGruas(e.target.value as 'todos' | 'nuevos_5d' | 'suspendidos')
+                        }
+                      >
+                        <option value="todos">Todas las grúas</option>
+                        <option value="nuevos_5d">
+                          Nuevas últimos 5 días ({gruasNuevas5DiasEnLista})
+                        </option>
+                        <option value="suspendidos">
+                          Solo suspendidas por impago ({gruasSuspendidasEnLista})
+                        </option>
+                      </select>
+                    </div>
+                    {gruasPendientesVisibles.length > 0 && (
+                      <button
+                        type="button"
+                        className="dashboard-admin-btn ok"
+                        disabled={accionando === 'bulk-gruas-aprobar'}
+                        onClick={() => void aprobarGruasPendientesVisibles()}
+                      >
+                        Autorizar pendientes residuales ({gruasPendientesVisibles.length})
+                      </button>
+                    )}
+                  </div>
+                  <p className="dashboard-admin-table-scroll-hint">
+                    La barra para ir a la derecha queda fija abajo del listado visible. También puedes usar
+                    Shift + rueda del mouse.
+                  </p>
+                  <div className="dashboard-admin-table-wrap dashboard-admin-table-wrap--perfiles">
+                    <table className="dashboard-admin-table dashboard-admin-table--perfiles">
+                      <thead>
+                        <tr>
+                          <th>Nombre completo</th>
+                          <th>RIF</th>
+                          <th>Tipos de grúa</th>
+                          <th>Servicio</th>
+                          <th>Teléfono</th>
+                          <th>Correo</th>
+                          <th>Estado</th>
+                          <th>Ciudad</th>
+                          <th>GPS</th>
+                          <th>Autorización web</th>
+                          <th>Estado pago</th>
+                          <th>Visibilidad web</th>
+                          <th>Membresía hasta</th>
+                          <th>User ID</th>
+                          <th>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gruasVisibles.length === 0 ? (
+                          <tr>
+                            <td colSpan={15} className="dashboard-texto-placeholder">
+                              {filtroListaGruas === 'suspendidos'
+                                ? 'Ninguna grúa suspendida en el listado cargado. Cambia el filtro o recarga.'
+                                : filtroListaGruas === 'nuevos_5d'
+                                  ? 'Ninguna grúa nueva en los últimos 5 días en el listado cargado.'
+                                  : 'No hay grúas en el listado. Si ves un error de permisos, ejecuta supabase-admin-gruas.sql en Supabase.'}
+                            </td>
+                          </tr>
+                        ) : (
+                          gruasVisibles.map((g) => {
+                            const estadoImpago = etiquetaEstadoImpagoPerfilTabla(g);
+                            const visWeb = etiquetaVisibilidadWebPerfilTabla(g);
+                            const suspendido = perfilSuspendidoPorImpago(g);
+                            const tiposItems = itemsTiposGruaAdmin(g.tipos);
+                            return (
+                              <tr
+                                key={g.id}
+                                className={suspendido ? 'dashboard-admin-row-impago' : undefined}
+                              >
+                                <td className="dashboard-admin-texto-td dashboard-admin-nombre-td">
+                                  {celdaTextoCompletoAdmin(etiquetaNombreNegocioCompleto(g))}
+                                </td>
+                                <td className="dashboard-admin-rif-td">{celdaRifAdmin(g.rif)}</td>
+                                <td className="dashboard-admin-especialidad-td">
+                                  <EspecialidadTallerCeldaAdmin
+                                    especialidad={tiposItems}
+                                    onVerDetalle={(items) =>
+                                      setEspecialidadTallerModal({
+                                        nombre: g.nombre_comercial || g.nombre || 'Grúa',
+                                        items,
+                                      })
+                                    }
+                                  />
+                                </td>
+                                <td className="dashboard-admin-texto-td">
+                                  {celdaTextoUnaLineaAdmin(etiquetaServicioGruaAdmin(g))}
+                                </td>
+                                <td className="dashboard-admin-texto-td dashboard-admin-telefono-td">
+                                  {celdaTextoCompletoAdmin(g.telefono)}
+                                </td>
+                                <td className="dashboard-admin-email-td">
+                                  {celdaEmailAdmin(emailNegocioAdmin(g, emailsPorUserId))}
+                                </td>
+                                <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(g.estado)}</td>
+                                <td className="dashboard-admin-texto-td">{celdaTextoUnaLineaAdmin(g.ciudad)}</td>
+                                <td className="dashboard-admin-ubicacion-td">
+                                  <AdminCeldaUbicacion
+                                    latitud={g.latitud}
+                                    longitud={g.longitud}
+                                    guardando={accionando === `ubic-grua-${g.id}`}
+                                    onEditar={() =>
+                                      setUbicacionNegocioModal({
+                                        tipo: 'grua',
+                                        id: g.id,
+                                        nombre: g.nombre_comercial || g.nombre || 'Grúa',
+                                        latitud: g.latitud ?? null,
+                                        longitud: g.longitud ?? null,
+                                      })
+                                    }
+                                  />
+                                </td>
+                                <td className="dashboard-admin-autorizacion-td">
+                                  <AdminCeldaAutorizacionWeb
+                                    aprobacionEstado={g.aprobacion_estado}
+                                    accionando={accionando === `aprob-grua-${g.id}`}
+                                    onAprobar={() => void setGruaAprobacion(g.id, 'aprobado')}
+                                    onRechazar={() => void setGruaAprobacion(g.id, 'rechazado')}
+                                    onPendiente={() => void setGruaAprobacion(g.id, 'pendiente')}
+                                  />
+                                </td>
+                                <td className="dashboard-admin-status-td">
+                                  <span
+                                    className={`dashboard-admin-status dashboard-admin-status--compacto ${estadoImpago.clase}`}
+                                    title={estadoImpago.title}
+                                  >
+                                    {estadoImpago.texto}
+                                  </span>
+                                </td>
+                                <td className="dashboard-admin-status-td">
+                                  <span
+                                    className={`dashboard-admin-status dashboard-admin-status--compacto ${visWeb.clase}`}
+                                    title={visWeb.title}
+                                  >
+                                    {visWeb.texto}
+                                  </span>
+                                </td>
+                                <td className="dashboard-admin-texto-td dashboard-admin-membresia-td">
+                                  {celdaTextoUnaLineaAdmin(fmtMembresiaHasta(g.membresia_hasta))}
+                                </td>
+                                <td className="dashboard-admin-userid-td">
+                                  <AdminCeldaUserId
+                                    userId={g.user_id}
+                                    onVer={() =>
+                                      setUserIdPerfilModal({
+                                        nombre: g.nombre_comercial || g.nombre || 'Grúa',
+                                        userId: g.user_id,
+                                      })
+                                    }
+                                  />
+                                </td>
+                                <td className="dashboard-admin-acciones-td">
+                                  <div className="dashboard-admin-acciones-fila">
+                                    {perfilBloqueadoPorAdmin(g) ? (
+                                      <button
+                                        type="button"
+                                        className="dashboard-admin-btn ok dashboard-admin-btn--compacto"
+                                        disabled={
+                                          accionando === `grua-${g.id}` ||
+                                          accionando === `membresia-grua-${g.id}`
+                                        }
+                                        onClick={() => void setGruaBloqueada(g.id, false)}
+                                        title="Quitar bloqueo: vuelve a poder verse si la membresía está vigente"
+                                      >
+                                        Quitar
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className="dashboard-admin-btn danger dashboard-admin-btn--compacto"
+                                        disabled={
+                                          accionando === `grua-${g.id}` ||
+                                          accionando === `membresia-grua-${g.id}`
+                                        }
+                                        onClick={() => void setGruaBloqueada(g.id, true)}
+                                        title="Anula la visibilidad: no se muestra en web ni app"
+                                      >
+                                        Ocultar
+                                      </button>
+                                    )}
+                                    {(g.aprobacion_estado ?? 'aprobado') === 'aprobado' && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          className="dashboard-admin-btn ok dashboard-admin-btn--compacto"
+                                          disabled={
+                                            accionando === `grua-${g.id}` ||
+                                            accionando === `membresia-grua-${g.id}`
+                                          }
+                                          title="Extender membresía 30 días desde hoy"
+                                          onClick={() =>
+                                            void setGruaMembresiaHasta(g.id, fechaMembresiaDesdeHoyUtc(30))
+                                          }
+                                        >
+                                          +30d
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="dashboard-admin-btn ok dashboard-admin-btn--compacto"
+                                          disabled={
+                                            accionando === `grua-${g.id}` ||
+                                            accionando === `membresia-grua-${g.id}`
+                                          }
+                                          title="Extender membresía 1 año desde hoy"
+                                          onClick={() =>
+                                            void setGruaMembresiaHasta(g.id, fechaMembresiaDesdeHoyUtc(365))
+                                          }
+                                        >
+                                          +1a
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {hayMasGruasAdmin && (
+                    <div className="dashboard-admin-cargar-mas">
+                      <button
+                        type="button"
+                        className="dashboard-admin-btn ok"
+                        disabled={cargandoMasGruasAdmin || cargando}
+                        onClick={() => void cargarMasGruas()}
+                      >
+                        {cargandoMasGruasAdmin ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
+                      </button>
+                    </div>
+                  )}
+                </section>
+              )}
+
               {tab === 'compradores' && (
                 <section className="dashboard-seccion">
                   <h2 className="dashboard-seccion-titulo">Perfiles de compradores</h2>
@@ -5008,6 +5664,13 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           onClick={() => setTab('talleres')}
         >
           Talleres
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'gruas' ? 'activo' : ''}`}
+          onClick={() => setTab('gruas')}
+        >
+          Grúas
         </button>
         <button
           type="button"

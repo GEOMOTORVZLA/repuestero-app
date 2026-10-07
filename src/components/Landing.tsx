@@ -425,11 +425,11 @@ export function Landing({
         <h2 className="landing-seccion-titulo">GRÚAS Y EMERGENCIAS VIALES</h2>
         <div className="landing-emergencia-contenido">
           <img
-            src="/sticker-emergencia.webp"
-            alt="Emergencia"
+            src={esMoto ? '/sticker-grua-moto-v3.webp' : '/sticker-grua-v3.webp'}
+            alt={esMoto ? 'Grúa de motos' : 'Grúas'}
             className="landing-emergencia-sticker"
-            width={420}
-            height={320}
+            width={esMoto ? 705 : 718}
+            height={esMoto ? 499 : 513}
             loading="lazy"
             decoding="async"
           />
@@ -447,11 +447,11 @@ export function Landing({
       <section className="landing-taller">
         <div className="landing-taller-contenido">
           <img
-            src="/sticker-taller-v2.webp"
-            alt="Taller"
+            src={esMoto ? '/sticker-taller-moto-v3.webp' : '/sticker-taller-v3.webp'}
+            alt={esMoto ? 'Taller de motos' : 'Taller'}
             className="landing-taller-sticker"
-            width={432}
-            height={438}
+            width={esMoto ? 684 : 683}
+            height={525}
             loading="lazy"
             decoding="async"
           />

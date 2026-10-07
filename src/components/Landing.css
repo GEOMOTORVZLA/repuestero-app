@@ -735,7 +735,7 @@
 
 .landing-taller-imagen,
 .landing-taller-sticker {
-  width: calc(var(--landing-sticker-w) * 0.875);
+  width: var(--landing-sticker-w);
   height: auto;
   max-width: 100%;
   filter: drop-shadow(0 6px 10px rgba(45, 55, 72, 0.16));
