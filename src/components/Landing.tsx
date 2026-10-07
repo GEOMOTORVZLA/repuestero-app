@@ -445,7 +445,6 @@ export function Landing({
       </section>
 
       <section className="landing-taller">
-        <h2 className="landing-seccion-titulo">ENCUENTRA EL TALLER QUE NECESITAS AQUI</h2>
         <div className="landing-taller-contenido">
           <img
             src="/sticker-taller-v2.webp"
@@ -456,6 +455,7 @@ export function Landing({
             loading="lazy"
             decoding="async"
           />
+          <h2 className="landing-seccion-titulo">ENCUENTRA EL TALLER QUE NECESITAS AQUI</h2>
           <div className="landing-taller-texto">
             <Suspense fallback={<p className="landing-lazy-fallback">Cargando talleres…</p>}>
               <BusquedaTalleres vertical={vertical} />
