@@ -151,10 +151,10 @@
   max-width: 40rem;
   min-width: 0;
   box-sizing: border-box;
-  border: none;
+  border: 1px solid #d1d5db;
   border-radius: 10px;
-  background: #1e3a5f;
-  color: #fff;
+  background: #e5e7eb;
+  color: #111827;
   font-weight: 700;
   font-size: 0.92rem;
   letter-spacing: 0.04em;
@@ -166,8 +166,10 @@
   cursor: pointer;
 }
 
-.guia-repuestos-cta-btn:hover {
-  background: #16304d;
+.guia-repuestos-cta-btn:hover,
+.guia-repuestos-cta-btn:focus-visible {
+  background: #d1d5db;
+  border-color: #9ca3af;
 }
 
 @media (max-width: 480px) {
