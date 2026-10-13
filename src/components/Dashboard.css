@@ -1002,6 +1002,14 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   background: #ffedd5;
 }
 
+.dashboard-admin-table tr.dashboard-admin-row-sin-inventario td {
+  background: #fefce8;
+}
+
+.dashboard-admin-table tr.dashboard-admin-row-sin-inventario:hover td {
+  background: #fef9c3;
+}
+
 .dashboard-admin-coords {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;

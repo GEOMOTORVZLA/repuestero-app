@@ -145,6 +145,7 @@ type AdminTab =
   | 'fotos'
   | 'mostrador'
   | 'vendedores'
+  | 'inventario_vendedores'
   | 'talleres'
   | 'gruas'
   | 'compradores';
@@ -229,6 +230,7 @@ function etiquetaPestañaAdmin(t: AdminTab): string {
     fotos: 'Gestión de fotos',
     mostrador: 'Visor de mostrador',
     vendedores: 'Vendedores',
+    inventario_vendedores: 'Inventario por vendedor',
     talleres: 'Talleres',
     gruas: 'Grúas',
     compradores: 'Compradores',
@@ -357,6 +359,32 @@ type AdminTienda = {
   membresia_hasta?: string | null;
   vertical?: string | null;
 };
+
+type AdminInventarioVendedor = AdminTienda & {
+  items_cargados: number;
+};
+
+type FiltroInventarioVendedor = 'todos' | 'sin_items' | 'con_items';
+
+function itemsCargadosDesdeFila(row: {
+  items_cargados?: number | null;
+  productos?: { count?: number | null }[] | { count?: number | null } | null;
+}): number {
+  if (typeof row.items_cargados === 'number' && Number.isFinite(row.items_cargados)) {
+    return row.items_cargados;
+  }
+  const p = row.productos;
+  if (Array.isArray(p) && p[0] && typeof p[0].count === 'number') return p[0].count;
+  if (p && !Array.isArray(p) && typeof p.count === 'number') return p.count;
+  return 0;
+}
+
+function etiquetaUbicacionAdmin(estado?: string | null, ciudad?: string | null): string {
+  const e = estado?.trim() || '';
+  const c = ciudad?.trim() || '';
+  if (e && c) return `${e}, ${c}`;
+  return e || c || '—';
+}
 
 type AdminPerfilMembresia = {
   bloqueado: boolean | null;
@@ -992,6 +1020,14 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [busquedaUsuarios, setBusquedaUsuarios] = useState('');
   const [busquedaCompradores, setBusquedaCompradores] = useState('');
   const [busquedaVendedores, setBusquedaVendedores] = useState('');
+  const [inventarioVendedores, setInventarioVendedores] = useState<AdminInventarioVendedor[]>([]);
+  const [busquedaInventarioVendedores, setBusquedaInventarioVendedores] = useState('');
+  const [filtroInventarioVendedores, setFiltroInventarioVendedores] =
+    useState<FiltroInventarioVendedor>('todos');
+  const [hayMasInventarioVendedores, setHayMasInventarioVendedores] = useState(false);
+  const [offsetInventarioVendedores, setOffsetInventarioVendedores] = useState(0);
+  const [cargandoMasInventarioVendedores, setCargandoMasInventarioVendedores] = useState(false);
+  const [inventarioVendedoresError, setInventarioVendedoresError] = useState<string | null>(null);
   const [hayMasVendedoresAdmin, setHayMasVendedoresAdmin] = useState(false);
   const [offsetVendedoresAdmin, setOffsetVendedoresAdmin] = useState(0);
   const [cargandoMasVendedoresAdmin, setCargandoMasVendedoresAdmin] = useState(false);
@@ -1375,6 +1411,130 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     }
   };
 
+  const normalizarFilasInventario = (rows: unknown[]): AdminInventarioVendedor[] =>
+    (rows as (AdminTienda & {
+      items_cargados?: number;
+      productos?: { count?: number }[] | { count?: number };
+    })[]).map((r) => ({
+      ...r,
+      items_cargados: itemsCargadosDesdeFila(r),
+    }));
+
+  const cargarInventarioPorVendedor = async (buscar: string, filtro: FiltroInventarioVendedor) => {
+    const t = buscar.trim();
+    setInventarioVendedoresError(null);
+    const rpc = await supabase.rpc('admin_inventario_por_vendedor', {
+      p_buscar: t,
+      p_filtro: filtro,
+      p_limit: ADMIN_LIST_PAGE,
+      p_offset: 0,
+    });
+    if (!rpc.error) {
+      const rows = normalizarFilasInventario(rpc.data ?? []);
+      setInventarioVendedores(rows);
+      setHayMasInventarioVendedores(rows.length === ADMIN_LIST_PAGE);
+      setOffsetInventarioVendedores(rows.length);
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q: any = supabase.from('tiendas').select(`${ADMIN_TIENDAS_SELECT}, productos(count)`);
+    if (t) {
+      const esc = escapeIlikePatron(t);
+      q = q.or(
+        `rif.ilike.%${esc}%,nombre.ilike.%${esc}%,nombre_comercial.ilike.%${esc}%,telefono.ilike.%${esc}%,estado.ilike.%${esc}%,ciudad.ilike.%${esc}%`
+      );
+    }
+    const vRes = await q
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(0, ADMIN_LIST_PAGE - 1);
+    if (vRes.error) {
+      setInventarioVendedoresError(
+        `${rpc.error.message} Alternativa: ${vRes.error.message}. Ejecuta supabase-admin-inventario-vendedor.sql en el SQL Editor.`
+      );
+      setInventarioVendedores([]);
+      setHayMasInventarioVendedores(false);
+      setOffsetInventarioVendedores(0);
+      return;
+    }
+    let rows = normalizarFilasInventario(vRes.data ?? []);
+    if (filtro === 'sin_items') rows = rows.filter((r) => r.items_cargados === 0);
+    if (filtro === 'con_items') rows = rows.filter((r) => r.items_cargados > 0);
+    setInventarioVendedores(rows);
+    setHayMasInventarioVendedores((vRes.data ?? []).length === ADMIN_LIST_PAGE);
+    setOffsetInventarioVendedores((vRes.data ?? []).length);
+  };
+
+  const cargarMasInventarioPorVendedor = async () => {
+    if (cargandoMasInventarioVendedores || !hayMasInventarioVendedores) return;
+    setCargandoMasInventarioVendedores(true);
+    try {
+      const t = busquedaInventarioVendedores.trim();
+      const rpc = await supabase.rpc('admin_inventario_por_vendedor', {
+        p_buscar: t,
+        p_filtro: filtroInventarioVendedores,
+        p_limit: ADMIN_LIST_PAGE,
+        p_offset: offsetInventarioVendedores,
+      });
+      if (!rpc.error) {
+        const rows = normalizarFilasInventario(rpc.data ?? []);
+        setInventarioVendedores((prev) => concatenarUnicosPorId(prev, rows));
+        setHayMasInventarioVendedores(rows.length === ADMIN_LIST_PAGE);
+        setOffsetInventarioVendedores((prev) => prev + rows.length);
+        return;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q: any = supabase.from('tiendas').select(`${ADMIN_TIENDAS_SELECT}, productos(count)`);
+      if (t) {
+        const esc = escapeIlikePatron(t);
+        q = q.or(
+          `rif.ilike.%${esc}%,nombre.ilike.%${esc}%,nombre_comercial.ilike.%${esc}%,telefono.ilike.%${esc}%,estado.ilike.%${esc}%,ciudad.ilike.%${esc}%`
+        );
+      }
+      const vRes = await q
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(offsetInventarioVendedores, offsetInventarioVendedores + ADMIN_LIST_PAGE - 1);
+      if (vRes.error) {
+        setInventarioVendedoresError(vRes.error.message);
+        return;
+      }
+      let rows = normalizarFilasInventario(vRes.data ?? []);
+      if (filtroInventarioVendedores === 'sin_items') {
+        rows = rows.filter((r) => r.items_cargados === 0);
+      }
+      if (filtroInventarioVendedores === 'con_items') {
+        rows = rows.filter((r) => r.items_cargados > 0);
+      }
+      setInventarioVendedores((prev) => concatenarUnicosPorId(prev, rows));
+      setHayMasInventarioVendedores((vRes.data ?? []).length === ADMIN_LIST_PAGE);
+      setOffsetInventarioVendedores((prev) => prev + (vRes.data ?? []).length);
+    } finally {
+      setCargandoMasInventarioVendedores(false);
+    }
+  };
+
+  const irAProductosDeVendedor = (tiendaId: string) => {
+    const filtros: FiltrosConsultaAdminProductos = {
+      texto: '',
+      estado: 'todos',
+      vertical: 'todos',
+      tiendaId,
+    };
+    setBusquedaProductosAdminDraft('');
+    setFiltroEstadoProductosAdminDraft('todos');
+    setAdminFiltroVerticalDraft('todos');
+    setAdminFiltroVendedorTiendaIdDraft(tiendaId);
+    setBusquedaProductosAdminAplicada('');
+    setFiltroEstadoProductosAdmin('todos');
+    setAdminFiltroVertical('todos');
+    setAdminFiltroVendedorTiendaId(tiendaId);
+    setTab('productos');
+    void cargarProductosPrimeraPagina({ conIndicadorFiltros: true, filtros });
+  };
+
   const cargarTalleres = async (buscar: string) => {
     const t = buscar.trim();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1526,6 +1686,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     if (tab === 'productos' || productosTabCargada) {
       await cargarProductosPrimeraPagina();
     }
+    if (tab === 'inventario_vendedores') {
+      await cargarInventarioPorVendedor(busquedaInventarioVendedores, filtroInventarioVendedores);
+    }
     if (!silencioso) setCargando(false);
   };
 
@@ -1564,6 +1727,14 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     }, 400);
     return () => window.clearTimeout(tm);
   }, [busquedaVendedores, tab]);
+
+  useEffect(() => {
+    if (tab !== 'inventario_vendedores') return;
+    const tm = window.setTimeout(() => {
+      void cargarInventarioPorVendedor(busquedaInventarioVendedores, filtroInventarioVendedores);
+    }, 400);
+    return () => window.clearTimeout(tm);
+  }, [busquedaInventarioVendedores, filtroInventarioVendedores, tab]);
 
   useEffect(() => {
     if (tab !== 'talleres') return;
@@ -3291,6 +3462,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           <button type="button" className={`dashboard-menu-item ${tab === 'productos' ? 'activo' : ''}`} onClick={() => setTab('productos')}>Productos</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'fotos' ? 'activo' : ''}`} onClick={() => setTab('fotos')}>Gestión de fotos</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'vendedores' ? 'activo' : ''}`} onClick={() => setTab('vendedores')}>Vendedores</button>
+          <button type="button" className={`dashboard-menu-item ${tab === 'inventario_vendedores' ? 'activo' : ''}`} onClick={() => setTab('inventario_vendedores')}>Inventario por vendedor</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'talleres' ? 'activo' : ''}`} onClick={() => setTab('talleres')}>Talleres</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'gruas' ? 'activo' : ''}`} onClick={() => setTab('gruas')}>Grúas</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'compradores' ? 'activo' : ''}`} onClick={() => setTab('compradores')}>Compradores</button>
@@ -4603,6 +4775,128 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                 </section>
               )}
 
+              {tab === 'inventario_vendedores' && (
+                <section className="dashboard-seccion">
+                  <h2 className="dashboard-seccion-titulo">Inventario por vendedor</h2>
+                  <p className="dashboard-kpi-grid-hint">
+                    Ordenado por fecha de registro (más reciente arriba). Incluye quienes nunca subieron
+                    productos (ítems = 0). Ejecuta <code>supabase-admin-inventario-vendedor.sql</code> en
+                    Supabase para el conteo exacto de todo el catálogo.
+                  </p>
+                  <div className="dashboard-admin-busqueda-fila">
+                    <label htmlFor="admin-buscar-inventario-vendedores" className="dashboard-admin-busqueda-label">
+                      Buscar (nombre, teléfono, estado, ciudad o RIF)
+                    </label>
+                    <input
+                      id="admin-buscar-inventario-vendedores"
+                      type="search"
+                      className="dashboard-admin-busqueda-input"
+                      placeholder="Ej: Caracas, 0412, repuestos…"
+                      value={busquedaInventarioVendedores}
+                      onChange={(e) => setBusquedaInventarioVendedores(e.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </div>
+                  <div className="dashboard-admin-acciones-masivas">
+                    <div className="dashboard-admin-filtro-vertical">
+                      <label htmlFor="admin-filtro-inventario-vendedores">Filtrar listado</label>
+                      <select
+                        id="admin-filtro-inventario-vendedores"
+                        value={filtroInventarioVendedores}
+                        onChange={(e) =>
+                          setFiltroInventarioVendedores(e.target.value as FiltroInventarioVendedor)
+                        }
+                      >
+                        <option value="todos">Todos (por fecha de registro)</option>
+                        <option value="sin_items">
+                          Sin inventario (0 ítems)
+                          {inventarioVendedores.length
+                            ? ` · ${inventarioVendedores.filter((v) => v.items_cargados === 0).length} en esta página`
+                            : ''}
+                        </option>
+                        <option value="con_items">Con al menos 1 ítem</option>
+                      </select>
+                    </div>
+                  </div>
+                  {inventarioVendedoresError && (
+                    <p className="dashboard-admin-productos-hint">{inventarioVendedoresError}</p>
+                  )}
+                  <div className="dashboard-admin-table-wrap dashboard-admin-table-wrap--perfiles">
+                    <table className="dashboard-admin-table dashboard-admin-table--perfiles">
+                      <thead>
+                        <tr>
+                          <th>Nombre</th>
+                          <th>Teléfono</th>
+                          <th>Ubicación</th>
+                          <th>Ítems</th>
+                          <th>Registrado</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inventarioVendedores.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="dashboard-texto-placeholder">
+                              {filtroInventarioVendedores === 'sin_items'
+                                ? 'Ningún vendedor sin inventario en este bloque. Prueba «Cargar más» o todos.'
+                                : 'No hay vendedores en el listado.'}
+                            </td>
+                          </tr>
+                        ) : (
+                          inventarioVendedores.map((v) => {
+                            const cero = v.items_cargados === 0;
+                            return (
+                              <tr
+                                key={v.id}
+                                className={cero ? 'dashboard-admin-row-sin-inventario' : undefined}
+                              >
+                                <td className="dashboard-admin-texto-td dashboard-admin-nombre-td">
+                                  {celdaTextoCompletoAdmin(etiquetaNombreNegocioCompleto(v))}
+                                </td>
+                                <td className="dashboard-admin-texto-td dashboard-admin-telefono-td">
+                                  {celdaTextoCompletoAdmin(v.telefono)}
+                                </td>
+                                <td className="dashboard-admin-texto-td">
+                                  {celdaTextoCompletoAdmin(etiquetaUbicacionAdmin(v.estado, v.ciudad))}
+                                </td>
+                                <td>
+                                  <strong>{v.items_cargados}</strong>
+                                </td>
+                                <td className="dashboard-admin-texto-td">
+                                  {celdaTextoUnaLineaAdmin(fmtFechaCortaAdmin(v.created_at))}
+                                </td>
+                                <td className="dashboard-admin-acciones-td">
+                                  <button
+                                    type="button"
+                                    className="dashboard-admin-btn dashboard-admin-btn--compacto"
+                                    onClick={() => irAProductosDeVendedor(v.id)}
+                                  >
+                                    Ver productos
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {hayMasInventarioVendedores && (
+                    <div className="dashboard-admin-cargar-mas">
+                      <button
+                        type="button"
+                        className="dashboard-admin-btn ok"
+                        disabled={cargandoMasInventarioVendedores || cargando}
+                        onClick={() => void cargarMasInventarioPorVendedor()}
+                      >
+                        {cargandoMasInventarioVendedores ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
+                      </button>
+                    </div>
+                  )}
+                </section>
+              )}
+
               {tab === 'talleres' && (
                 <section className="dashboard-seccion">
                   <h2 className="dashboard-seccion-titulo">Perfiles de talleres</h2>
@@ -5657,6 +5951,13 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           onClick={() => setTab('vendedores')}
         >
           Vendedores
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'inventario_vendedores' ? 'activo' : ''}`}
+          onClick={() => setTab('inventario_vendedores')}
+        >
+          Inventario
         </button>
         <button
           type="button"
