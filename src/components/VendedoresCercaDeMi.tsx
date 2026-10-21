@@ -18,7 +18,7 @@ import {
   mensajeWhatsappCompartirCatalogoVendedor,
 } from '../utils/enlaceCompartirProducto';
 import { productoCoincideTextoFlexible, terminosBusquedaProducto, aplicarTerminosTextoABusquedaTiendas, aplicarTerminosTextoABusquedaProductos } from '../utils/busquedaProductosTexto';
-import { aplicarFiltroStockPublico } from '../utils/stockActualInventario';
+import { TABLA_CATALOGO_PUBLICO } from '../utils/catalogoPublico';
 import { registrarEventoContacto } from '../services/eventoContactoFlujo';
 import './VendedoresCercaDeMi.css';
 import './avisoSeleccionarEstado.css';
@@ -137,14 +137,12 @@ async function fetchPaginaProductosPublicosTienda(opts: {
   const texto = (opts.texto ?? '').trim();
 
   let query = supabase
-    .from('productos')
+    .from(TABLA_CATALOGO_PUBLICO)
     .select(SELECT_PRODUCTOS_VENDEDOR_CERCA)
     .eq('tienda_id', tiendaId)
     .eq('activo', true)
     .eq('aprobacion_publica', 'aprobado')
     .eq('vertical', vertical);
-
-  query = aplicarFiltroStockPublico(query);
 
   if (texto) {
     query = aplicarTerminosTextoABusquedaProductos(query, texto);

@@ -7,6 +7,7 @@ import { MARCAS_MODELOS } from '../data/marcasModelos';
 import { MARCAS_MOTOS } from '../data/marcasMotos';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO, VERTICAL_MOTO } from '../utils/verticalVehiculo';
+import { TABLA_CATALOGO_PUBLICO } from '../utils/catalogoPublico';
 import { TarjetaProductoBusqueda, type ProductoTarjetaBusqueda } from './TarjetaProductoBusqueda';
 import { mensajeWhatsappVendedorProducto, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
 import { registrarEventoContacto } from '../services/eventoContactoFlujo';
@@ -801,17 +802,16 @@ export function IdentificarRepuestoVision({ vertical, onIaModalCapaDelta }: Iden
     setProductoExpandidoId(null);
     try {
       let query = supabase
-        .from('productos')
+        .from(TABLA_CATALOGO_PUBLICO)
         .select(
           `
           id, nombre, descripcion, comentarios, categoria, marca, modelo, anio, moneda, precio_usd, imagen_url, imagenes_extra, disponibilidad_aviso, es_oferta,
-          tiendas ( nombre_comercial, nombre, rif, telefono, direccion, latitud, longitud, metodos_pago )
+          tiendas
         `
         )
         .eq('activo', true)
         .eq('aprobacion_publica', 'aprobado')
-        .eq('vertical', esMoto ? VERTICAL_MOTO : VERTICAL_AUTO)
-        .or('stock_actual.is.null,stock_actual.gt.0');
+        .eq('vertical', esMoto ? VERTICAL_MOTO : VERTICAL_AUTO);
 
       const marcaQ = marcaVehiculo.trim();
       const filtroMarca = filtroMarcaMarcaONombre(marcaQ);

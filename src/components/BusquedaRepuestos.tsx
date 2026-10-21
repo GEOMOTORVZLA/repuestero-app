@@ -22,7 +22,7 @@ import {
   aplicarTerminosTextoABusquedaProductos,
   terminosBusquedaProducto,
 } from '../utils/busquedaProductosTexto';
-import { aplicarFiltroStockPublico } from '../utils/stockActualInventario';
+import { TABLA_CATALOGO_PUBLICO } from '../utils/catalogoPublico';
 import './BusquedaRepuestos.css';
 
 /** Distancia en km entre dos puntos (Haversine) */
@@ -80,7 +80,7 @@ const SELECT_PRODUCTOS_PUBLICO_LISTA = `
         imagenes_extra,
         disponibilidad_aviso,
         es_oferta,
-        tiendas ( nombre_comercial, nombre, rif, telefono, direccion, latitud, longitud, metodos_pago )
+        tiendas
 `;
 
 /** Tamaño de página en listados públicos (se pide una fila extra para saber si hay más). */
@@ -107,13 +107,12 @@ function mapFilasASugerencias(
 
 function queryProductosSugerencias(textoBusquedaTrim: string, vertical: VerticalVehiculo) {
   let query = supabase
-    .from('productos')
+    .from(TABLA_CATALOGO_PUBLICO)
     .select('id, nombre, marca, modelo')
     .eq('activo', true)
     .eq('aprobacion_publica', 'aprobado')
     .eq('vertical', vertical);
 
-  query = aplicarFiltroStockPublico(query);
   query = aplicarTerminosTextoABusquedaProductos(query, textoBusquedaTrim);
 
   return query.order('nombre', { ascending: true }).order('id', { ascending: true });
@@ -288,13 +287,12 @@ export function BusquedaRepuestos({
 
   const armarQueryListaProductos = (p: ParamsBusquedaProductos) => {
     let query = supabase
-      .from('productos')
+      .from(TABLA_CATALOGO_PUBLICO)
       .select(SELECT_PRODUCTOS_PUBLICO_LISTA)
       .eq('activo', true)
       .eq('aprobacion_publica', 'aprobado')
       .eq('vertical', vertical);
 
-    query = aplicarFiltroStockPublico(query);
     query = aplicarTerminosTextoABusquedaProductos(query, p.texto);
 
     return query.order('nombre').order('id');
@@ -506,13 +504,12 @@ export function BusquedaRepuestos({
       setMostrarIntroBusquedaPagina(false);
 
       const { data, error } = await supabase
-        .from('productos')
+        .from(TABLA_CATALOGO_PUBLICO)
         .select(SELECT_PRODUCTOS_PUBLICO_LISTA)
         .eq('id', id)
         .eq('activo', true)
         .eq('aprobacion_publica', 'aprobado')
         .eq('vertical', vertical)
-        .or('stock_actual.is.null,stock_actual.gt.0')
         .maybeSingle();
 
       if (cancelled) return;

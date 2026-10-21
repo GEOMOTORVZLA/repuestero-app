@@ -18,7 +18,7 @@ import {
   aplicarTerminosTextoABusquedaProductos,
   terminosBusquedaProducto,
 } from '../utils/busquedaProductosTexto';
-import { aplicarFiltroStockPublico } from '../utils/stockActualInventario';
+import { TABLA_CATALOGO_PUBLICO } from '../utils/catalogoPublico';
 import { categoriasEquivalentesConsulta } from '../data/categoriasProducto';
 import { permitirAccionCliente } from '../utils/rateLimitCliente';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
@@ -76,7 +76,7 @@ const SELECT_PRODUCTOS_CATEGORIA = `
   imagenes_extra,
   disponibilidad_aviso,
   es_oferta,
-  tiendas ( nombre_comercial, nombre, rif, telefono, direccion, latitud, longitud, metodos_pago )
+  tiendas
 `;
 
 export function ListaRepuestosPorCategoria({
@@ -100,14 +100,13 @@ export function ListaRepuestosPorCategoria({
   const armarQuery = useCallback(
     (texto: string) => {
       let query = supabase
-        .from('productos')
+        .from(TABLA_CATALOGO_PUBLICO)
         .select(SELECT_PRODUCTOS_CATEGORIA)
         .eq('activo', true)
         .eq('aprobacion_publica', 'aprobado')
         .eq('vertical', vertical)
         .in('categoria', categoriasEquivalentesConsulta(categoria));
 
-      query = aplicarFiltroStockPublico(query);
       query = aplicarTerminosTextoABusquedaProductos(query, texto);
       return query.order('nombre').order('id');
     },

@@ -8,6 +8,7 @@ import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO, VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import { mensajeWhatsappVendedorProducto, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
 import { registrarEventoContacto } from '../services/eventoContactoFlujo';
+import { TABLA_CATALOGO_PUBLICO } from '../utils/catalogoPublico';
 import { TarjetaProductoBusqueda, type ProductoTarjetaBusqueda } from './TarjetaProductoBusqueda';
 import './MecanicoVirtualObd.css';
 
@@ -291,7 +292,7 @@ export function MecanicoVirtualObd({
 
     try {
       let query = supabase
-        .from('productos')
+        .from(TABLA_CATALOGO_PUBLICO)
         .select(
           `
           id,
@@ -308,13 +309,12 @@ export function MecanicoVirtualObd({
           imagenes_extra,
           disponibilidad_aviso,
           es_oferta,
-          tiendas ( nombre_comercial, nombre, rif, telefono, direccion, latitud, longitud, metodos_pago )
+          tiendas
         `
         )
         .eq('activo', true)
         .eq('aprobacion_publica', 'aprobado')
-        .eq('vertical', vertical)
-        .or('stock_actual.is.null,stock_actual.gt.0');
+        .eq('vertical', vertical);
 
       if (marcaVehiculo) query = query.eq('marca', marcaVehiculo);
 

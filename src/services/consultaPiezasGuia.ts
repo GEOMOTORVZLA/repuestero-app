@@ -10,7 +10,7 @@ import {
   comillasFiltroPostgrest,
   normalizarTextoBusqueda,
 } from '../utils/busquedaProductosTexto';
-import { aplicarFiltroStockPublico } from '../utils/stockActualInventario';
+import { TABLA_CATALOGO_PUBLICO } from '../utils/catalogoPublico';
 import type { ProductoTarjetaBusqueda } from '../components/TarjetaProductoBusqueda';
 
 export const SELECT_PRODUCTOS_GUIA = `
@@ -28,7 +28,7 @@ export const SELECT_PRODUCTOS_GUIA = `
         imagenes_extra,
         disponibilidad_aviso,
         es_oferta,
-        tiendas ( nombre_comercial, nombre, rif, telefono, direccion, latitud, longitud, metodos_pago )
+        tiendas
 `;
 
 export type TiendaGuiaContacto = {
@@ -129,14 +129,12 @@ function orAliasNombre(alias: string[]): string {
 }
 
 function queryBasePublica(vertical: VerticalVehiculo = VERTICAL_AUTO) {
-  let q = supabase
-    .from('productos')
+  return supabase
+    .from(TABLA_CATALOGO_PUBLICO)
     .select(SELECT_PRODUCTOS_GUIA)
     .eq('activo', true)
     .eq('aprobacion_publica', 'aprobado')
     .eq('vertical', vertical);
-  q = aplicarFiltroStockPublico(q);
-  return q;
 }
 
 export async function buscarProductosPorPiezaGuia(opts: {

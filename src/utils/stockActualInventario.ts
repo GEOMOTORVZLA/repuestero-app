@@ -104,8 +104,3 @@ export function etiquetaStockActual(stock: StockActual): string {
   if (stock <= 0) return 'Agotado (0)';
   return `${stock} disponible${stock === 1 ? '' : 's'}`;
 }
-
-/** Filtro PostgREST: visible al publico si no controla inventario o tiene unidades. */
-export function aplicarFiltroStockPublico<T extends { or: (f: string) => T }>(query: T): T {
-  return query.or('stock_actual.is.null,stock_actual.gt.0');
-}
