@@ -11,3 +11,6 @@ verify_jwt = true
 
 [functions.mecanico-virtual-obd]
 verify_jwt = true
+
+[functions.copiar-foto-externa]
+verify_jwt = true

@@ -11,6 +11,7 @@ import { parsePrecioProducto } from '../utils/precioProducto';
 import { permitirAccionCliente } from '../utils/rateLimitCliente';
 import { parseStockActualInput, patchDesdeStockActual } from '../utils/stockActualInventario';
 import { LIMITE_DESCRIPCION_PRODUCTO } from '../utils/limiteDescripcionProducto';
+import { copiarFotosExternasDeProductos } from '../utils/copiarFotosImportacion';
 import './ImportarProductosCSV.css';
 
 type ModoImportacion = 'alta' | 'sincronizar' | 'freemarket_fotos';
@@ -692,6 +693,7 @@ export function ImportarProductosCSV({
     let okInsert = 0;
     let okUpdate = 0;
     const erroresOp: string[] = [];
+    const fotosPendientes: { rowNumber: number; productoId: string; urls: string[] }[] = [];
 
     for (const r of filas) {
       const inv = patchDesdeStockActual(r.cantidad);
@@ -726,6 +728,9 @@ export function ImportarProductosCSV({
         if (updError) {
           erroresOp.push(`Fila ${r.rowNumber}: ${updError.message || 'Error actualizando.'}`);
           continue;
+        }
+        if (patchFotos) {
+          fotosPendientes.push({ rowNumber: r.rowNumber, productoId: existenteId, urls: r.imagenesUrl });
         }
         okUpdate += 1;
         continue;
@@ -777,20 +782,43 @@ export function ImportarProductosCSV({
       if (inserted?.id && r.codigo) {
         codigosExistentes.set(r.codigo, inserted.id);
       }
+      if (patchFotos && inserted?.id) {
+        fotosPendientes.push({ rowNumber: r.rowNumber, productoId: inserted.id, urls: r.imagenesUrl });
+      }
       okInsert += 1;
+    }
+
+    let fotosCopiadas = 0;
+    const fallosFoto: string[] = [];
+    if (fotosPendientes.length) {
+      setMensaje(`Copiando fotos al almacenamiento (${fotosPendientes.length})...`);
+      const copia = await copiarFotosExternasDeProductos(fotosPendientes, (hechos, total) => {
+        setMensaje(`Copiando fotos al almacenamiento (${hechos} de ${total})...`);
+      });
+      fotosCopiadas = copia.copiadas;
+      fallosFoto.push(...copia.fallos);
     }
 
     setLotePendiente(null);
     setInsertados(okInsert);
     setActualizados(okUpdate);
 
-    if (erroresOp.length) {
-      setErrores(erroresOp.slice(0, 20));
-      setEstado('error');
+    const textoFotos =
+      fotosPendientes.length > 0
+        ? ` Fotos guardadas en Supabase: ${fotosCopiadas}.${
+            fallosFoto.length ? ` No se pudieron copiar ${fallosFoto.length}; esas siguen con el enlace original.` : ''
+          }`
+        : '';
+
+    if (erroresOp.length || fallosFoto.length) {
+      setErrores([...erroresOp, ...fallosFoto].slice(0, 20));
+      setEstado(erroresOp.length ? 'error' : 'ok');
       setMensaje(
-        usaCodigoLote
-          ? `Parcial: ${okUpdate} actualizado(s), ${okInsert} nuevo(s); ${erroresOp.length} error(es). (Mostrando hasta 20)`
-          : `Se insertaron ${okInsert} producto(s), pero hubo ${erroresOp.length} error(es). (Mostrando hasta 20)`
+        erroresOp.length
+          ? usaCodigoLote
+            ? `Parcial: ${okUpdate} actualizado(s), ${okInsert} nuevo(s); ${erroresOp.length} error(es).${textoFotos} (Mostrando hasta 20)`
+            : `Se insertaron ${okInsert} producto(s), pero hubo ${erroresOp.length} error(es).${textoFotos} (Mostrando hasta 20)`
+          : `Productos listos: ${okUpdate} actualizado(s), ${okInsert} nuevo(s).${textoFotos}`
       );
       if (okInsert + okUpdate > 0) onImportado?.();
       return;
@@ -799,7 +827,7 @@ export function ImportarProductosCSV({
     setEstado('ok');
     setMensaje(
       esFreemarketLote
-        ? `Freemarket completado: ${okUpdate} actualizado(s) con fotos URL, ${okInsert} nuevo(s) con fotos URL.`
+        ? `Freemarket completado: ${okUpdate} actualizado(s), ${okInsert} nuevo(s).${textoFotos}`
         : esSyncLote
           ? `Sincronización completada: ${okUpdate} actualizado(s) (categoría y fotos intactas), ${okInsert} nuevo(s) sin foto.`
           : modoAdmin
@@ -874,7 +902,8 @@ export function ImportarProductosCSV({
           <>
             Descarga el <strong>modelo Freemarket con fotos en URL</strong> ({vertical === 'moto' ? 'moto' : 'auto'}
             ): misma estructura que sincronizar más una columna <code>imagen_url</code>. En esa celda
-            pones las URLs en orden (foto 1; foto 2; foto 3; foto 4) separadas por <code>;</code>. Por{' '}
+            pones las URLs en orden (foto 1; foto 2; foto 3; foto 4) separadas por <code>;</code>. Al
+            importar, cada enlace externo se copia al almacenamiento de Geomotors. Por{' '}
             <strong>codigo</strong> actualiza inventario y fotos. Códigos nuevos se crean con foto. Máx.
             1000 filas.
           </>

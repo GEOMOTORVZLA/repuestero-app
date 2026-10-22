@@ -40,3 +40,6 @@ android/*.keystore
 
 # Supabase CLI local
 supabase/.temp/
+
+# Reporte local al copiar fotos externas a Storage
+scripts/out/

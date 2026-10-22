@@ -1,7 +1,7 @@
 {
   "name": "repuestero-app",
   "private": true,
-  "version": "1.0.23",
+  "version": "1.0.24",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,7 +20,8 @@
     "supabase:deploy-notify": "npx supabase functions deploy notify-registro",
     "supabase:deploy-mecanico": "npx supabase functions deploy mecanico-virtual-obd",
     "supabase:deploy-vision": "node scripts/deploy-vision.mjs",
-    "check-encoding": "node scripts/check-src-encoding.mjs"
+    "check-encoding": "node scripts/check-src-encoding.mjs",
+    "fotos:copiar": "node scripts/copiar-fotos-externas.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",
