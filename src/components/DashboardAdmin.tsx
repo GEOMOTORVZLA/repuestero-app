@@ -21,6 +21,7 @@ import { VERTICAL_AUTO, VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import { mensajeNegocioNoListoParaAprobar } from '../utils/validarDatosNegocio';
 import { nombreTipoGrua } from '../data/tiposGrua';
 import { ImportarProductosCSV } from './ImportarProductosCSV';
+import { DescargarPublicacionesActivas } from './DescargarPublicacionesActivas';
 import { VisorMostrador } from './VisorMostrador';
 import {
   aplicarTerminosTextoABusquedaTiendas,
@@ -146,6 +147,7 @@ type AdminTab =
   | 'mostrador'
   | 'vendedores'
   | 'inventario_vendedores'
+  | 'descarga_publicaciones'
   | 'talleres'
   | 'gruas'
   | 'compradores';
@@ -231,6 +233,7 @@ function etiquetaPestañaAdmin(t: AdminTab): string {
     mostrador: 'Visor de mostrador',
     vendedores: 'Vendedores',
     inventario_vendedores: 'Inventario por vendedor',
+    descarga_publicaciones: 'Descarga de publicaciones activas',
     talleres: 'Talleres',
     gruas: 'Grúas',
     compradores: 'Compradores',
@@ -1002,6 +1005,8 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [productosTabCargada, setProductosTabCargada] = useState(false);
   const [adminImportVertical, setAdminImportVertical] = useState<VerticalVehiculo>(VERTICAL_AUTO);
   const [adminImportTiendaId, setAdminImportTiendaId] = useState('');
+  const [adminDescargaVertical, setAdminDescargaVertical] = useState<VerticalVehiculo>(VERTICAL_AUTO);
+  const [adminDescargaTiendaId, setAdminDescargaTiendaId] = useState('');
   const [bulkProductosAccion, setBulkProductosAccion] = useState<AccionMasivaProductosAdmin>('');
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2053,6 +2058,27 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     if (!v) return null;
     return v.nombre_comercial?.trim() || v.nombre?.trim() || v.id;
   }, [vendedores, adminImportTiendaId]);
+
+  const vendedoresActivosDescargaAdmin = useMemo(() => {
+    return vendedores
+      .filter((v) => {
+        if ((v.aprobacion_estado ?? 'aprobado') !== 'aprobado') return false;
+        if (v.bloqueado === true) return false;
+        const vert = (v.vertical ?? 'auto') === 'moto' ? 'moto' : 'auto';
+        return vert === adminDescargaVertical;
+      })
+      .sort((a, b) => {
+        const la = (a.nombre_comercial || a.nombre || '').toLocaleLowerCase('es');
+        const lb = (b.nombre_comercial || b.nombre || '').toLocaleLowerCase('es');
+        return la.localeCompare(lb, 'es');
+      });
+  }, [vendedores, adminDescargaVertical]);
+
+  const adminDescargaEtiquetaVendedor = useMemo(() => {
+    const v = vendedores.find((x) => x.id === adminDescargaTiendaId);
+    if (!v) return null;
+    return v.nombre_comercial?.trim() || v.nombre?.trim() || v.id;
+  }, [vendedores, adminDescargaTiendaId]);
 
   const vendedoresVisibles = useMemo(() => {
     let list = [...vendedores];
@@ -3463,6 +3489,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           <button type="button" className={`dashboard-menu-item ${tab === 'fotos' ? 'activo' : ''}`} onClick={() => setTab('fotos')}>Gestión de fotos</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'vendedores' ? 'activo' : ''}`} onClick={() => setTab('vendedores')}>Vendedores</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'inventario_vendedores' ? 'activo' : ''}`} onClick={() => setTab('inventario_vendedores')}>Inventario por vendedor</button>
+          <button type="button" className={`dashboard-menu-item ${tab === 'descarga_publicaciones' ? 'activo' : ''}`} onClick={() => setTab('descarga_publicaciones')}>Descarga de publicaciones activas</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'talleres' ? 'activo' : ''}`} onClick={() => setTab('talleres')}>Talleres</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'gruas' ? 'activo' : ''}`} onClick={() => setTab('gruas')}>Grúas</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'compradores' ? 'activo' : ''}`} onClick={() => setTab('compradores')}>Compradores</button>
@@ -4894,6 +4921,58 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </button>
                     </div>
                   )}
+                </section>
+              )}
+
+              {tab === 'descarga_publicaciones' && (
+                <section className="dashboard-seccion">
+                  <h2 className="dashboard-seccion-titulo">Descarga de publicaciones activas</h2>
+                  <p className="dashboard-kpi-grid-hint">
+                    Elige la vertical y el vendedor. El Excel tiene la misma estructura de la carga masiva, sin la columna de fotos.
+                  </p>
+                  <div className="dashboard-admin-import-vendedor-controles">
+                    <label>
+                      Vertical del catálogo
+                      <select
+                        value={adminDescargaVertical}
+                        onChange={(e) => {
+                          const next = e.target.value === VERTICAL_MOTO ? VERTICAL_MOTO : VERTICAL_AUTO;
+                          setAdminDescargaVertical(next);
+                          setAdminDescargaTiendaId('');
+                        }}
+                      >
+                        <option value={VERTICAL_AUTO}>Automóvil</option>
+                        <option value={VERTICAL_MOTO}>Motocicleta</option>
+                      </select>
+                    </label>
+                    <label>
+                      Vendedor activo
+                      <select
+                        value={adminDescargaTiendaId}
+                        onChange={(e) => setAdminDescargaTiendaId(e.target.value)}
+                      >
+                        <option value="">Selecciona un vendedor…</option>
+                        {vendedoresActivosDescargaAdmin.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {(v.nombre_comercial?.trim() || v.nombre?.trim() || v.id) +
+                              (v.rif?.trim() ? ` · ${v.rif.trim()}` : '')}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  {vendedoresActivosDescargaAdmin.length === 0 && (
+                    <p className="dashboard-texto-placeholder">
+                      No hay vendedores activos (aprobados y sin bloqueo) en esta vertical.
+                    </p>
+                  )}
+                  <DescargarPublicacionesActivas
+                    key={`admin-descarga-${adminDescargaVertical}-${adminDescargaTiendaId || 'none'}`}
+                    modoAdmin
+                    vertical={adminDescargaVertical}
+                    tiendaId={adminDescargaTiendaId || null}
+                    etiquetaVendedor={adminDescargaEtiquetaVendedor}
+                  />
                 </section>
               )}
 

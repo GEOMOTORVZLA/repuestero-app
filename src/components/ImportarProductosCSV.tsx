@@ -12,6 +12,7 @@ import { permitirAccionCliente } from '../utils/rateLimitCliente';
 import { parseStockActualInput, patchDesdeStockActual } from '../utils/stockActualInventario';
 import { LIMITE_DESCRIPCION_PRODUCTO } from '../utils/limiteDescripcionProducto';
 import { copiarFotosExternasDeProductos } from '../utils/copiarFotosImportacion';
+import { resolverCodigosRepetidos } from '../utils/codigosImportacionDuplicados';
 import './ImportarProductosCSV.css';
 
 type ModoImportacion = 'alta' | 'sincronizar' | 'freemarket_fotos';
@@ -227,6 +228,9 @@ type LotePendienteImport = {
   modo: ModoImportacion;
   aActualizar: number;
   aCrear: number;
+  /** Aviso corto: filas unidas o códigos separados con sufijo. */
+  resumenCodigos: string;
+  avisosCodigos: string[];
 };
 
 function normalizeHeader(s: string): string {
@@ -250,16 +254,22 @@ function parseXLSXToRows(arrayBuffer: ArrayBuffer): string[][] {
     .filter((r) => r.some((c) => c !== ''));
 }
 
-async function mapaCodigosExistentesTienda(
-  tiendaId: string
-): Promise<{ ok: true; map: Map<string, string> } | { ok: false; error: string }> {
+async function mapaCodigosExistentesTienda(tiendaId: string): Promise<
+  | {
+      ok: true;
+      map: Map<string, string>;
+      existentes: { codigo: string; nombre: string }[];
+    }
+  | { ok: false; error: string }
+> {
   const map = new Map<string, string>();
+  const existentes: { codigo: string; nombre: string }[] = [];
   const PAGE = 1000;
   let from = 0;
   while (true) {
     const { data, error } = await supabase
       .from('productos')
-      .select('id, codigo')
+      .select('id, codigo, nombre')
       .eq('tienda_id', tiendaId)
       .not('codigo', 'is', null)
       .range(from, from + PAGE - 1);
@@ -272,15 +282,17 @@ async function mapaCodigosExistentesTienda(
             : error.message || 'No se pudieron cargar los códigos existentes.',
       };
     }
-    const batch = (data ?? []) as { id: string; codigo: string | null }[];
+    const batch = (data ?? []) as { id: string; codigo: string | null; nombre: string | null }[];
     for (const row of batch) {
       const c = normalizarCodigoProducto(String(row.codigo ?? ''));
-      if (c) map.set(c, row.id);
+      if (!c || map.has(c)) continue;
+      map.set(c, row.id);
+      existentes.push({ codigo: c, nombre: String(row.nombre ?? '') });
     }
     if (batch.length < PAGE) break;
     from += PAGE;
   }
-  return { ok: true, map };
+  return { ok: true, map, existentes };
 }
 
 export function ImportarProductosCSV({
@@ -443,7 +455,6 @@ export function ImportarProductosCSV({
 
     const filas: ParsedRow[] = [];
     const erroresFila: string[] = [];
-    const codigosEnArchivo = new Set<string>();
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
@@ -462,17 +473,6 @@ export function ImportarProductosCSV({
           );
           continue;
         }
-        if (codigosEnArchivo.has(codigoNorm)) {
-          erroresFila.push(`Fila ${rowNumber}: codigo duplicado en el archivo (${codigoNorm}).`);
-          continue;
-        }
-        codigosEnArchivo.add(codigoNorm);
-      } else if (codigoNorm) {
-        if (codigosEnArchivo.has(codigoNorm)) {
-          erroresFila.push(`Fila ${rowNumber}: codigo duplicado en el archivo (${codigoNorm}).`);
-          continue;
-        }
-        codigosEnArchivo.add(codigoNorm);
       }
 
       const nombre = nombreRaw.toUpperCase();
@@ -598,6 +598,7 @@ export function ImportarProductosCSV({
     }
 
     let codigosExistentes = new Map<string, string>();
+    let existentesNombre: { codigo: string; nombre: string }[] = [];
     if (usaCodigoObligatorio || filas.some((f) => f.codigo)) {
       setMensaje('Cargando códigos existentes de la tienda...');
       const mapa = await mapaCodigosExistentesTienda(tiendaId!);
@@ -607,11 +608,15 @@ export function ImportarProductosCSV({
         return;
       }
       codigosExistentes = mapa.map;
+      existentesNombre = mapa.existentes;
     }
+
+    const resuelto = resolverCodigosRepetidos(filas, existentesNombre);
+    const filasListas = resuelto.filas;
 
     let aActualizar = 0;
     let aCrear = 0;
-    for (const r of filas) {
+    for (const r of filasListas) {
       if ((esSync || esFreemarket) && r.codigo && codigosExistentes.has(r.codigo)) {
         aActualizar += 1;
       } else {
@@ -620,16 +625,20 @@ export function ImportarProductosCSV({
     }
 
     setLotePendiente({
-      filas,
+      filas: filasListas,
       tiendaId: tiendaId!,
       codigosExistentes,
       modo: modoImportacion,
       aActualizar,
       aCrear,
+      resumenCodigos: resuelto.resumen,
+      avisosCodigos: resuelto.avisos,
     });
     setEstado('confirmar');
     setMensaje(
-      `Lote listo para revisar: ${filas.length} fila(s) válida(s). Confirma si deseas subirlo.`
+      `Lote listo para revisar: ${filasListas.length} fila(s) válida(s).${
+        resuelto.resumen ? ` ${resuelto.resumen}` : ''
+      } Confirma si deseas subirlo.`
     );
   };
 
@@ -669,6 +678,8 @@ export function ImportarProductosCSV({
     }
 
     const { filas, tiendaId } = lotePendiente;
+    const notaCodigos = lotePendiente.resumenCodigos.trim();
+    const conNota = (texto: string) => (notaCodigos ? `${texto} ${notaCodigos}` : texto);
     const codigosExistentes = new Map(lotePendiente.codigosExistentes);
     const modoLote = lotePendiente.modo;
     const esSyncLote = modoLote === 'sincronizar';
@@ -814,11 +825,13 @@ export function ImportarProductosCSV({
       setErrores([...erroresOp, ...fallosFoto].slice(0, 20));
       setEstado(erroresOp.length ? 'error' : 'ok');
       setMensaje(
-        erroresOp.length
-          ? usaCodigoLote
-            ? `Parcial: ${okUpdate} actualizado(s), ${okInsert} nuevo(s); ${erroresOp.length} error(es).${textoFotos} (Mostrando hasta 20)`
-            : `Se insertaron ${okInsert} producto(s), pero hubo ${erroresOp.length} error(es).${textoFotos} (Mostrando hasta 20)`
-          : `Productos listos: ${okUpdate} actualizado(s), ${okInsert} nuevo(s).${textoFotos}`
+        conNota(
+          erroresOp.length
+            ? usaCodigoLote
+              ? `Parcial: ${okUpdate} actualizado(s), ${okInsert} nuevo(s); ${erroresOp.length} error(es).${textoFotos} (Mostrando hasta 20)`
+              : `Se insertaron ${okInsert} producto(s), pero hubo ${erroresOp.length} error(es).${textoFotos} (Mostrando hasta 20)`
+            : `Productos listos: ${okUpdate} actualizado(s), ${okInsert} nuevo(s).${textoFotos}`
+        )
       );
       if (okInsert + okUpdate > 0) onImportado?.();
       return;
@@ -826,13 +839,15 @@ export function ImportarProductosCSV({
 
     setEstado('ok');
     setMensaje(
-      esFreemarketLote
-        ? `Freemarket completado: ${okUpdate} actualizado(s), ${okInsert} nuevo(s).${textoFotos}`
-        : esSyncLote
-          ? `Sincronización completada: ${okUpdate} actualizado(s) (categoría y fotos intactas), ${okInsert} nuevo(s) sin foto.`
-          : modoAdmin
-            ? `Importación completada: ${okInsert} producto(s) insertados en ${etiquetaDestino?.trim() || 'la tienda'} (sin fotos).`
-            : `Importación completada: ${okInsert} producto(s) insertados (sin fotos). Ya están publicados.`
+      conNota(
+        esFreemarketLote
+          ? `Freemarket completado: ${okUpdate} actualizado(s), ${okInsert} nuevo(s).${textoFotos}`
+          : esSyncLote
+            ? `Sincronización completada: ${okUpdate} actualizado(s) (categoría y fotos intactas), ${okInsert} nuevo(s) sin foto.`
+            : modoAdmin
+              ? `Importación completada: ${okInsert} producto(s) insertados en ${etiquetaDestino?.trim() || 'la tienda'} (sin fotos).`
+              : `Importación completada: ${okInsert} producto(s) insertados (sin fotos). Ya están publicados.`
+      )
     );
     onImportado?.();
   };
@@ -904,16 +919,18 @@ export function ImportarProductosCSV({
             ): misma estructura que sincronizar más una columna <code>imagen_url</code>. En esa celda
             pones las URLs en orden (foto 1; foto 2; foto 3; foto 4) separadas por <code>;</code>. Al
             importar, cada enlace externo se copia al almacenamiento de Geomotors. Por{' '}
-            <strong>codigo</strong> actualiza inventario y fotos. Códigos nuevos se crean con foto. Máx.
-            1000 filas.
+            <strong>codigo</strong> actualiza inventario y fotos. Si el código viene repetido, el mismo
+            nombre se junta en un producto; si el nombre es otro, se guarda con un sufijo (-2, -3) y la
+            carga no se detiene. Códigos nuevos se crean con foto. Máx. 1000 filas.
           </>
         ) : esSync ? (
           <>
             Descarga la <strong>plantilla de sincronizar ({vertical === 'moto' ? 'moto' : 'auto'})</strong>{' '}
             con columna <strong>codigo</strong>. Si el código ya existe: actualiza nombre, descripción
             (comentarios), precio y cantidad; <strong>no cambia categoría ni fotos</strong>. Si es
-            código nuevo: crea el producto (usa la categoría del Excel). Cantidad 0 pausa sin borrar
-            fotos. Máx. 1000 filas.
+            código nuevo: crea el producto (usa la categoría del Excel). Si el código viene repetido, el
+            mismo nombre se junta en un producto; si el nombre es otro, se guarda con un sufijo (-2, -3)
+            y la carga no se detiene. Cantidad 0 pausa sin borrar fotos. Máx. 1000 filas.
           </>
         ) : (
           <>
@@ -1000,6 +1017,13 @@ export function ImportarProductosCSV({
             <li>
               Se crearán: <strong>{lotePendiente.aCrear}</strong>
             </li>
+            {lotePendiente.avisosCodigos.length > 0 &&
+              lotePendiente.avisosCodigos.slice(0, 12).map((aviso) => (
+                <li key={aviso}>{aviso}</li>
+              ))}
+            {lotePendiente.avisosCodigos.length > 12 && (
+              <li>y {lotePendiente.avisosCodigos.length - 12} aviso(s) más de códigos repetidos.</li>
+            )}
           </ul>
           {estado === 'confirmar' && (
             <p className="importar-productos-confirmacion-aviso">

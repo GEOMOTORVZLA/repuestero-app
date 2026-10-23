@@ -8,6 +8,7 @@ import { VisorMostrador } from './VisorMostrador';
 import { ResumenVendedor } from './ResumenVendedor';
 import { PerfilUsuario } from './PerfilUsuario';
 import { ImportarProductosCSV } from './ImportarProductosCSV';
+import { DescargarPublicacionesActivas } from './DescargarPublicacionesActivas';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO, VERTICAL_MOTO } from '../utils/verticalVehiculo';
 import { bannerEstadoCuentaNegocio } from '../utils/estadoCuentaVendedorTaller';
@@ -15,7 +16,7 @@ import type { BannerEstadoCuenta } from '../utils/estadoCuentaVendedorTaller';
 import { EstadoCuentaNegocioBanner } from './EstadoCuentaNegocioBanner';
 import './Dashboard.css';
 
-type TabId = 'resumen' | 'publicar' | 'productos' | 'fotos' | 'mostrador' | 'perfil';
+type TabId = 'resumen' | 'publicar' | 'productos' | 'descarga' | 'fotos' | 'mostrador' | 'perfil';
 
 const STORAGE_GLOBO_PUBLICAR = 'repuestero:globo-publicar-visto';
 
@@ -164,6 +165,13 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
           </button>
           <button
             type="button"
+            className={`dashboard-menu-item ${tab === 'descarga' ? 'activo' : ''}`}
+            onClick={() => setTab('descarga')}
+          >
+            Descarga de publicaciones activas
+          </button>
+          <button
+            type="button"
             className={`dashboard-menu-item ${tab === 'fotos' ? 'activo' : ''}`}
             onClick={() => setTab('fotos')}
           >
@@ -301,6 +309,8 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
             </section>
           )}
 
+          {tab === 'descarga' && <DescargarPublicacionesActivas vertical={vertical} />}
+
           {tab === 'fotos' && (
             <section className="dashboard-seccion">
               <h2 className="dashboard-seccion-titulo">Gestión de fotos</h2>
@@ -375,6 +385,15 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
           onClick={() => setTab('productos')}
         >
           Editar
+        </button>
+        <button
+          type="button"
+          className={`dashboard-nav-movil-item ${tab === 'descarga' ? 'activo' : ''}`}
+          onClick={() => setTab('descarga')}
+          title="Descarga de publicaciones activas"
+          aria-label="Descarga de publicaciones activas"
+        >
+          Excel
         </button>
         <button
           type="button"
