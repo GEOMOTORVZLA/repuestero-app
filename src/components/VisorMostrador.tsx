@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../supabaseClient';
 import { urlsFotosProducto } from '../utils/productoImagenesExtra';
 import { etiquetaMoneda } from '../utils/monedaProducto';
 import { formatearPrecioProducto } from '../utils/precioProducto';
@@ -8,6 +9,7 @@ import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { etiquetaStockActual } from '../utils/stockActualInventario';
 import {
   PRODUCTOS_VENDEDOR_LISTA_PAGE,
+  contarProductosVendedor,
   fetchPaginaProductosVendedorLista,
   fetchTiendaIdsUsuario,
   type TiendaVendedorResumen,
@@ -57,6 +59,28 @@ function tiendaParaCompartir(
   return tiendas.find((t) => t.vertical === vertical) ?? tiendas[0];
 }
 
+type ResumenMostrador = {
+  publicados: number | null;
+  pausados: number | null;
+  visitas: number | null;
+};
+
+function textoCifra(valor: number | null, cargando: boolean): string {
+  if (cargando) return '…';
+  if (valor == null) return '—';
+  return new Intl.NumberFormat('es-VE').format(valor);
+}
+
+/** Visitas al contacto: el vendedor usa la función ya publicada; el admin, la de un vendedor concreto. */
+async function contarVisitasContacto(userIdCatalogo: string | undefined): Promise<number | null> {
+  const { data, error } = userIdCatalogo
+    ? await supabase.rpc('admin_conteo_contactos_vendedor', { p_user_id: userIdCatalogo })
+    : await supabase.rpc('vendedor_conteo_contactos');
+  if (error) return null;
+  const total = (data ?? {}) as { total?: number };
+  return total.total ?? 0;
+}
+
 function IconoCompartirCatalogo() {
   return (
     <svg viewBox="0 0 24 24" width={22} height={22} aria-hidden="true" focusable="false">
@@ -94,12 +118,16 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
   const [visorFotos, setVisorFotos] = useState<{ fotos: string[]; indice: number; nombre: string } | null>(
     null
   );
+  const [resumen, setResumen] = useState<ResumenMostrador | null>(null);
+  const [cargandoResumen, setCargandoResumen] = useState(true);
 
   useEffect(() => {
     let cancelado = false;
     const init = async () => {
       if (!ownerId) return;
       setCargando(true);
+      setCargandoResumen(true);
+      setResumen(null);
       setError(null);
       setProductos([]);
       setHayMas(false);
@@ -113,6 +141,8 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
           setError(errIds);
           setTiendaIds([]);
           setTiendas([]);
+          setResumen({ publicados: null, pausados: null, visitas: null });
+          setCargandoResumen(false);
           setCargando(false);
           return;
         }
@@ -120,13 +150,39 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
         setTiendas(lista);
         setConCodigo(true);
         if (ids.length === 0) {
+          setResumen({ publicados: 0, pausados: 0, visitas: 0 });
+          setCargandoResumen(false);
           setCargando(false);
           setProductos([]);
+        } else {
+          void (async () => {
+            try {
+              const [pub, pau, visitas] = await Promise.all([
+                contarProductosVendedor({ tiendaIds: ids, vertical, estado: 'todos' }),
+                contarProductosVendedor({ tiendaIds: ids, vertical, estado: 'pausados' }),
+                contarVisitasContacto(userIdCatalogo),
+              ]);
+              if (cancelado) return;
+              setResumen({
+                publicados: pub.error ? null : pub.count,
+                pausados: pau.error ? null : pau.count,
+                visitas,
+              });
+            } catch {
+              if (!cancelado) {
+                setResumen({ publicados: null, pausados: null, visitas: null });
+              }
+            } finally {
+              if (!cancelado) setCargandoResumen(false);
+            }
+          })();
         }
         // La carga de la 1.ª página la dispara el efecto de búsqueda al tener tiendaIds.
       } catch (e) {
         if (!cancelado) {
           setError(e instanceof Error ? e.message : 'No se pudo cargar el catálogo.');
+          setResumen({ publicados: null, pausados: null, visitas: null });
+          setCargandoResumen(false);
           setCargando(false);
         }
       }
@@ -135,7 +191,7 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
     return () => {
       cancelado = true;
     };
-  }, [ownerId, vertical, refreshTrigger]);
+  }, [ownerId, vertical, refreshTrigger, userIdCatalogo]);
 
   useEffect(() => {
     const t = window.setTimeout(() => inputRef.current?.focus(), 150);
@@ -253,9 +309,34 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
   return (
     <div className="visor-mostrador">
       <header className="visor-mostrador-barra">
-        <label className="visor-mostrador-buscar-label" htmlFor="visor-mostrador-buscar">
-          {userIdCatalogo ? 'Buscar en el catálogo del vendedor' : 'Buscar en tu catálogo'}
-        </label>
+        <div className="visor-mostrador-cabeza">
+          <label className="visor-mostrador-buscar-label" htmlFor="visor-mostrador-buscar">
+            {userIdCatalogo ? 'Buscar en el catálogo del vendedor' : 'Buscar en tu catálogo'}
+          </label>
+          <div className="visor-mostrador-resumen-bloque">
+            <p className="visor-mostrador-resumen-titulo">Resumen</p>
+            <dl className="visor-mostrador-resumen" aria-label="Resumen del catálogo">
+              <div className="visor-mostrador-resumen-item" title="Todos los productos de este catálogo">
+                <dt>Publicados</dt>
+                <dd>{textoCifra(resumen?.publicados ?? null, cargandoResumen)}</dd>
+              </div>
+              <div
+                className="visor-mostrador-resumen-item visor-mostrador-resumen-item--pausados"
+                title="No se muestran en la búsqueda pública"
+              >
+                <dt>Pausados</dt>
+                <dd>{textoCifra(resumen?.pausados ?? null, cargandoResumen)}</dd>
+              </div>
+              <div
+                className="visor-mostrador-resumen-item visor-mostrador-resumen-item--visitas"
+                title="Veces que pidieron el contacto"
+              >
+                <dt>Visitas</dt>
+                <dd>{textoCifra(resumen?.visitas ?? null, cargandoResumen)}</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
         <input
           ref={inputRef}
           id="visor-mostrador-buscar"

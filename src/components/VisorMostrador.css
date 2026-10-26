@@ -19,10 +19,83 @@
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
 }
 
+.visor-mostrador-cabeza {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+}
+
 .visor-mostrador-buscar-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 0.15rem;
   font-size: 0.8rem;
   font-weight: 700;
   color: #334155;
+}
+
+.visor-mostrador-resumen-bloque {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.visor-mostrador-resumen-titulo {
+  margin: 0 0 0.2rem;
+  text-align: right;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.visor-mostrador-resumen {
+  display: flex;
+  margin: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.visor-mostrador-resumen-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 5.5rem;
+  margin: 0;
+  padding: 0.35rem 0.7rem 0.4rem;
+}
+
+.visor-mostrador-resumen-item + .visor-mostrador-resumen-item {
+  border-left: 1px solid #e2e8f0;
+}
+
+.visor-mostrador-resumen dt {
+  margin: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.visor-mostrador-resumen dd {
+  margin: 0.12rem 0 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.visor-mostrador-resumen-item--pausados dd {
+  color: #9a3412;
+}
+
+.visor-mostrador-resumen-item--visitas dd {
+  color: #0f766e;
 }
 
 .visor-mostrador-buscar {
@@ -306,6 +379,30 @@
 }
 
 @media (max-width: 640px) {
+  .visor-mostrador-cabeza {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .visor-mostrador-resumen-bloque {
+    margin-left: 0;
+  }
+
+  .visor-mostrador-resumen-titulo {
+    text-align: left;
+  }
+
+  .visor-mostrador-resumen {
+    width: 100%;
+  }
+
+  .visor-mostrador-resumen-item {
+    flex: 1;
+    min-width: 0;
+    align-items: flex-start;
+    padding-inline: 0.55rem;
+  }
+
   .visor-mostrador-compartir {
     width: 2.35rem;
     height: 2.35rem;
