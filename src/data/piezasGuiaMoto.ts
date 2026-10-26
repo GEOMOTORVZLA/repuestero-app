@@ -215,7 +215,7 @@ export const PIEZAS_GUIA_MOTO: PiezaGuiaMoto[] = [
   {
     "id": "grasa_cadenas",
     "etiqueta": "Grasa para cadenas",
-    "categoriaGeomotor": "Accesorios",
+    "categoriaGeomotor": "Aceites y lubricantes",
     "alias": [
       "grasa de cadena",
       "lubricante de cadena"
@@ -342,7 +342,7 @@ export const PIEZAS_GUIA_MOTO: PiezaGuiaMoto[] = [
   {
     "id": "aceite_20w50_moto",
     "etiqueta": "Aceite 20W50 de moto",
-    "categoriaGeomotor": "Accesorios",
+    "categoriaGeomotor": "Aceites y lubricantes",
     "alias": [
       "aceite 20w50",
       "aceite de moto",
@@ -450,7 +450,7 @@ export const PIEZAS_GUIA_MOTO: PiezaGuiaMoto[] = [
   {
     "id": "aceite_barras_fork",
     "etiqueta": "Aceite hidráulico para barras (fork oil)",
-    "categoriaGeomotor": "Bastones",
+    "categoriaGeomotor": "Aceites y lubricantes",
     "alias": [
       "fork oil",
       "aceite de barras",
