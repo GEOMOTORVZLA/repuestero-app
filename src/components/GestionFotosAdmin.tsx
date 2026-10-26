@@ -191,7 +191,7 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
     return porBusqueda;
   }, [porBusqueda, alcance, seleccionados]);
 
-  const listaVisible = porBusqueda;
+  const listaVisible = alcance === 'seleccionados' ? porBusqueda : objetivos;
 
   const etiquetaVendedor =
     vendedoresOrdenados.find((v) => v.id === tiendaId)?.nombre_comercial ||
@@ -413,14 +413,18 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
             : cargando
               ? 'Cargando productos del vendedor…'
               : busqueda.trim()
-                ? `Búsqueda «${busqueda.trim()}»: ${porBusqueda.length} de ${productos.length}. Alcance → ${objetivos.length} objetivo(s)${
+                ? `Búsqueda «${busqueda.trim()}»: ${listaVisible.length} mostrado(s) de ${productos.length}${
                     alcance === 'sin_foto' && porBusqueda.length > 0 && objetivos.length === 0
-                      ? '. Todos ya tienen foto; usa «enlaces externos» o «Todos» para reemplazarlas.'
+                      ? '. Todos ya tienen foto principal.'
                       : alcance === 'enlaces_externos' && porBusqueda.length > 0 && objetivos.length === 0
                         ? '. No hay enlaces externos en esta búsqueda.'
                         : '.'
                   }`
-                : `Catálogo del vendedor: ${productos.length} producto(s). Alcance → ${objetivos.length} objetivo(s).`}
+                : alcance === 'sin_foto'
+                  ? `Sin foto principal: ${objetivos.length} de ${productos.length}.`
+                  : alcance === 'enlaces_externos'
+                    ? `Con enlace externo: ${objetivos.length} de ${productos.length}.`
+                    : `Catálogo del vendedor: ${productos.length} producto(s).`}
         </p>
 
         {error && <p className="dashboard-admin-error">{error}</p>}
@@ -502,11 +506,13 @@ export function GestionFotosAdmin({ vendedores, onFotosAplicadas }: GestionFotos
           {listaVisible.length === 0 ? (
             <div className="mis-productos-mensaje mis-productos-mensaje--bloque">
               <p>
-                {!busqueda.trim()
-                  ? 'Escribe en el buscador para filtrar el catálogo del vendedor.'
-                  : porBusqueda.length === 0
-                    ? `Ningún producto coincide con «${busqueda.trim()}» (nombre o código).`
-                    : 'No hay productos para mostrar.'}
+                {busqueda.trim() && porBusqueda.length === 0
+                  ? `Ningún producto coincide con «${busqueda.trim()}» (nombre o código).`
+                  : alcance === 'sin_foto'
+                    ? 'No hay productos sin foto principal.'
+                    : alcance === 'enlaces_externos'
+                      ? 'No hay productos con fotos en enlaces externos.'
+                      : 'No hay productos para mostrar.'}
               </p>
             </div>
           ) : (
