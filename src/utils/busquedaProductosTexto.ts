@@ -70,6 +70,26 @@ export function terminosBusquedaProducto(texto: string): string[] {
     });
 }
 
+function esAnioVehiculoEnBusqueda(termino: string): boolean {
+  if (!/^\d{4}$/.test(termino)) return false;
+  const anio = Number(termino);
+  return anio >= 1950 && anio <= 2035;
+}
+
+/**
+ * Si el texto mezcla un código de repuesto con otras palabras, devuelve solo el código.
+ * Un año (2005) no cuenta como código. Null si no hay nada que separar.
+ */
+export function textoCodigoRepuestoEnBusqueda(texto: string): string | null {
+  const terminos = terminosBusquedaProducto(texto);
+  const codigos = terminos.filter((t) => {
+    if (!/\d/.test(t) || esAnioVehiculoEnBusqueda(t)) return false;
+    return /[a-z]/i.test(t) || /[-/]/.test(t);
+  });
+  if (codigos.length === 0 || codigos.length === terminos.length) return null;
+  return codigos.join(' ');
+}
+
 export function patronIlikeTerminoProducto(termino: string): string {
   const limpio = termino.replace(/[%_]/g, '');
   return comillasFiltroPostgrest(`%${limpio}%`);

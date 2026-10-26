@@ -21,6 +21,7 @@ import { esIdProductoUuid } from '../utils/enlaceCompartirProducto';
 import {
   aplicarTerminosTextoABusquedaProductos,
   terminosBusquedaProducto,
+  textoCodigoRepuestoEnBusqueda,
 } from '../utils/busquedaProductosTexto';
 import { TABLA_CATALOGO_PUBLICO } from '../utils/catalogoPublico';
 import './BusquedaRepuestos.css';
@@ -357,34 +358,72 @@ export function BusquedaRepuestos({
       });
     }
 
-    const query = armarQueryListaProductos(params);
-    const { data, error } = await query.range(0, PAGE_SIZE_RESULTADOS_PUBLICOS);
+    const consultar = async (textoConsulta: string) => {
+      const { data, error } = await armarQueryListaProductos({ texto: textoConsulta }).range(
+        0,
+        PAGE_SIZE_RESULTADOS_PUBLICOS
+      );
+      return {
+        filas: (data as unknown as ProductoResultado[]) ?? [],
+        error,
+      };
+    };
 
-    if (error) {
-      setMensaje(error.message || 'Error al buscar.');
+    const publicarPagina = (
+      filasRaw: ProductoResultado[],
+      paramsUsados: ParamsBusquedaProductos,
+      nota: string | null
+    ) => {
+      const hayMas = filasRaw.length > PAGE_SIZE_RESULTADOS_PUBLICOS;
+      const primeraPagina = hayMas
+        ? filasRaw.slice(0, PAGE_SIZE_RESULTADOS_PUBLICOS)
+        : filasRaw;
+      textoUltimaBusquedaEjecutadaRef.current = texto;
+      setResultados(
+        ubicacionActual ? ordenarPorUbicacionUsuario(primeraPagina, ubicacionActual) : primeraPagina
+      );
+      setHayMasResultados(hayMas && primeraPagina.length > 0);
+      if (!primeraPagina.length) {
+        paramsUltimaBusquedaRef.current = null;
+        setMensaje('No hay repuestos que coincidan con tu búsqueda.');
+        return;
+      }
+      paramsUltimaBusquedaRef.current = paramsUsados;
+      if (nota) setMensaje(nota);
+    };
+
+    const falloConsulta = () => {
+      setMensaje('No se pudo completar la búsqueda. Prueba con el código o con menos palabras.');
       setResultados([]);
-      setBuscando(false);
       paramsUltimaBusquedaRef.current = null;
       setSugerencias([]);
       setDropdownAbierto(false);
-      return;
-    }
+      setHayMasResultados(false);
+    };
 
-    const filas = (data as unknown as ProductoResultado[]) ?? [];
-    const hayMas = filas.length > PAGE_SIZE_RESULTADOS_PUBLICOS;
-    const primeraPagina = hayMas
-      ? filas.slice(0, PAGE_SIZE_RESULTADOS_PUBLICOS)
-      : filas;
-
-    paramsUltimaBusquedaRef.current = params;
-    textoUltimaBusquedaEjecutadaRef.current = texto;
-    setResultados(
-      ubicacionActual ? ordenarPorUbicacionUsuario(primeraPagina, ubicacionActual) : primeraPagina
-    );
-    setHayMasResultados(hayMas);
-    if (!primeraPagina.length) {
-      setMensaje('No hay repuestos que coincidan con tu búsqueda.');
-      paramsUltimaBusquedaRef.current = null;
+    const primera = await consultar(texto);
+    if (!primera.error && primera.filas.length > 0) {
+      publicarPagina(primera.filas, params, null);
+    } else {
+      const codigo = textoCodigoRepuestoEnBusqueda(texto);
+      if (codigo) {
+        const porCodigo = await consultar(codigo);
+        if (!porCodigo.error && porCodigo.filas.length > 0) {
+          publicarPagina(
+            porCodigo.filas,
+            { texto: codigo },
+            `No coincidió todo el texto. Estos resultados son por el código ${codigo}.`
+          );
+        } else if (primera.error || porCodigo.error) {
+          falloConsulta();
+        } else {
+          publicarPagina([], params, null);
+        }
+      } else if (primera.error) {
+        falloConsulta();
+      } else {
+        publicarPagina([], params, null);
+      }
     }
     setBuscando(false);
   };
@@ -402,7 +441,7 @@ export function BusquedaRepuestos({
     );
 
     if (error) {
-      setMensaje(error.message || 'Error al cargar más resultados.');
+      setMensaje('No se pudieron cargar más resultados. Intenta de nuevo.');
       setCargandoMasResultados(false);
       return;
     }
