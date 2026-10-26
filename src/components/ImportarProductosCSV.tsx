@@ -228,9 +228,6 @@ type LotePendienteImport = {
   modo: ModoImportacion;
   aActualizar: number;
   aCrear: number;
-  /** Aviso corto: filas unidas o códigos separados con sufijo. */
-  resumenCodigos: string;
-  avisosCodigos: string[];
 };
 
 function normalizeHeader(s: string): string {
@@ -631,14 +628,10 @@ export function ImportarProductosCSV({
       modo: modoImportacion,
       aActualizar,
       aCrear,
-      resumenCodigos: resuelto.resumen,
-      avisosCodigos: resuelto.avisos,
     });
     setEstado('confirmar');
     setMensaje(
-      `Lote listo para revisar: ${filasListas.length} fila(s) válida(s).${
-        resuelto.resumen ? ` ${resuelto.resumen}` : ''
-      } Confirma si deseas subirlo.`
+      `Lote listo para revisar: ${filasListas.length} fila(s) válida(s). Confirma si deseas subirlo.`
     );
   };
 
@@ -678,8 +671,6 @@ export function ImportarProductosCSV({
     }
 
     const { filas, tiendaId } = lotePendiente;
-    const notaCodigos = lotePendiente.resumenCodigos.trim();
-    const conNota = (texto: string) => (notaCodigos ? `${texto} ${notaCodigos}` : texto);
     const codigosExistentes = new Map(lotePendiente.codigosExistentes);
     const modoLote = lotePendiente.modo;
     const esSyncLote = modoLote === 'sincronizar';
@@ -825,13 +816,11 @@ export function ImportarProductosCSV({
       setErrores([...erroresOp, ...fallosFoto].slice(0, 20));
       setEstado(erroresOp.length ? 'error' : 'ok');
       setMensaje(
-        conNota(
-          erroresOp.length
-            ? usaCodigoLote
-              ? `Parcial: ${okUpdate} actualizado(s), ${okInsert} nuevo(s); ${erroresOp.length} error(es).${textoFotos} (Mostrando hasta 20)`
-              : `Se insertaron ${okInsert} producto(s), pero hubo ${erroresOp.length} error(es).${textoFotos} (Mostrando hasta 20)`
-            : `Productos listos: ${okUpdate} actualizado(s), ${okInsert} nuevo(s).${textoFotos}`
-        )
+        erroresOp.length
+          ? usaCodigoLote
+            ? `Parcial: ${okUpdate} actualizado(s), ${okInsert} nuevo(s); ${erroresOp.length} error(es).${textoFotos} (Mostrando hasta 20)`
+            : `Se insertaron ${okInsert} producto(s), pero hubo ${erroresOp.length} error(es).${textoFotos} (Mostrando hasta 20)`
+          : `Productos listos: ${okUpdate} actualizado(s), ${okInsert} nuevo(s).${textoFotos}`
       );
       if (okInsert + okUpdate > 0) onImportado?.();
       return;
@@ -839,15 +828,13 @@ export function ImportarProductosCSV({
 
     setEstado('ok');
     setMensaje(
-      conNota(
-        esFreemarketLote
-          ? `Freemarket completado: ${okUpdate} actualizado(s), ${okInsert} nuevo(s).${textoFotos}`
-          : esSyncLote
-            ? `Sincronización completada: ${okUpdate} actualizado(s) (categoría y fotos intactas), ${okInsert} nuevo(s) sin foto.`
-            : modoAdmin
-              ? `Importación completada: ${okInsert} producto(s) insertados en ${etiquetaDestino?.trim() || 'la tienda'} (sin fotos).`
-              : `Importación completada: ${okInsert} producto(s) insertados (sin fotos). Ya están publicados.`
-      )
+      esFreemarketLote
+        ? `Freemarket completado: ${okUpdate} actualizado(s), ${okInsert} nuevo(s).${textoFotos}`
+        : esSyncLote
+          ? `Sincronización completada: ${okUpdate} actualizado(s) (categoría y fotos intactas), ${okInsert} nuevo(s) sin foto.`
+          : modoAdmin
+            ? `Importación completada: ${okInsert} producto(s) insertados en ${etiquetaDestino?.trim() || 'la tienda'} (sin fotos).`
+            : `Importación completada: ${okInsert} producto(s) insertados (sin fotos). Ya están publicados.`
     );
     onImportado?.();
   };
@@ -1017,13 +1004,6 @@ export function ImportarProductosCSV({
             <li>
               Se crearán: <strong>{lotePendiente.aCrear}</strong>
             </li>
-            {lotePendiente.avisosCodigos.length > 0 &&
-              lotePendiente.avisosCodigos.slice(0, 12).map((aviso) => (
-                <li key={aviso}>{aviso}</li>
-              ))}
-            {lotePendiente.avisosCodigos.length > 12 && (
-              <li>y {lotePendiente.avisosCodigos.length - 12} aviso(s) más de códigos repetidos.</li>
-            )}
           </ul>
           {estado === 'confirmar' && (
             <p className="importar-productos-confirmacion-aviso">
