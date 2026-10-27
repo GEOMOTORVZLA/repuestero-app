@@ -175,7 +175,8 @@
   gap: 0.85rem 1rem;
 }
 
-.perfil-taller-campo-full {
+.perfil-taller-campo-full,
+.perfil-usuario-campo-full {
   grid-column: 1 / -1;
 }
 

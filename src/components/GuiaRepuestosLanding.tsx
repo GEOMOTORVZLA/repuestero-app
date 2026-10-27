@@ -39,7 +39,8 @@ import {
   TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS,
 } from '../constants/googleMapsNavUi';
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
-import { mensajeWhatsappVendedorProducto, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
+import { mensajeWhatsappVendedorProducto } from '../utils/linkWhatsAppGeomotor';
+import { BotonesWhatsappContacto } from './BotonesWhatsappContacto';
 import { VERTICAL_MOTO, type VerticalVehiculo } from '../utils/verticalVehiculo';
 import './GuiaRepuestosLanding.css';
 import './BusquedaRepuestos.css';
@@ -603,11 +604,6 @@ function GuiaRepuestosVertical({
                     <span className="busqueda-repuestos-modal-etiqueta">Nombre comercial</span>
                     <span className="busqueda-repuestos-modal-valor-negrita">{nombreTienda(contactar)}</span>
                   </p>
-                  {contactar.tiendas.telefono && (
-                    <p className="busqueda-repuestos-modal-linea">
-                      <span className="busqueda-repuestos-modal-etiqueta">Teléfono</span> {contactar.tiendas.telefono}
-                    </p>
-                  )}
                   {contactar.tiendas.direccion && (
                     <p className="busqueda-repuestos-modal-linea">
                       <span className="busqueda-repuestos-modal-etiqueta">Dirección</span> {contactar.tiendas.direccion}
@@ -635,30 +631,18 @@ function GuiaRepuestosVertical({
                 </>
               )}
               <div className="busqueda-repuestos-modal-botones">
-                {contactar.tiendas?.telefono ? (
-                  <a
-                    href={
-                      urlWhatsAppGeomotor(
-                        contactar.tiendas.telefono,
-                        mensajeWhatsappVendedorProducto(contactar.nombre)
-                      )!
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="busqueda-repuestos-modal-whatsapp"
-                    onClick={() =>
-                      registrarEventoContacto({
-                        tipo: 'whatsapp',
-                        origen: 'guia_repuestos',
-                        productoId: contactar.id,
-                      })
-                    }
-                  >
-                    Contactar por WhatsApp
-                  </a>
-                ) : (
-                  <p className="busqueda-repuestos-modal-sin-contacto">Sin teléfono registrado.</p>
-                )}
+                <BotonesWhatsappContacto
+                  prefijo="Vendedor"
+                  telefonos={contactar.tiendas ?? {}}
+                  mensaje={mensajeWhatsappVendedorProducto(contactar.nombre)}
+                  onContacto={() =>
+                    registrarEventoContacto({
+                      tipo: 'whatsapp',
+                      origen: 'guia_repuestos',
+                      productoId: contactar.id,
+                    })
+                  }
+                />
               </div>
               {contactar.tiendas?.latitud != null && contactar.tiendas?.longitud != null && (
                 <div className="vendedores-cerca-modal-ruta">

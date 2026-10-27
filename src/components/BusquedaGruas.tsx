@@ -9,7 +9,8 @@ import {
   TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS,
 } from '../constants/googleMapsNavUi';
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
-import { mensajeWhatsappGrua, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
+import { mensajeWhatsappGrua } from '../utils/linkWhatsAppGeomotor';
+import { BotonesWhatsappContacto } from './BotonesWhatsappContacto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import './avisoSeleccionarEstado.css';
@@ -30,6 +31,9 @@ export type Grua = {
   estado: string | null;
   ciudad: string | null;
   telefono: string | null;
+  telefono_2?: string | null;
+  telefono_3?: string | null;
+  telefono_4?: string | null;
   email: string | null;
   direccion: string | null;
   latitud: number | null;
@@ -82,7 +86,7 @@ export function BusquedaGruas({ vertical = VERTICAL_AUTO }: BusquedaGruasProps) 
     let query = supabase
       .from('gruas')
       .select(
-        'id, nombre, nombre_comercial, rif, tipos, servicio_24h, auxilio_vial, acerca_de, estado, ciudad, telefono, email, direccion, latitud, longitud'
+        'id, nombre, nombre_comercial, rif, tipos, servicio_24h, auxilio_vial, acerca_de, estado, ciudad, telefono, telefono_2, telefono_3, telefono_4, email, direccion, latitud, longitud'
       );
 
     if (tipoQ) query = query.contains('tipos', [tipoQ]);
@@ -186,9 +190,6 @@ export function BusquedaGruas({ vertical = VERTICAL_AUTO }: BusquedaGruasProps) 
   }, [buscado, contactar, cerrarPanel]);
 
   const tieneUbicacion = (g: Grua) => g.latitud != null && g.longitud != null;
-  const urlWa = contactar?.telefono
-    ? urlWhatsAppGeomotor(contactar.telefono, mensajeWhatsappGrua())
-    : null;
 
   const resetLista = () => {
     setBuscado(false);
@@ -425,12 +426,6 @@ export function BusquedaGruas({ vertical = VERTICAL_AUTO }: BusquedaGruasProps) 
                       <span>{[contactar.ciudad, contactar.estado].filter(Boolean).join(', ')}</span>
                     </p>
                   )}
-                  {contactar.telefono && (
-                    <p className="busqueda-repuestos-modal-linea">
-                      <span className="busqueda-repuestos-modal-etiqueta">Teléfono</span>
-                      <span>{contactar.telefono}</span>
-                    </p>
-                  )}
                   {contactar.direccion && (
                     <p className="busqueda-repuestos-modal-linea">
                       <span className="busqueda-repuestos-modal-etiqueta">Dirección</span>
@@ -471,13 +466,11 @@ export function BusquedaGruas({ vertical = VERTICAL_AUTO }: BusquedaGruasProps) 
               )}
 
               <div className="busqueda-repuestos-modal-botones">
-                {urlWa ? (
-                  <a href={urlWa} target="_blank" rel="noopener noreferrer" className="busqueda-repuestos-modal-whatsapp">
-                    Contactar por WhatsApp
-                  </a>
-                ) : (
-                  <p className="busqueda-repuestos-modal-sin-contacto">Sin teléfono registrado.</p>
-                )}
+                <BotonesWhatsappContacto
+                  prefijo="Grúa"
+                  telefonos={contactar}
+                  mensaje={mensajeWhatsappGrua()}
+                />
               </div>
               {tieneUbicacion(contactar) && (
                 <div className="vendedores-cerca-modal-ruta">

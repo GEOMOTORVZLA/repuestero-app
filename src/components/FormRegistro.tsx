@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import {
   TIPOS_RIF,
   CODIGOS_TELEFONO,
-  CODIGOS_AREA_FIJO,
   ESPECIALIDADES_TALLER,
   ESPECIALIDADES_TALLER_MOTO,
 } from '../data/registroVenezuela';
@@ -19,6 +18,12 @@ import {
 } from '../utils/geolocalizacionRegistro';
 import { RegistroUbicacionMapa } from './RegistroUbicacionMapa';
 import {
+  BloqueTelefonoRegistro,
+  telefonoCompletoDesdeFormulario,
+  telefonoFormularioVacio,
+  type TelefonoFormulario,
+} from './BloqueTelefonoRegistro';
+import {
   POLITICA_DIVULGACION_VERSION,
   RUTA_POLITICA_DIVULGACION_DATOS,
 } from '../constants/politicaDivulgacionDatos';
@@ -30,6 +35,7 @@ import {
   parseCoordenadaRegistro,
   rifDesdeFormularioRegistro,
 } from '../utils/validarDatosNegocio';
+import { camposTelefonosAdicionales, mensajeTelefonosAdicionales } from '../utils/telefonosNegocio';
 
 const MARCAS_TALLER = [
   'Multimarca',
@@ -62,6 +68,9 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
   const [codigoTel, setCodigoTel] = useState<string>(CODIGOS_TELEFONO[0].codigo);
   const [restoTel, setRestoTel] = useState('');
   const [esFijo, setEsFijo] = useState(false);
+  const [telefonosExtra, setTelefonosExtra] = useState<
+    [TelefonoFormulario, TelefonoFormulario, TelefonoFormulario]
+  >([telefonoFormularioVacio(), telefonoFormularioVacio(), telefonoFormularioVacio()]);
   const [tipoRif, setTipoRif] = useState<string>(TIPOS_RIF[0]);
   const [numeroRif, setNumeroRif] = useState('');
   const [email, setEmail] = useState('');
@@ -97,16 +106,6 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
   }, []);
   const especialidadesTallerOpciones =
     verticalNegocio === 'moto' ? ESPECIALIDADES_TALLER_MOTO : ESPECIALIDADES_TALLER;
-
-  const etiquetaCodigoTelefono = useMemo(() => {
-    if (esFijo) {
-      return CODIGOS_AREA_FIJO.find((c) => c.codigo === codigoTel)?.ciudad ?? '';
-    }
-    return CODIGOS_TELEFONO.find((c) => c.codigo === codigoTel)?.compania ?? '';
-  }, [codigoTel, esFijo]);
-
-  const vistaPreviaTelefono =
-    restoTel.length > 0 ? `${codigoTel}-${restoTel}` : '';
 
   const scrollCampoAlFoco = useCallback((el: HTMLElement | null) => {
     if (!el || typeof window.matchMedia !== 'function') return;
@@ -242,6 +241,12 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
         setMensaje('Indica el teléfono de empresa completo (7 dígitos después del código de área).');
         return;
       }
+      const extrasCompletos = telefonosExtra.map(telefonoCompletoDesdeFormulario);
+      const errExtras = mensajeTelefonosAdicionales(telefonoCompletoPre, extrasCompletos);
+      if (errExtras) {
+        setMensaje(errExtras);
+        return;
+      }
       if (!esRifValido(tipoRif, numeroRif)) {
         setMensaje('Indica un RIF (tipo y valor alfanumérico).');
         return;
@@ -279,6 +284,9 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
     const lngMeta =
       esRegistroNegocio(tipo) ? (lngParsed as number) : (lngParsed ?? 0);
     const telefonoCompletoMeta = telefonoCompletoPre;
+    const telefonosExtraMeta = esRegistroNegocio(tipo)
+      ? camposTelefonosAdicionales(telefonosExtra.map(telefonoCompletoDesdeFormulario))
+      : null;
     const rifCompletoMeta =
       tipo === 'vendedor'
         ? rifDesdeFormularioRegistro(tipoRif, numeroRif)
@@ -299,6 +307,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
               estado: estadoTaller.trim() || null,
               ciudad: ciudadTaller.trim() || null,
               telefono: telefonoCompletoMeta,
+              ...telefonosExtraMeta,
               latitud: latMeta,
               longitud: lngMeta,
               metodos_pago: metodosPago.length ? metodosPago : null,
@@ -321,6 +330,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
                 estado: estadoTaller.trim() || null,
                 ciudad: ciudadTaller.trim() || null,
                 telefono: telefonoCompletoMeta,
+                ...telefonosExtraMeta,
                 email: email.trim() || null,
                 latitud: latMeta,
                 longitud: lngMeta,
@@ -344,6 +354,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
                   estado: estadoTaller.trim() || null,
                   ciudad: ciudadTaller.trim() || null,
                   telefono: telefonoCompletoMeta,
+                  ...telefonosExtraMeta,
                   email: email.trim() || null,
                   latitud: latMeta,
                   longitud: lngMeta,
@@ -429,6 +440,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           estado: estadoTaller.trim() || null,
           ciudad: ciudadTaller.trim() || null,
           telefono: telefonoCompleto,
+          ...telefonosExtraMeta,
           latitud: lat,
           longitud: lng,
           metodos_pago: metodosPago.length ? metodosPago : null,
@@ -464,6 +476,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           estado: estadoTaller.trim() || null,
           ciudad: ciudadTaller.trim() || null,
           telefono: telefonoCompleto,
+          ...telefonosExtraMeta,
           email: email.trim() || null,
           latitud: lat,
           longitud: lng,
@@ -500,6 +513,7 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
           estado: estadoTaller.trim() || null,
           ciudad: ciudadTaller.trim() || null,
           telefono: telefonoCompleto,
+          ...telefonosExtraMeta,
           email: email.trim() || null,
           latitud: lat,
           longitud: lng,
@@ -587,87 +601,41 @@ export function FormRegistro({ tipo, onVolver, onExito }: FormRegistroProps) {
             />
           </div>
 
-          <div className="form-registro-campo form-registro-telefono">
-            <label>
-              {tipo === 'usuario' ? 'Teléfono particular' : 'Teléfono empresa'}
-              {(esRegistroNegocio(tipo)) && ' *'}
-            </label>
-            <div className="form-registro-telefono-tipo">
-              <button
-                type="button"
-                className={!esFijo ? 'activo' : ''}
-                onClick={() => { setEsFijo(false); setCodigoTel(CODIGOS_TELEFONO[0].codigo); }}
-              >
-                Móvil
-              </button>
-              <button
-                type="button"
-                className={esFijo ? 'activo' : ''}
-                onClick={() => { setEsFijo(true); setCodigoTel(CODIGOS_AREA_FIJO[0].codigo); }}
-              >
-                Fijo
-              </button>
-            </div>
-            <div className="form-registro-telefono-inputs">
-              <div className="form-registro-telefono-codigo-wrap">
-                <label htmlFor="codigoTelefono" className="form-registro-telefono-sublabel">
-                  Código de área
-                </label>
-                <select
-                  id="codigoTelefono"
-                  value={codigoTel}
-                  onChange={(e) => setCodigoTel(e.target.value)}
-                  disabled={cargando}
-                  aria-label="Código de área telefónico"
-                >
-                  {!esFijo
-                    ? CODIGOS_TELEFONO.map(({ codigo }) => (
-                        <option key={codigo} value={codigo}>
-                          {codigo}
-                        </option>
-                      ))
-                    : CODIGOS_AREA_FIJO.map(({ codigo }) => (
-                        <option key={codigo} value={codigo}>
-                          {codigo}
-                        </option>
-                      ))}
-                </select>
-                {etiquetaCodigoTelefono ? (
-                  <p className="form-registro-telefono-codigo-hint">
-                    {esFijo ? `Ciudad: ${etiquetaCodigoTelefono}` : etiquetaCodigoTelefono}
-                  </p>
-                ) : null}
-              </div>
-              <div className="form-registro-telefono-numero-wrap">
-                <label htmlFor="numeroTelefono" className="form-registro-telefono-sublabel">
-                  Número (7 dígitos)
-                </label>
-                <input
-                  id="numeroTelefono"
-                  className="form-registro-telefono-numero"
-                  type="tel"
-                  inputMode="numeric"
-                  autoComplete="tel-national"
-                  value={restoTel}
-                  onChange={(e) => setRestoTel(e.target.value.replace(/\D/g, '').slice(0, 7))}
-                  onFocus={(e) => scrollCampoAlFoco(e.currentTarget)}
-                  placeholder="1234567"
-                  maxLength={7}
-                  disabled={cargando}
-                  aria-describedby={vistaPreviaTelefono ? 'telefono-preview' : undefined}
-                />
-              </div>
-            </div>
-            {vistaPreviaTelefono ? (
-              <p id="telefono-preview" className="form-registro-telefono-preview" aria-live="polite">
-                Número completo: <strong>{vistaPreviaTelefono}</strong>
-              </p>
-            ) : (
-              <p className="form-registro-telefono-preview form-registro-telefono-preview--vacio">
-                Escribe los 7 dígitos después del código de área.
-              </p>
-            )}
-          </div>
+          <BloqueTelefonoRegistro
+            idPrefix="tel-1"
+            etiqueta={tipo === 'usuario' ? 'Teléfono particular' : 'Teléfono empresa'}
+            obligatorio={esRegistroNegocio(tipo)}
+            valor={{ esFijo, codigo: codigoTel, resto: restoTel }}
+            onChange={(v) => {
+              setEsFijo(v.esFijo);
+              setCodigoTel(v.codigo);
+              setRestoTel(v.resto);
+            }}
+            disabled={cargando}
+            onFocusNumero={scrollCampoAlFoco}
+          />
+          {esRegistroNegocio(tipo) &&
+            telefonosExtra.map((tel, indice) => (
+              <BloqueTelefonoRegistro
+                key={`tel-extra-${indice + 2}`}
+                idPrefix={`tel-${indice + 2}`}
+                etiqueta={`Teléfono ${indice + 2}`}
+                valor={tel}
+                onChange={(v) =>
+                  setTelefonosExtra((prev) => {
+                    const next: [TelefonoFormulario, TelefonoFormulario, TelefonoFormulario] = [
+                      prev[0],
+                      prev[1],
+                      prev[2],
+                    ];
+                    next[indice] = v;
+                    return next;
+                  })
+                }
+                disabled={cargando}
+                onFocusNumero={scrollCampoAlFoco}
+              />
+            ))}
 
           <div className="form-registro-campo form-registro-rif">
             <label>

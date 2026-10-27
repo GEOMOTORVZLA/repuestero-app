@@ -10,7 +10,8 @@ import {
   TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS,
 } from '../constants/googleMapsNavUi';
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
-import { mensajeWhatsappTaller, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
+import { mensajeWhatsappTaller } from '../utils/linkWhatsAppGeomotor';
+import { BotonesWhatsappContacto } from './BotonesWhatsappContacto';
 import { registrarEventoContacto } from '../services/eventoContactoFlujo';
 import './avisoSeleccionarEstado.css';
 import './BusquedaRepuestos.css';
@@ -31,6 +32,9 @@ export interface Taller {
   estado: string | null;
   ciudad: string | null;
   telefono: string | null;
+  telefono_2?: string | null;
+  telefono_3?: string | null;
+  telefono_4?: string | null;
   email: string | null;
   direccion: string | null;
   latitud: number | null;
@@ -70,7 +74,7 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
     let query = supabase
       .from('talleres')
       .select(
-        'id, nombre, nombre_comercial, rif, especialidad, marca_vehiculo, acerca_de, estado, ciudad, telefono, email, direccion, latitud, longitud, metodos_pago'
+        'id, nombre, nombre_comercial, rif, especialidad, marca_vehiculo, acerca_de, estado, ciudad, telefono, telefono_2, telefono_3, telefono_4, email, direccion, latitud, longitud, metodos_pago'
       )
       .eq('vertical', vertical);
 
@@ -201,11 +205,6 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
 
   const tieneUbicacion = (t: Taller) =>
     t.latitud != null && t.longitud != null;
-
-  const urlWhatsAppContactarTaller =
-    contactarTaller?.telefono != null
-      ? urlWhatsAppGeomotor(contactarTaller.telefono, mensajeWhatsappTaller())
-      : null;
 
   return (
     <div className="busqueda-talleres">
@@ -419,12 +418,6 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
                     <span>{[contactarTaller.ciudad, contactarTaller.estado].filter(Boolean).join(', ')}</span>
                   </p>
                 )}
-                {contactarTaller.telefono && (
-                  <p className="busqueda-repuestos-modal-linea">
-                    <span className="busqueda-repuestos-modal-etiqueta">Teléfono</span>
-                    <span>{contactarTaller.telefono}</span>
-                  </p>
-                )}
                 {contactarTaller.email && (
                   <p className="busqueda-repuestos-modal-linea">
                     <span className="busqueda-repuestos-modal-etiqueta">Correo</span>
@@ -495,25 +488,19 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
             )}
 
             <div className="busqueda-repuestos-modal-botones">
-              {urlWhatsAppContactarTaller ? (
-                <a
-                  href={urlWhatsAppContactarTaller}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="busqueda-repuestos-modal-whatsapp"
-                  onClick={() =>
-                    contactarTaller &&
+              {contactarTaller && (
+                <BotonesWhatsappContacto
+                  prefijo="Taller"
+                  telefonos={contactarTaller}
+                  mensaje={mensajeWhatsappTaller()}
+                  onContacto={() =>
                     registrarEventoContacto({
                       tipo: 'whatsapp',
                       origen: 'busqueda_talleres',
                       tallerId: contactarTaller.id,
                     })
                   }
-                >
-                  Contactar por WhatsApp
-                </a>
-              ) : (
-                <p className="busqueda-repuestos-modal-sin-contacto">Sin teléfono registrado.</p>
+                />
               )}
             </div>
             {tieneUbicacion(contactarTaller) && (

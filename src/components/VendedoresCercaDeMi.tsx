@@ -11,7 +11,8 @@ import {
   TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS,
 } from '../constants/googleMapsNavUi';
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
-import { mensajeWhatsappVendedorZona, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
+import { mensajeWhatsappVendedorZona } from '../utils/linkWhatsAppGeomotor';
+import { BotonesWhatsappContacto } from './BotonesWhatsappContacto';
 import {
   abrirWhatsappConTexto,
   construirUrlTiendaCompartida,
@@ -48,6 +49,9 @@ export interface TiendaCerca {
   latitud: number;
   longitud: number;
   telefono: string | null;
+  telefono_2?: string | null;
+  telefono_3?: string | null;
+  telefono_4?: string | null;
   direccion: string | null;
   rif: string | null;
   metodos_pago: string[] | null;
@@ -87,12 +91,9 @@ type ProductoVendedorCercaBusqueda = ProductoTarjetaBusqueda & {
   categoria?: string | null;
 };
 
-/** Misma lógica flexible que Visor / gestión / landing (acentos, plural, conectores, typos). */
+/** Misma regla que la barra pública: las palabras solo cuentan en el nombre. */
 function productoCoincideBusquedaVendedor(p: ProductoVendedorCercaBusqueda, texto: string): boolean {
-  return productoCoincideTextoFlexible(
-    [p.nombre, p.descripcion, p.comentarios, p.categoria, p.marca, p.modelo, p.anio],
-    texto
-  );
+  return productoCoincideTextoFlexible([p.nombre], texto);
 }
 
 function resaltarCoincidenciaVendedor(texto: string, consulta: string) {
@@ -262,7 +263,7 @@ export function VendedoresCercaDeMi({
   const construirQueryTiendas = (textoNombre = busquedaNombreListaAplicada) => {
     let query = supabase
       .from('tiendas')
-      .select('id, user_id, nombre, nombre_comercial, rif, estado, ciudad, latitud, longitud, telefono, direccion, metodos_pago')
+      .select('id, user_id, nombre, nombre_comercial, rif, estado, ciudad, latitud, longitud, telefono, telefono_2, telefono_3, telefono_4, direccion, metodos_pago')
       .eq('vertical', vertical)
       .order('estado', { ascending: true, nullsFirst: false })
       .order('ciudad', { ascending: true, nullsFirst: false })
@@ -471,7 +472,7 @@ export function VendedoresCercaDeMi({
       const { data, error } = await supabase
         .from('tiendas')
         .select(
-          'id, user_id, nombre, nombre_comercial, rif, estado, ciudad, latitud, longitud, telefono, direccion, metodos_pago'
+          'id, user_id, nombre, nombre_comercial, rif, estado, ciudad, latitud, longitud, telefono, telefono_2, telefono_3, telefono_4, direccion, metodos_pago'
         )
         .eq('id', tiendaIdDesdeEnlace)
         .eq('vertical', vertical)
@@ -791,11 +792,6 @@ export function VendedoresCercaDeMi({
     const url = construirUrlTiendaCompartida(t.id, vertical);
     void abrirWhatsappConTexto(mensajeWhatsappCompartirCatalogoVendedor(nombreTienda(t), url));
   };
-
-  const urlWhatsAppContactarVendedor =
-    contactarTienda?.telefono != null
-      ? urlWhatsAppGeomotor(contactarTienda.telefono, mensajeWhatsappVendedorZona())
-      : null;
 
   return (
     <section className="vendedores-cerca" id="vendedores-cerca">
@@ -1310,9 +1306,6 @@ export function VendedoresCercaDeMi({
               {(contactarTienda.ciudad || contactarTienda.estado) && (
                 <p className="busqueda-repuestos-modal-linea"><span className="busqueda-repuestos-modal-etiqueta">Ubicación</span> {[contactarTienda.ciudad, contactarTienda.estado].filter(Boolean).join(', ')}</p>
               )}
-              {contactarTienda.telefono && (
-                <p className="busqueda-repuestos-modal-linea"><span className="busqueda-repuestos-modal-etiqueta">Teléfono</span> {contactarTienda.telefono}</p>
-              )}
               {contactarTienda.direccion && (
                 <p className="busqueda-repuestos-modal-linea"><span className="busqueda-repuestos-modal-etiqueta">Dirección</span> {contactarTienda.direccion}</p>
               )}
@@ -1336,26 +1329,18 @@ export function VendedoresCercaDeMi({
               userLng={gpsCoords?.lng}
             />
             <div className="busqueda-repuestos-modal-botones">
-              {urlWhatsAppContactarVendedor ? (
-                <a
-                  href={urlWhatsAppContactarVendedor}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="busqueda-repuestos-modal-whatsapp"
-                  onClick={() =>
-                    contactarTienda &&
-                    registrarEventoContacto({
-                      tipo: 'whatsapp',
-                      origen: 'vendedores_cerca',
-                      tiendaId: contactarTienda.id,
-                    })
-                  }
-                >
-                  Contactar por WhatsApp
-                </a>
-              ) : (
-                <p className="busqueda-repuestos-modal-sin-contacto">Sin teléfono registrado.</p>
-              )}
+              <BotonesWhatsappContacto
+                prefijo="Vendedor"
+                telefonos={contactarTienda}
+                mensaje={mensajeWhatsappVendedorZona()}
+                onContacto={() =>
+                  registrarEventoContacto({
+                    tipo: 'whatsapp',
+                    origen: 'vendedores_cerca',
+                    tiendaId: contactarTienda.id,
+                  })
+                }
+              />
               {contactarTienda.latitud != null && contactarTienda.longitud != null && (
                 <div className="vendedores-cerca-modal-ruta">
                   <p className="maps-nav-aviso-confirmacion" role="note">

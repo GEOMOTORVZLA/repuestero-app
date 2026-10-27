@@ -1582,8 +1582,21 @@
   color: #2d3748;
 }
 
+.busqueda-repuestos-modal-whatsapp-lista {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+}
+
 .busqueda-repuestos-modal-whatsapp {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-width: min(100%, 18rem);
+  box-sizing: border-box;
   padding: 0.4rem 0.75rem;
   font-size: 0.85rem;
   font-weight: 600;
@@ -1591,7 +1604,13 @@
   background: #25d366;
   color: #fff;
   text-decoration: none;
+  text-align: center;
   transition: background 0.2s;
+}
+
+.busqueda-repuestos-modal-whatsapp-numero {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 .busqueda-repuestos-modal-whatsapp:hover {

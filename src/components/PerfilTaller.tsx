@@ -6,6 +6,7 @@ import { MARCAS_VEHICULOS } from '../data/marcasVehiculos';
 import { ESPECIALIDADES_TALLER } from '../data/registroVenezuela';
 import { normalizeEspecialidadesTallerDb } from '../utils/tallerEspecialidades';
 import { mensajeValidacionDatosNegocio, perfilTallerMetadataListo } from '../utils/validarDatosNegocio';
+import { mensajeTelefonosAdicionales } from '../utils/telefonosNegocio';
 import { bannerEstadoCuentaNegocio } from '../utils/estadoCuentaVendedorTaller';
 import { EstadoCuentaNegocioBanner } from './EstadoCuentaNegocioBanner';
 import './PerfilTaller.css';
@@ -24,6 +25,9 @@ type TallerPerfilFull = {
   rif: string | null;
   tipo_persona: string | null;
   telefono: string | null;
+  telefono_2: string | null;
+  telefono_3: string | null;
+  telefono_4: string | null;
   email: string | null;
   estado: string | null;
   ciudad: string | null;
@@ -84,6 +88,9 @@ function perfilDesdeSoloMetadata(
     rif: meta.rif != null ? String(meta.rif) : null,
     tipo_persona: meta.tipo_persona != null ? String(meta.tipo_persona) : null,
     telefono: meta.telefono != null ? String(meta.telefono) : null,
+    telefono_2: meta.telefono_2 != null ? String(meta.telefono_2) : null,
+    telefono_3: meta.telefono_3 != null ? String(meta.telefono_3) : null,
+    telefono_4: meta.telefono_4 != null ? String(meta.telefono_4) : null,
     email: meta.email != null ? String(meta.email) : emailCuenta ?? null,
     estado: meta.estado != null ? String(meta.estado) : null,
     ciudad: meta.ciudad != null ? String(meta.ciudad) : null,
@@ -114,6 +121,9 @@ function perfilDesdeFila(
       (row.tipo_persona as string) ??
       (metaTaller?.tipo_persona != null ? String(metaTaller.tipo_persona) : null),
     telefono: (row.telefono as string) ?? null,
+    telefono_2: (row.telefono_2 as string) ?? (metaTaller?.telefono_2 != null ? String(metaTaller.telefono_2) : null),
+    telefono_3: (row.telefono_3 as string) ?? (metaTaller?.telefono_3 != null ? String(metaTaller.telefono_3) : null),
+    telefono_4: (row.telefono_4 as string) ?? (metaTaller?.telefono_4 != null ? String(metaTaller.telefono_4) : null),
     email: (row.email as string) ?? null,
     estado: (row.estado as string) ?? null,
     ciudad: (row.ciudad as string) ?? null,
@@ -168,6 +178,9 @@ function cuerpoTallerDesdePerfil(d: TallerPerfilFull): Record<string, unknown> |
     tipo_persona: d.tipo_persona || null,
     rif: d.rif?.trim() || null,
     telefono: d.telefono?.trim() || null,
+    telefono_2: d.telefono_2?.trim() || null,
+    telefono_3: d.telefono_3?.trim() || null,
+    telefono_4: d.telefono_4?.trim() || null,
     email: d.email?.trim() || null,
     estado: d.estado?.trim() || null,
     ciudad: d.ciudad?.trim() || null,
@@ -386,6 +399,15 @@ export function PerfilTaller() {
       setMensaje(errNegocio);
       return;
     }
+    const errExtras = mensajeTelefonosAdicionales(datos.telefono, [
+      datos.telefono_2,
+      datos.telefono_3,
+      datos.telefono_4,
+    ]);
+    if (errExtras) {
+      setMensaje(errExtras);
+      return;
+    }
 
     setGuardando(true);
     setMensaje('');
@@ -540,15 +562,33 @@ export function PerfilTaller() {
               <input type="email" value={user.email ?? ''} disabled className="perfil-taller-input-sololectura" />
             </div>
             <div className="perfil-taller-campo">
-              <label htmlFor="pt-tel">Teléfono empresa</label>
+              <label htmlFor="pt-tel">Teléfono 1</label>
               <input
                 id="pt-tel"
-                type="text"
+                type="tel"
+                inputMode="tel"
                 value={datos.telefono ?? ''}
                 disabled={disabledCampo}
                 onChange={(e) => setDatos({ ...datos, telefono: e.target.value })}
               />
             </div>
+            {([2, 3, 4] as const).map((n) => {
+              const clave = `telefono_${n}` as 'telefono_2' | 'telefono_3' | 'telefono_4';
+              return (
+                <div className="perfil-taller-campo perfil-taller-campo-full" key={clave}>
+                  <label htmlFor={`pt-tel-${n}`}>{`Teléfono ${n}`}</label>
+                  <input
+                    id={`pt-tel-${n}`}
+                    type="tel"
+                    inputMode="tel"
+                    value={datos[clave] ?? ''}
+                    disabled={disabledCampo}
+                    placeholder="Opcional"
+                    onChange={(e) => setDatos({ ...datos, [clave]: e.target.value })}
+                  />
+                </div>
+              );
+            })}
           </div>
         </section>
 

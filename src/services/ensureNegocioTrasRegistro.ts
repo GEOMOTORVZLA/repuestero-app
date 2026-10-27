@@ -18,6 +18,9 @@ type PerfilVendedorMeta = {
   estado?: string | null;
   ciudad?: string | null;
   telefono?: string | null;
+  telefono_2?: string | null;
+  telefono_3?: string | null;
+  telefono_4?: string | null;
   latitud?: number;
   longitud?: number;
   metodos_pago?: string[] | null;
@@ -38,6 +41,9 @@ type PerfilGruaMeta = {
   estado?: string | null;
   ciudad?: string | null;
   telefono?: string | null;
+  telefono_2?: string | null;
+  telefono_3?: string | null;
+  telefono_4?: string | null;
   email?: string | null;
   latitud?: number;
   longitud?: number;
@@ -59,6 +65,9 @@ type PerfilTallerMeta = {
   estado?: string | null;
   ciudad?: string | null;
   telefono?: string | null;
+  telefono_2?: string | null;
+  telefono_3?: string | null;
+  telefono_4?: string | null;
   email?: string | null;
   latitud?: number;
   longitud?: number;
@@ -130,6 +139,9 @@ async function runEnsureNegocio(user: User): Promise<void> {
         estado: perfil.estado ?? null,
         ciudad: perfil.ciudad ?? null,
         telefono: perfil.telefono ?? null,
+        telefono_2: perfil.telefono_2 ?? null,
+        telefono_3: perfil.telefono_3 ?? null,
+        telefono_4: perfil.telefono_4 ?? null,
         latitud: parseCoordenadaRegistro(perfil.latitud) as number,
         longitud: parseCoordenadaRegistro(perfil.longitud) as number,
         metodos_pago: perfil.metodos_pago?.length ? perfil.metodos_pago : null,
@@ -188,6 +200,9 @@ async function runEnsureNegocio(user: User): Promise<void> {
         estado: perfil.estado ?? null,
         ciudad: perfil.ciudad ?? null,
         telefono: perfil.telefono ?? null,
+        telefono_2: perfil.telefono_2 ?? null,
+        telefono_3: perfil.telefono_3 ?? null,
+        telefono_4: perfil.telefono_4 ?? null,
         email: perfil.email ?? user.email ?? null,
         latitud: parseCoordenadaRegistro(perfil.latitud) as number,
         longitud: parseCoordenadaRegistro(perfil.longitud) as number,
@@ -249,6 +264,9 @@ async function runEnsureNegocio(user: User): Promise<void> {
         estado: perfil.estado ?? null,
         ciudad: perfil.ciudad ?? null,
         telefono: perfil.telefono ?? null,
+        telefono_2: perfil.telefono_2 ?? null,
+        telefono_3: perfil.telefono_3 ?? null,
+        telefono_4: perfil.telefono_4 ?? null,
         email: perfil.email ?? user.email ?? null,
         latitud: parseCoordenadaRegistro(perfil.latitud) as number,
         longitud: parseCoordenadaRegistro(perfil.longitud) as number,

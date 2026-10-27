@@ -127,15 +127,8 @@ type QueryConOr = {
   or: (filtro: string) => QueryConOr;
 };
 
-/** Campos públicos: prioriza columnas con índice trigram (ver supabase-indices-escala.sql). */
-const CAMPOS_TEXTO_PRODUCTO = [
-  'nombre',
-  'marca',
-  'modelo',
-  'categoria',
-  'descripcion',
-  'comentarios',
-] as const;
+/** La búsqueda pública de repuestos solo mira el nombre. El índice trigram está en supabase-indices-escala.sql. */
+const CAMPOS_TEXTO_PRODUCTO = ['nombre'] as const;
 
 const CAMPOS_TEXTO_TIENDA = ['nombre', 'nombre_comercial'] as const;
 
@@ -191,7 +184,7 @@ function aplicarTerminosIlikeEnCampos<T extends QueryConOr>(
   return q;
 }
 
-/** Cada termino (o su singular/plural) debe coincidir en al menos un campo; tildes aproximadas vía variantes. */
+/** Cada término (o su singular o plural) debe coincidir en el nombre; las tildes se cubren con variantes. */
 export function aplicarTerminosTextoABusquedaProductos<T extends QueryConOr>(
   query: T,
   texto: string

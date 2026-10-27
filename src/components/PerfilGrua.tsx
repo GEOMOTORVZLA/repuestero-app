@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
 import { TIPOS_GRUA, type TipoGruaId } from '../data/tiposGrua';
 import { mensajeValidacionDatosNegocio } from '../utils/validarDatosNegocio';
+import { mensajeTelefonosAdicionales } from '../utils/telefonosNegocio';
 import './PerfilTaller.css';
 
 const METODOS_PAGO = ['Efectivo', 'Pagomovil', 'Transferencia', 'Zelle', 'Binance', 'Cashea'] as const;
@@ -14,6 +15,9 @@ type GruaPerfil = {
   nombre_comercial: string;
   rif: string;
   telefono: string;
+  telefono_2: string;
+  telefono_3: string;
+  telefono_4: string;
   estado: string;
   ciudad: string;
   tipos: TipoGruaId[];
@@ -43,7 +47,7 @@ export function PerfilGrua() {
       const { data } = await supabase
         .from('gruas')
         .select(
-          'id, nombre, nombre_comercial, rif, telefono, estado, ciudad, tipos, servicio_24h, auxilio_vial, acerca_de, metodos_pago'
+          'id, nombre, nombre_comercial, rif, telefono, telefono_2, telefono_3, telefono_4, estado, ciudad, tipos, servicio_24h, auxilio_vial, acerca_de, metodos_pago'
         )
         .eq('user_id', user.id)
         .order('created_at', { ascending: true })
@@ -58,6 +62,9 @@ export function PerfilGrua() {
           nombre_comercial: String(row.nombre_comercial ?? ''),
           rif: String(row.rif ?? ''),
           telefono: String(row.telefono ?? ''),
+          telefono_2: String(row.telefono_2 ?? ''),
+          telefono_3: String(row.telefono_3 ?? ''),
+          telefono_4: String(row.telefono_4 ?? ''),
           estado: String(row.estado ?? ''),
           ciudad: String(row.ciudad ?? ''),
           tipos: tiposDesdeDb(row.tipos),
@@ -76,6 +83,9 @@ export function PerfilGrua() {
         nombre_comercial: String(p.nombre_comercial ?? ''),
         rif: String(p.rif ?? ''),
         telefono: String(p.telefono ?? ''),
+        telefono_2: String(p.telefono_2 ?? ''),
+        telefono_3: String(p.telefono_3 ?? ''),
+        telefono_4: String(p.telefono_4 ?? ''),
         estado: String(p.estado ?? ''),
         ciudad: String(p.ciudad ?? ''),
         tipos: tiposDesdeDb(p.tipos),
@@ -105,6 +115,16 @@ export function PerfilGrua() {
       setMensaje('Indica el nombre jurídico o comercial.');
       return;
     }
+    const errExtras = mensajeTelefonosAdicionales(datos.telefono, [
+      datos.telefono_2,
+      datos.telefono_3,
+      datos.telefono_4,
+    ]);
+    if (errExtras) {
+      setError(true);
+      setMensaje(errExtras);
+      return;
+    }
     const err = mensajeValidacionDatosNegocio({
       nombre: datos.nombre,
       nombre_comercial: datos.nombre_comercial,
@@ -126,6 +146,9 @@ export function PerfilGrua() {
       nombre_comercial: datos.nombre_comercial.trim() || datos.nombre.trim(),
       rif: datos.rif.trim() || null,
       telefono: datos.telefono.trim() || null,
+      telefono_2: datos.telefono_2.trim() || null,
+      telefono_3: datos.telefono_3.trim() || null,
+      telefono_4: datos.telefono_4.trim() || null,
       estado: datos.estado.trim() || null,
       ciudad: datos.ciudad.trim() || null,
       tipos: datos.tipos,
@@ -169,15 +192,34 @@ export function PerfilGrua() {
             disabled={guardando}
           />
         </div>
-        <div className="perfil-usuario-campo">
-          <label htmlFor="grua-tel">Teléfono</label>
+        <div className="perfil-usuario-campo perfil-usuario-campo-full">
+          <label htmlFor="grua-tel">Teléfono 1</label>
           <input
             id="grua-tel"
+            type="tel"
+            inputMode="tel"
             value={datos.telefono}
             onChange={(e) => setDatos({ ...datos, telefono: e.target.value })}
             disabled={guardando}
           />
         </div>
+        {([2, 3, 4] as const).map((n) => {
+          const clave = `telefono_${n}` as 'telefono_2' | 'telefono_3' | 'telefono_4';
+          return (
+            <div className="perfil-usuario-campo perfil-usuario-campo-full" key={clave}>
+              <label htmlFor={`grua-tel-${n}`}>{`Teléfono ${n}`}</label>
+              <input
+                id={`grua-tel-${n}`}
+                type="tel"
+                inputMode="tel"
+                value={datos[clave]}
+                placeholder="Opcional"
+                onChange={(e) => setDatos({ ...datos, [clave]: e.target.value })}
+                disabled={guardando}
+              />
+            </div>
+          );
+        })}
         <div className="perfil-usuario-campo">
           <label htmlFor="grua-rif">RIF</label>
           <input

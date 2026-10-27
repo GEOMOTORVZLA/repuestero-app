@@ -13,7 +13,8 @@ import {
   TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS,
 } from '../constants/googleMapsNavUi';
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
-import { mensajeWhatsappVendedorProducto, urlWhatsAppGeomotor } from '../utils/linkWhatsAppGeomotor';
+import { mensajeWhatsappVendedorProducto } from '../utils/linkWhatsAppGeomotor';
+import { BotonesWhatsappContacto } from './BotonesWhatsappContacto';
 import {
   aplicarTerminosTextoABusquedaProductos,
   terminosBusquedaProducto,
@@ -30,6 +31,9 @@ interface TiendaContacto {
   nombre: string | null;
   rif: string | null;
   telefono: string | null;
+  telefono_2?: string | null;
+  telefono_3?: string | null;
+  telefono_4?: string | null;
   direccion: string | null;
   latitud: number | null;
   longitud: number | null;
@@ -402,12 +406,6 @@ export function ListaRepuestosPorCategoria({
                     {contactarProducto.tiendas.rif}
                   </p>
                 )}
-                {contactarProducto.tiendas.telefono && (
-                  <p className="busqueda-repuestos-modal-linea">
-                    <span className="busqueda-repuestos-modal-etiqueta">Teléfono</span>{' '}
-                    {contactarProducto.tiendas.telefono}
-                  </p>
-                )}
                 {contactarProducto.tiendas.direccion && (
                   <p className="busqueda-repuestos-modal-linea">
                     <span className="busqueda-repuestos-modal-etiqueta">Dirección</span>{' '}
@@ -450,30 +448,18 @@ export function ListaRepuestosPorCategoria({
                 </>
               )}
             <div className="busqueda-repuestos-modal-botones">
-              {contactarProducto.tiendas?.telefono ? (
-                <a
-                  href={
-                    urlWhatsAppGeomotor(
-                      contactarProducto.tiendas.telefono,
-                      mensajeWhatsappVendedorProducto(contactarProducto.nombre),
-                    )!
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="busqueda-repuestos-modal-whatsapp"
-                  onClick={() =>
-                    registrarEventoContacto({
-                      tipo: 'whatsapp',
-                      origen: 'categorias',
-                      productoId: contactarProducto.id,
-                    })
-                  }
-                >
-                  Contactar por WhatsApp
-                </a>
-              ) : (
-                <p className="busqueda-repuestos-modal-sin-contacto">Sin teléfono registrado.</p>
-              )}
+              <BotonesWhatsappContacto
+                prefijo="Vendedor"
+                telefonos={contactarProducto.tiendas ?? {}}
+                mensaje={mensajeWhatsappVendedorProducto(contactarProducto.nombre)}
+                onContacto={() =>
+                  registrarEventoContacto({
+                    tipo: 'whatsapp',
+                    origen: 'categorias',
+                    productoId: contactarProducto.id,
+                  })
+                }
+              />
             </div>
             {contactarProducto.tiendas?.latitud != null &&
               contactarProducto.tiendas?.longitud != null && (

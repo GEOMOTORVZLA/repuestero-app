@@ -9,6 +9,7 @@ import { bannerEstadoCuentaNegocio } from '../utils/estadoCuentaVendedorTaller';
 import {
   mensajeValidacionDatosNegocio,
 } from '../utils/validarDatosNegocio';
+import { mensajeTelefonosAdicionales } from '../utils/telefonosNegocio';
 import { EstadoCuentaNegocioBanner } from './EstadoCuentaNegocioBanner';
 import './PerfilUsuario.css';
 
@@ -24,6 +25,9 @@ interface TiendaPerfil {
   nombre_comercial: string | null;
   rif: string | null;
   telefono?: string | null;
+  telefono_2?: string | null;
+  telefono_3?: string | null;
+  telefono_4?: string | null;
   telefono_whatsapp?: string | null;
   estado?: string | null;
   ciudad?: string | null;
@@ -246,6 +250,15 @@ export function PerfilUsuario() {
     const nombreComercial = tienda.nombre_comercial?.trim() || nombreJuridico || '';
     const rif = tienda.rif?.trim() || '';
     const telefono = tienda.telefono?.trim() || '';
+    const telefono2 = tienda.telefono_2?.trim() || '';
+    const telefono3 = tienda.telefono_3?.trim() || '';
+    const telefono4 = tienda.telefono_4?.trim() || '';
+    const errExtras = mensajeTelefonosAdicionales(telefono, [telefono2, telefono3, telefono4]);
+    if (errExtras) {
+      setEstado('error');
+      setMensaje(errExtras);
+      return;
+    }
 
     const errNegocio = mensajeValidacionDatosNegocio({
       nombre: nombreJuridico || null,
@@ -270,6 +283,9 @@ export function PerfilUsuario() {
       vertical: tienda.vertical === 'moto' ? 'moto' : 'auto',
       rif: rif || null,
       telefono: telefono || null,
+      telefono_2: telefono2 || null,
+      telefono_3: telefono3 || null,
+      telefono_4: telefono4 || null,
       estado: tienda.estado?.trim() || null,
       ciudad: tienda.ciudad?.trim() || null,
       latitud: tienda.latitud ?? null,
@@ -423,9 +439,10 @@ export function PerfilUsuario() {
                 />
               </div>
               <div className="perfil-usuario-campo">
-                <label>Teléfono</label>
+                <label>Teléfono 1</label>
                 <input
-                  type="text"
+                  type="tel"
+                  inputMode="tel"
                   value={tienda.telefono ?? tienda.telefono_whatsapp ?? ''}
                   onChange={(e) =>
                     setTienda((prev) =>
@@ -440,6 +457,24 @@ export function PerfilUsuario() {
                   disabled={!editando || estado === 'guardando'}
                 />
               </div>
+              {([2, 3, 4] as const).map((n) => {
+                const clave = `telefono_${n}` as 'telefono_2' | 'telefono_3' | 'telefono_4';
+                return (
+                  <div className="perfil-usuario-campo perfil-usuario-campo-full" key={clave}>
+                    <label>{`Teléfono ${n}`}</label>
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      value={tienda[clave] ?? ''}
+                      onChange={(e) =>
+                        setTienda((prev) => (prev ? { ...prev, [clave]: e.target.value } : prev))
+                      }
+                      disabled={!editando || estado === 'guardando'}
+                      placeholder="Opcional"
+                    />
+                  </div>
+                );
+              })}
               <div className="perfil-usuario-campo">
                 <label>Estado</label>
                 <select
