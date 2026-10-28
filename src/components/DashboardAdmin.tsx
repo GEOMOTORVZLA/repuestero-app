@@ -2255,6 +2255,40 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     setAccionando(null);
   };
 
+  const eliminarProductoAdmin = async (productoId: string, nombre: string) => {
+    const titulo = nombre.trim() || 'este producto';
+    if (
+      !window.confirm(
+        `¿Eliminar «${titulo}» de la base de datos? Queda borrado y no se puede recuperar. El vendedor verá el aviso de que se quitó por no cumplir las normas.`
+      )
+    ) {
+      return;
+    }
+    setAccionando(`eliminar-prod-${productoId}`);
+    setError(null);
+    const { data, error: rpcError } = await supabase.rpc('admin_eliminar_productos', {
+      p_producto_ids: [productoId],
+    });
+    if (rpcError) {
+      setError(
+        `No se pudo eliminar: ${rpcError.message}. Si ves “function does not exist”, ejecuta admin_eliminar_productos de supabase-admin-panel.sql.`
+      );
+    } else {
+      const n = typeof data === 'number' ? data : 0;
+      if (n < 1) {
+        setError('No se eliminó el producto. Revisa permisos o si ya no existe.');
+      } else {
+        setProductos((prev) => prev.filter((p) => p.id !== productoId));
+        setListaProductosVendedorModal((prev) =>
+          prev ? prev.filter((p) => p.id !== productoId) : prev
+        );
+        setProductoEditandoAdmin((actual) => (actual?.id === productoId ? null : actual));
+        void cargarKpis();
+      }
+    }
+    setAccionando(null);
+  };
+
   const abrirProductosVendedor = async (v: AdminTienda) => {
     const nombre = v.nombre_comercial?.trim() || v.nombre?.trim() || 'Vendedor';
     setModalProductosVendedor({ tiendaId: v.id, nombre });
@@ -4389,6 +4423,17 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                     Activar
                                   </button>
                                 )}
+                                <button
+                                  type="button"
+                                  className="dashboard-admin-btn danger"
+                                  disabled={
+                                    accionando === `eliminar-prod-${p.id}` ||
+                                    accionando === 'bulk-productos-masivo'
+                                  }
+                                  onClick={() => void eliminarProductoAdmin(p.id, p.nombre)}
+                                >
+                                  {accionando === `eliminar-prod-${p.id}` ? 'Eliminando…' : 'Eliminar'}
+                                </button>
                               </div>
                             </td>
                           </tr>
@@ -5812,6 +5857,14 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                                           Activar
                                         </button>
                                       )}
+                                      <button
+                                        type="button"
+                                        className="dashboard-admin-btn danger"
+                                        disabled={accionando === `eliminar-prod-${p.id}`}
+                                        onClick={() => void eliminarProductoAdmin(p.id, p.nombre)}
+                                      >
+                                        {accionando === `eliminar-prod-${p.id}` ? 'Eliminando…' : 'Eliminar'}
+                                      </button>
                                     </div>
                                   </td>
                                 </tr>
