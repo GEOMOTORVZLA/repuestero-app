@@ -1,9 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
-import { MARCAS_VEHICULOS } from '../data/marcasVehiculos';
-import { MARCAS_MODELOS, ANOS } from '../data/marcasModelos';
-import { MARCAS_MOTOS, getModelosPorMarcaMoto } from '../data/marcasMotos';
 import { CATEGORIAS_PRODUCTO } from '../data/categoriasProducto';
 import { CATEGORIAS_PRODUCTO_MOTO } from '../data/categoriasProductoMoto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
@@ -30,6 +27,10 @@ import {
 } from '../utils/stockActualInventario';
 import './RegistroRepuestos.css';
 
+function normalizarCodigoManual(raw: string): string {
+  return raw.trim().toUpperCase().replace(/\s+/g, '-');
+}
+
 interface Tienda {
   id: string;
   nombre: string | null;
@@ -47,16 +48,13 @@ export function RegistroRepuestos({
 }: RegistroRepuestosProps) {
   const esMoto = vertical === 'moto';
   const categoriasOpciones = esMoto ? CATEGORIAS_PRODUCTO_MOTO : CATEGORIAS_PRODUCTO;
-  const marcasLista = esMoto ? [...MARCAS_MOTOS] : [...MARCAS_VEHICULOS];
   const { user } = useAuth();
   const [tiendas, setTiendas] = useState<Tienda[]>([]);
   const [cargandoTienda, setCargandoTienda] = useState(true);
   const [avisoTiendaIncompleta, setAvisoTiendaIncompleta] = useState<string | null>(null);
   const [nombre, setNombre] = useState('');
   const [categoria, setCategoria] = useState('');
-  const [marca, setMarca] = useState('');
-  const [modelo, setModelo] = useState('');
-  const [anio, setAnio] = useState('');
+  const [codigo, setCodigo] = useState('');
   const [comentarios, setComentarios] = useState('');
   const [precio, setPrecio] = useState('');
   const [moneda, setMoneda] = useState<'BS' | 'USD'>('BS');
@@ -69,12 +67,6 @@ export function RegistroRepuestos({
   /** Una ranura por foto adicional (1…4); no se pisan al elegir archivo en otra ranura. */
   const [fotosExtraSlots, setFotosExtraSlots] = useState<(File | null)[]>(() => slotsArchivosExtraVacios());
   const registrandoRef = useRef(false);
-
-  const modelosMarca = esMoto
-    ? getModelosPorMarcaMoto(marca)
-    : marca
-      ? MARCAS_MODELOS[marca] ?? []
-      : [];
 
   useEffect(() => {
     if (!user) return;
@@ -236,11 +228,32 @@ export function RegistroRepuestos({
       setMensaje('Selecciona la categoría del producto.');
       return;
     }
-    if (!marca) {
+    const codigoNorm = normalizarCodigoManual(codigo);
+    if (codigoNorm && !/^[A-Z0-9][A-Z0-9._-]{0,63}$/.test(codigoNorm)) {
       registrandoRef.current = false;
       setEstado('error');
-      setMensaje(esMoto ? 'Selecciona la marca de la moto.' : 'Selecciona la marca del vehículo.');
+      setMensaje('El código solo puede llevar letras, números, puntos y guiones.');
       return;
+    }
+    if (codigoNorm) {
+      const { data: repetido, error: errCodigo } = await supabase
+        .from('productos')
+        .select('id')
+        .eq('tienda_id', tienda.id)
+        .ilike('codigo', codigoNorm)
+        .limit(1);
+      if (errCodigo) {
+        registrandoRef.current = false;
+        setEstado('error');
+        setMensaje(errCodigo.message || 'No se pudo revisar si ese código ya existe.');
+        return;
+      }
+      if (repetido && repetido.length > 0) {
+        registrandoRef.current = false;
+        setEstado('error');
+        setMensaje('Ese código ya está usado en otro producto de tu tienda.');
+        return;
+      }
     }
     const precioNum = parsePrecioProducto(precio);
     if (precioNum == null) {
@@ -323,9 +336,10 @@ export function RegistroRepuestos({
         tienda_id: tienda.id,
         nombre: nombre.trim(),
         categoria,
-        marca: marca === 'Otra' ? null : marca,
-        modelo: modelo.trim() || null,
-        anio: anio ? parseInt(anio, 10) : null,
+        marca: null,
+        modelo: null,
+        anio: null,
+        codigo: codigoNorm || null,
         // usamos un solo campo de texto para la breve descripción
         descripcion: comentarios.trim() || null,
         comentarios: comentarios.trim() || null,
@@ -352,8 +366,13 @@ export function RegistroRepuestos({
         .single();
 
       if (error || !insertData) {
+        const msg = error?.message || 'Error al guardar.';
         setEstado('error');
-        setMensaje(error?.message || 'Error al guardar.');
+        setMensaje(
+          /codigo|unique|duplic/i.test(msg)
+            ? 'Ese código ya está usado en otro producto de tu tienda.'
+            : msg
+        );
         return;
       }
 
@@ -417,9 +436,7 @@ export function RegistroRepuestos({
       onProductoRegistrado?.();
       setNombre('');
       setCategoria('');
-      setMarca('');
-      setModelo('');
-      setAnio('');
+      setCodigo('');
       setComentarios('');
       setPrecio('');
       setMoneda('BS');
@@ -482,42 +499,21 @@ export function RegistroRepuestos({
         disabled={estado === 'registrando'}
         spellCheck={false}
       />
-      <select
-        value={marca}
-        onChange={(e) => { setMarca(e.target.value); setModelo(''); }}
-        disabled={estado === 'registrando'}
-        translate="no"
-        className="notranslate"
-      >
-        <option value="">{esMoto ? 'Marca de la moto' : 'Marca del vehículo'}</option>
-        {marcasLista.map((m) => (
-          <option key={m} value={m}>
-            {m}
-          </option>
-        ))}
-      </select>
-      {marca && modelosMarca.length > 0 && (
-        <select
-          value={modelo}
-          onChange={(e) => setModelo(e.target.value)}
+      <div className="registro-repuestos-codigo">
+        <label htmlFor="codigo-producto-registro">Código del producto</label>
+        <p className="registro-repuestos-codigo-ayuda">Opcional</p>
+        <input
+          id="codigo-producto-registro"
+          type="text"
+          placeholder="Ej. RPT1049-0.50"
+          value={codigo}
+          onChange={(e) => setCodigo(e.target.value.toUpperCase())}
           disabled={estado === 'registrando'}
-        >
-          <option value="">Modelo (opcional)</option>
-          {modelosMarca.map((m) => (
-            <option key={m} value={m}>{m}</option>
-          ))}
-        </select>
-      )}
-      <select
-        value={anio}
-        onChange={(e) => setAnio(e.target.value)}
-        disabled={estado === 'registrando'}
-      >
-        <option value="">Año (opcional)</option>
-        {ANOS.map((a) => (
-          <option key={a} value={a}>{a}</option>
-        ))}
-      </select>
+          spellCheck={false}
+          autoCapitalize="characters"
+          maxLength={64}
+        />
+      </div>
       <textarea
         placeholder={`Descripción del producto (máx. ${LIMITE_DESCRIPCION_PRODUCTO} caracteres)`}
         value={comentarios}
@@ -664,7 +660,7 @@ export function RegistroRepuestos({
         type="button"
         className="btn-registrar"
         onClick={registrarRepuesto}
-        disabled={estado === 'registrando' || !nombre.trim() || !marca || !precio.trim()}
+        disabled={estado === 'registrando' || !nombre.trim() || !precio.trim()}
       >
         {estado === 'registrando' ? 'Registrando...' : 'Registrar producto'}
       </button>

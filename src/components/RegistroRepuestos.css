@@ -91,6 +91,29 @@
   color: #080;
 }
 
+.registro-repuestos-codigo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-bottom: 0.75rem;
+}
+
+.registro-repuestos-codigo label {
+  font-size: 0.95rem;
+  color: #2d3748;
+}
+
+.registro-repuestos-codigo-ayuda {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  color: #718096;
+}
+
+.registro-repuestos-codigo input {
+  margin-bottom: 0;
+}
+
 .registro-repuestos-precio {
   margin-bottom: 1rem;
 }
