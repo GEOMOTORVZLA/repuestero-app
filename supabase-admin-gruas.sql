@@ -9,7 +9,11 @@ create policy "Permitir leer gruas publicas"
     or (
       aprobacion_estado = 'aprobado'
       and coalesce(bloqueado, false) = false
-      and (membresia_hasta is null or membresia_hasta >= current_date)
+      and (
+        public.cobro_en_cortesia()
+        or membresia_hasta is null
+        or membresia_hasta >= current_date
+      )
     )
     or public.is_admin()
   );

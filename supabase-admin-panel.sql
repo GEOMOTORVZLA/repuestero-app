@@ -573,8 +573,13 @@ as $$
   select coalesce(p_aprobacion_estado, 'aprobado') = 'aprobado'
     and (
       coalesce(p_bloqueado, false) = true
-      or p_membresia_hasta is null
-      or p_membresia_hasta < current_date
+      or (
+        not public.cobro_en_cortesia()
+        and (
+          p_membresia_hasta is null
+          or p_membresia_hasta < current_date
+        )
+      )
     );
 $$;
 

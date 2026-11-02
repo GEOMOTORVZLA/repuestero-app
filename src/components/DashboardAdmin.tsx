@@ -409,6 +409,12 @@ function extraerFechaCalendarioMembresia(membresiaHasta: string): string | null 
 }
 
 /**
+ * La consola lo pone en true cuando el cobro está en pausa.
+ * Hasta esa fecha, una membresía vencida no oculta el perfil.
+ */
+let cobroCortesiaActiva = false;
+
+/**
  * Membresía vencida o sin fecha. Alineado con RLS/KPI SQL:
  * `membresia_hasta IS NULL OR membresia_hasta < CURRENT_DATE`.
  */
@@ -423,11 +429,17 @@ function perfilBloqueadoPorAdmin(p: AdminPerfilMembresia): boolean {
   return p.bloqueado === true;
 }
 
+/** En cortesía la fecha no oculta. El bloqueo manual sí. */
+function ocultarPorFechaMembresia(membresiaHasta: string | null | undefined): boolean {
+  if (cobroCortesiaActiva) return false;
+  return membresiaVencidaOSinFecha(membresiaHasta);
+}
+
 /** Perfil aprobado: sin visibilidad pública por impago (bloqueo admin o membresía no vigente), alineado con políticas RLS. */
 function perfilSuspendidoPorImpago(p: AdminPerfilMembresia): boolean {
   if ((p.aprobacion_estado ?? 'aprobado') !== 'aprobado') return false;
   if (perfilBloqueadoPorAdmin(p)) return true;
-  return membresiaVencidaOSinFecha(p.membresia_hasta);
+  return ocultarPorFechaMembresia(p.membresia_hasta);
 }
 
 /** Columna «Estado pago» en vendedores/talleres: debe coincidir con el KPI suspendidos. */
@@ -452,7 +464,7 @@ function etiquetaVisibilidadWebPerfil(v: AdminPerfilMembresia): { texto: string;
   if (perfilBloqueadoPorAdmin(v)) {
     return { texto: 'Oculta (bloqueo admin)', clase: 'warn' };
   }
-  if (membresiaVencidaOSinFecha(v.membresia_hasta)) {
+  if (ocultarPorFechaMembresia(v.membresia_hasta)) {
     return { texto: 'Oculta (sin membresía vigente)', clase: 'warn' };
   }
   return { texto: 'Visible en web', clase: 'ok' };
@@ -482,7 +494,7 @@ function etiquetaVisibilidadWebPerfilTabla(v: AdminPerfilMembresia): {
   if ((v.aprobacion_estado ?? 'aprobado') !== 'aprobado') {
     return { texto: '—', clase: 'ok', title: 'Sin autorización web' };
   }
-  if (perfilBloqueadoPorAdmin(v) || membresiaVencidaOSinFecha(v.membresia_hasta)) {
+  if (perfilBloqueadoPorAdmin(v) || ocultarPorFechaMembresia(v.membresia_hasta)) {
     return { texto: 'Oculta', clase: 'warn', title: detalle.texto };
   }
   return { texto: 'Visible', clase: 'ok', title: detalle.texto };
@@ -979,8 +991,37 @@ async function fetchProductosCatalogoVerticalAdmin(opts: {
   return { productos: acc, error: null };
 }
 
+type AjusteCobroAdmin = {
+  modo: 'cortesia' | 'pago';
+  cortesiaHasta: string;
+  activa: boolean;
+};
+
+function fechaCobroLegible(iso: string): string {
+  const s = iso.slice(0, 10);
+  const partes = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!partes) return iso;
+  return `${partes[3]}/${partes[2]}/${partes[1]}`;
+}
+
+function leerAjusteCobro(data: unknown): AjusteCobroAdmin | null {
+  if (data == null || typeof data !== 'object') return null;
+  const row = data as { modo?: unknown; cortesia_hasta?: unknown; cortesia_activa?: unknown };
+  const modo = row.modo === 'pago' ? 'pago' : row.modo === 'cortesia' ? 'cortesia' : null;
+  if (!modo) return null;
+  return {
+    modo,
+    cortesiaHasta: String(row.cortesia_hasta ?? '2027-06-30').slice(0, 10),
+    activa: row.cortesia_activa === true,
+  };
+}
+
 export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: DashboardAdminProps) {
   const { user, signOut } = useAuth();
+  const [ajusteCobro, setAjusteCobro] = useState<AjusteCobroAdmin | null>(null);
+  const [ajusteCobroAviso, setAjusteCobroAviso] = useState<string | null>(null);
+  const [guardandoAjusteCobro, setGuardandoAjusteCobro] = useState(false);
+  cobroCortesiaActiva = ajusteCobro?.activa === true;
   const defaultVerticalFiltro: 'todos' | 'auto' | 'moto' =
     verticalEntrada === 'moto' ? 'moto' : 'todos';
   const [tab, setTab] = useState<AdminTab>('resumen');
@@ -1673,13 +1714,56 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     }
   };
 
+  const cargarAjusteCobro = async () => {
+    const { data, error: rpcError } = await supabase.rpc('admin_leer_ajuste_cobro');
+    if (rpcError) {
+      setAjusteCobro(null);
+      setAjusteCobroAviso(
+        'Para usar este control, ejecuta el archivo supabase-ajuste-cobro.sql en el editor SQL de Supabase.'
+      );
+      return;
+    }
+    const leido = leerAjusteCobro(data);
+    if (!leido) {
+      setAjusteCobro(null);
+      setAjusteCobroAviso('No se pudo leer el ajuste de cobro.');
+      return;
+    }
+    setAjusteCobro(leido);
+    setAjusteCobroAviso(null);
+  };
+
+  const cambiarAjusteCobro = async (modo: 'cortesia' | 'pago') => {
+    if (ajusteCobro == null || ajusteCobro.modo === modo) return;
+    const hasta = fechaCobroLegible(ajusteCobro.cortesiaHasta);
+    const confirmar =
+      modo === 'cortesia'
+        ? `¿Mantener a todos vigentes hasta el ${hasta}? Nadie se oculta por impago. El bloqueo manual sigue igual y las fechas de cada cuenta no se borran.`
+        : '¿Volver a la modalidad de pago? Quien no tenga fecha vigente deja de verse en la web. Las fechas guardadas no cambian.';
+    if (!window.confirm(confirmar)) return;
+    setGuardandoAjusteCobro(true);
+    setAjusteCobroAviso(null);
+    const { data, error: rpcError } = await supabase.rpc('admin_set_ajuste_cobro', { p_modo: modo });
+    setGuardandoAjusteCobro(false);
+    if (rpcError) {
+      setAjusteCobroAviso(rpcError.message);
+      return;
+    }
+    const leido = leerAjusteCobro(data);
+    if (leido) {
+      setAjusteCobro(leido);
+      cobroCortesiaActiva = leido.activa;
+    }
+    await cargarKpis();
+  };
+
   const cargar = async (opts?: { silencioso?: boolean }) => {
     const silencioso = opts?.silencioso === true;
     if (!silencioso) {
       setCargando(true);
       setError(null);
     }
-    await Promise.all([cargarKpis(), cargarFlujoContactos(), cargarConteoPorEstado()]);
+    await Promise.all([cargarKpis(), cargarAjusteCobro(), cargarFlujoContactos(), cargarConteoPorEstado()]);
     await Promise.all([
       cargarUsuarios(''),
       cargarCompradores(''),
@@ -3555,6 +3639,37 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
               {tab === 'resumen' && (
                 <section className="dashboard-seccion">
                   <h2 className="dashboard-seccion-titulo">Resumen global</h2>
+                  <div className="dashboard-ajuste-cobro">
+                    <p className="dashboard-ajuste-cobro-titulo">Cobro de membresía</p>
+                    <p className="dashboard-ajuste-cobro-texto">
+                      {ajusteCobro == null
+                        ? 'Este control se activa cuando el ajuste ya está en la base de datos.'
+                        : ajusteCobro.activa
+                          ? `Todos vigentes hasta el ${fechaCobroLegible(ajusteCobro.cortesiaHasta)}. Nadie se oculta por impago. El bloqueo manual sigue igual.`
+                          : ajusteCobro.modo === 'cortesia'
+                            ? `La pausa venció el ${fechaCobroLegible(ajusteCobro.cortesiaHasta)}. La web ya aplica la modalidad de pago.`
+                            : 'Modalidad de pago: quien no tenga fecha vigente no se ve en la web.'}
+                    </p>
+                    <div className="dashboard-ajuste-cobro-acciones">
+                      <button
+                        type="button"
+                        className={`dashboard-admin-btn${ajusteCobro?.modo === 'cortesia' ? ' dashboard-ajuste-cobro-btn--activo' : ''}`}
+                        disabled={guardandoAjusteCobro || ajusteCobro == null}
+                        onClick={() => void cambiarAjusteCobro('cortesia')}
+                      >
+                        Mantener a todos vigentes
+                      </button>
+                      <button
+                        type="button"
+                        className={`dashboard-admin-btn${ajusteCobro?.modo === 'pago' ? ' dashboard-ajuste-cobro-btn--activo' : ''}`}
+                        disabled={guardandoAjusteCobro || ajusteCobro == null}
+                        onClick={() => void cambiarAjusteCobro('pago')}
+                      >
+                        Volver a modalidad de pago
+                      </button>
+                    </div>
+                    {ajusteCobroAviso ? <p className="dashboard-ajuste-cobro-aviso">{ajusteCobroAviso}</p> : null}
+                  </div>
                   <p className="dashboard-kpi-grid-hint">Pulsa una tarjeta para ver el listado detallado (datos ya cargados en esta sesión).</p>
                   <div className="dashboard-kpi-grupos">
                     <div className="dashboard-kpi-grupo">

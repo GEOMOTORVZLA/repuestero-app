@@ -49,8 +49,10 @@ WHERE p.activo = true
   AND (p.stock_actual IS NULL OR p.stock_actual > 0)
   AND t.aprobacion_estado = 'aprobado'
   AND coalesce(t.bloqueado, false) = false
-  AND t.membresia_hasta IS NOT NULL
-  AND t.membresia_hasta >= CURRENT_DATE;
+  AND (
+    public.cobro_en_cortesia()
+    OR (t.membresia_hasta IS NOT NULL AND t.membresia_hasta >= CURRENT_DATE)
+  );
 
 COMMENT ON VIEW public.productos_publicos IS
   'Catálogo visible en la búsqueda. Sin codigo ni stock_actual.';

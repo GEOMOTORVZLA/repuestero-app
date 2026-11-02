@@ -2130,3 +2130,49 @@ button.dashboard-kpi-card.dashboard-kpi-card--clickable:focus-visible {
   }
 }
 
+.dashboard-ajuste-cobro {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+}
+
+.dashboard-ajuste-cobro-titulo {
+  margin: 0 0 0.25rem;
+  font-weight: 700;
+  color: #1a202c;
+}
+
+.dashboard-ajuste-cobro-texto {
+  margin: 0 0 0.7rem;
+  color: #4a5568;
+  font-size: 0.92rem;
+}
+
+.dashboard-ajuste-cobro-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dashboard-ajuste-cobro-acciones .dashboard-admin-btn {
+  background: #fff;
+  color: #1a365d;
+  border: 1px solid #1a365d;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.75rem;
+}
+
+.dashboard-ajuste-cobro-btn--activo {
+  background: #1a365d !important;
+  color: #fff !important;
+  border-color: #1a365d !important;
+}
+
+.dashboard-ajuste-cobro-aviso {
+  margin: 0.6rem 0 0;
+  color: #9b2c2c;
+  font-size: 0.88rem;
+}
+

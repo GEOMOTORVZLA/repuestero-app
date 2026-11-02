@@ -114,8 +114,10 @@ CREATE POLICY "Permitir leer talleres"
     OR (
       aprobacion_estado = 'aprobado'
       AND coalesce(bloqueado, false) = false
-      AND membresia_hasta IS NOT NULL
-      AND membresia_hasta >= CURRENT_DATE
+      AND (
+        public.cobro_en_cortesia()
+        OR (membresia_hasta IS NOT NULL AND membresia_hasta >= CURRENT_DATE)
+      )
     )
     OR public.is_admin()
   );

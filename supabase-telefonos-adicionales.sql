@@ -60,8 +60,10 @@ where p.activo = true
   and (p.stock_actual is null or p.stock_actual > 0)
   and t.aprobacion_estado = 'aprobado'
   and coalesce(t.bloqueado, false) = false
-  and t.membresia_hasta is not null
-  and t.membresia_hasta >= current_date;
+  and (
+    public.cobro_en_cortesia()
+    or (t.membresia_hasta is not null and t.membresia_hasta >= current_date)
+  );
 
 comment on view public.productos_publicos is
   'Catálogo visible en la búsqueda. Sin codigo ni stock_actual.';

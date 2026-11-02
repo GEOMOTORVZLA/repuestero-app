@@ -172,8 +172,10 @@ CREATE POLICY "Publico ve productos aprobados"
       WHERE t.id = productos.tienda_id
         AND t.aprobacion_estado = 'aprobado'
         AND coalesce(t.bloqueado, false) = false
-        AND t.membresia_hasta IS NOT NULL
-        AND t.membresia_hasta >= CURRENT_DATE
+        AND (
+          public.cobro_en_cortesia()
+          OR (t.membresia_hasta IS NOT NULL AND t.membresia_hasta >= CURRENT_DATE)
+        )
     )
   );
 
@@ -227,8 +229,10 @@ CREATE POLICY "Publico ve tiendas con membresia activa"
   USING (
     aprobacion_estado = 'aprobado'
     AND coalesce(bloqueado, false) = false
-    AND membresia_hasta IS NOT NULL
-    AND membresia_hasta >= CURRENT_DATE
+    AND (
+      public.cobro_en_cortesia()
+      OR (membresia_hasta IS NOT NULL AND membresia_hasta >= CURRENT_DATE)
+    )
   );
 
 DROP POLICY IF EXISTS "Admin ve todas las tiendas" ON public.tiendas;
@@ -245,8 +249,10 @@ CREATE POLICY "Permitir leer talleres"
     OR (
       aprobacion_estado = 'aprobado'
       AND coalesce(bloqueado, false) = false
-      AND membresia_hasta IS NOT NULL
-      AND membresia_hasta >= CURRENT_DATE
+      AND (
+        public.cobro_en_cortesia()
+        OR (membresia_hasta IS NOT NULL AND membresia_hasta >= CURRENT_DATE)
+      )
     )
     OR public.is_admin()
   );
