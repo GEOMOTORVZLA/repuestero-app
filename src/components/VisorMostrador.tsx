@@ -16,8 +16,10 @@ import {
 } from '../utils/productosVendedorConsulta';
 import {
   abrirWhatsappConTexto,
+  construirUrlProductoCompartido,
   construirUrlTiendaCompartida,
   mensajeWhatsappCompartirCatalogoVendedor,
+  mensajeWhatsappCompartirRepuesto,
 } from '../utils/enlaceCompartirProducto';
 import { ImagenProducto } from './ImagenProducto';
 import { VisorFotoProducto } from './VisorFotoProducto';
@@ -304,6 +306,12 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
     );
   };
 
+  const compartirArticulo = (p: ProductoMostrador) => {
+    const verticalArticulo = p.vertical === 'moto' || p.vertical === 'auto' ? p.vertical : vertical;
+    const url = construirUrlProductoCompartido(p.id, verticalArticulo);
+    void abrirWhatsappConTexto(mensajeWhatsappCompartirRepuesto(p.nombre, url));
+  };
+
   if (!user || !ownerId) return null;
 
   return (
@@ -461,9 +469,29 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
                   )}
                 </div>
               </div>
-              <p className="visor-mostrador-precio">
-                {etiquetaMoneda(p.moneda)} {formatearPrecioProducto(p.precio_usd)}
-              </p>
+              <div className="visor-mostrador-precio-bloque">
+                <p className="visor-mostrador-precio">
+                  {etiquetaMoneda(p.moneda)} {formatearPrecioProducto(p.precio_usd)}
+                </p>
+                <button
+                  type="button"
+                  className="visor-mostrador-compartir visor-mostrador-compartir-articulo"
+                  disabled={!activo}
+                  onClick={() => compartirArticulo(p)}
+                  title={
+                    activo
+                      ? 'Compartir este artículo por WhatsApp'
+                      : 'Este artículo está pausado y no se ve en el enlace'
+                  }
+                  aria-label={
+                    activo
+                      ? `Compartir ${p.nombre} por WhatsApp`
+                      : `${p.nombre} está pausado y no se puede compartir`
+                  }
+                >
+                  <IconoCompartirCatalogo />
+                </button>
+              </div>
             </li>
           );
         })}

@@ -345,6 +345,13 @@
   color: #0f172a;
 }
 
+.visor-mostrador-precio-bloque {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
 .visor-mostrador-precio {
   margin: 0;
   font-size: 1.1rem;
@@ -352,6 +359,16 @@
   color: #0f766e;
   white-space: nowrap;
   text-align: right;
+}
+
+.visor-mostrador-compartir-articulo {
+  width: 2rem;
+  height: 2rem;
+}
+
+.visor-mostrador-compartir-articulo svg {
+  width: 1rem;
+  height: 1rem;
 }
 
 .visor-mostrador-cargar-mas {
@@ -425,8 +442,12 @@
     grid-area: info;
   }
 
-  .visor-mostrador-precio {
+  .visor-mostrador-precio-bloque {
     grid-area: precio;
+    align-items: flex-start;
+  }
+
+  .visor-mostrador-precio {
     text-align: left;
     font-size: 1rem;
   }
