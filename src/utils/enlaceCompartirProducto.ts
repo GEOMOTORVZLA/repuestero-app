@@ -58,7 +58,7 @@ export function mensajeWhatsappCompartirRepuesto(nombreProducto: string, url: st
 /** Query param para abrir el catálogo de una tienda/vendedor (?tienda=uuid). */
 export const PARAM_TIENDA_COMPARTIDA = 'tienda';
 
-/** Sobrevive al desmontar Landing al pedir login (Auth a pantalla completa). */
+/** Conserva el id de la tienda del enlace compartido si la página se vuelve a montar. */
 const STORAGE_TIENDA_CATALOGO_PENDIENTE = 'geomotor_tienda_catalogo_pendiente';
 
 export function esIdTiendaUuid(valor: string): boolean {
@@ -103,7 +103,7 @@ export function construirUrlTiendaCompartida(tiendaId: string, vertical: Vertica
 
 export function mensajeWhatsappCompartirCatalogoVendedor(nombreTienda: string, url: string): string {
   const n = nombreTienda.trim() || 'este vendedor';
-  return `Mira el catálogo de repuestos de ${n} en Geomotor (inicia sesión para ver los productos):\n${url}`;
+  return `Mira el catálogo de repuestos de ${n} en Geomotor:\n${url}`;
 }
 
 export async function abrirWhatsappConTexto(texto: string): Promise<void> {

@@ -142,11 +142,6 @@ export function Landing({
     navigate({ pathname: location.pathname, search: q ? `?${q}` : '' }, { replace: true });
   }, [navigate, location.pathname, searchParams]);
 
-  const pedirLoginParaCatalogoCompartido = useCallback(() => {
-    if (tiendaIdDesdeUrl) guardarTiendaCatalogoPendiente(tiendaIdDesdeUrl);
-    onMostrarLogin?.();
-  }, [onMostrarLogin, tiendaIdDesdeUrl]);
-
   const esMoto = vertical === 'moto';
   const heroSlides = useMemo(() => (esMoto ? HERO_IMAGENES_MOTO : HERO_IMAGENES_AUTO), [esMoto]);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -385,7 +380,6 @@ export function Landing({
           vertical={vertical}
           tiendaIdDesdeEnlace={tiendaIdDesdeUrl}
           onLimpiarEnlaceTienda={limpiarEnlaceTiendaUrl}
-          onRequiereLoginParaCatalogo={pedirLoginParaCatalogoCompartido}
         />
       </Suspense>
 

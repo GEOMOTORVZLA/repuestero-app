@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { supabase } from '../supabaseClient';
-import { useAuth } from '../contexts/AuthContext';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO } from '../utils/verticalVehiculo';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado, valoresCiudadFiltroBd } from '../data/ciudadesVenezuela';
@@ -31,12 +30,10 @@ const PRODUCTOS_VENDEDOR_CERCA_PAGE = 20;
 
 export interface VendedoresCercaDeMiProps {
   vertical?: VerticalVehiculo;
-  /** ?tienda=uuid desde enlace compartido: abrir catálogo (requiere sesión). */
+  /** ?tienda=uuid desde enlace compartido: abrir el catálogo. */
   tiendaIdDesdeEnlace?: string | null;
   /** Limpia el query param al cerrar el catálogo abierto por enlace. */
   onLimpiarEnlaceTienda?: () => void;
-  /** Si llega enlace sin sesión, pedir login desde Landing. */
-  onRequiereLoginParaCatalogo?: () => void;
 }
 
 export interface TiendaCerca {
@@ -208,9 +205,7 @@ export function VendedoresCercaDeMi({
   vertical = VERTICAL_AUTO,
   tiendaIdDesdeEnlace = null,
   onLimpiarEnlaceTienda,
-  onRequiereLoginParaCatalogo,
 }: VendedoresCercaDeMiProps) {
-  const { user } = useAuth();
   const [tiendas, setTiendas] = useState<TiendaCerca[]>([]);
   const [cargando, setCargando] = useState(true);
   const [cargandoMas, setCargandoMas] = useState(false);
@@ -237,11 +232,8 @@ export function VendedoresCercaDeMi({
   const [mensajeBusquedaNombreLista, setMensajeBusquedaNombreLista] = useState('');
   const wrapBusquedaVendedorRef = useRef<HTMLDivElement>(null);
   const enlaceTiendaAbiertoOkRef = useRef<string | null>(null);
-  const onRequiereLoginRef = useRef(onRequiereLoginParaCatalogo);
   const onLimpiarEnlaceTiendaRef = useRef(onLimpiarEnlaceTienda);
-  onRequiereLoginRef.current = onRequiereLoginParaCatalogo;
   onLimpiarEnlaceTiendaRef.current = onLimpiarEnlaceTienda;
-  const userId = user?.id ?? null;
 
   const reiniciarBusquedaVendedor = () => {
     setBusquedaVendedorInput('');
@@ -533,7 +525,7 @@ export function VendedoresCercaDeMi({
     return () => {
       cancelled = true;
     };
-  }, [tiendaIdDesdeEnlace, userId, vertical]);
+  }, [tiendaIdDesdeEnlace, vertical]);
 
   const cerrarOverlayVendedores = () => {
     setUbicado(false);
