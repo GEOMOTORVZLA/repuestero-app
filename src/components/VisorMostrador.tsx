@@ -99,9 +99,19 @@ type VisorMostradorProps = {
   refreshTrigger?: number;
   /** Catálogo de este usuario (admin). Si se omite, usa la sesión del vendedor. */
   userIdCatalogo?: string;
+  /** Nombre comercial de una visita. Se muestra arriba de la búsqueda. */
+  tituloCatalogo?: string;
+  /** La vitrina no se comparte: esos enlaces son el catálogo público. */
+  ocultarCompartir?: boolean;
 };
 
-export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }: VisorMostradorProps) {
+export function VisorMostrador({
+  vertical,
+  refreshTrigger = 0,
+  userIdCatalogo,
+  tituloCatalogo,
+  ocultarCompartir = false,
+}: VisorMostradorProps) {
   const { user } = useAuth();
   const ownerId = userIdCatalogo ?? user?.id;
   const inputRef = useRef<HTMLInputElement>(null);
@@ -318,9 +328,14 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
     <div className="visor-mostrador">
       <header className="visor-mostrador-barra">
         <div className="visor-mostrador-cabeza">
-          <label className="visor-mostrador-buscar-label" htmlFor="visor-mostrador-buscar">
-            {userIdCatalogo ? 'Buscar en el catálogo del vendedor' : 'Buscar en tu catálogo'}
-          </label>
+          <div className="visor-mostrador-buscar-bloque">
+            {tituloCatalogo?.trim() ? (
+              <p className="visor-mostrador-titulo-visita">{tituloCatalogo.trim()}</p>
+            ) : null}
+            <label className="visor-mostrador-buscar-label" htmlFor="visor-mostrador-buscar">
+              {userIdCatalogo ? 'Buscar en el catálogo' : 'Buscar en tu catálogo'}
+            </label>
+          </div>
           <div className="visor-mostrador-resumen-bloque">
             <p className="visor-mostrador-resumen-titulo">Resumen</p>
             <dl className="visor-mostrador-resumen" aria-label="Resumen del catálogo">
@@ -373,6 +388,7 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
                     hayMas ? '+' : ''
                   }`}
             </span>
+            {!ocultarCompartir && (
             <button
               type="button"
               className="visor-mostrador-compartir"
@@ -391,6 +407,7 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
             >
               <IconoCompartirCatalogo />
             </button>
+            )}
           </div>
         </div>
       </header>
@@ -473,6 +490,7 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
                 <p className="visor-mostrador-precio">
                   {etiquetaMoneda(p.moneda)} {formatearPrecioProducto(p.precio_usd)}
                 </p>
+                {!ocultarCompartir && (
                 <button
                   type="button"
                   className="visor-mostrador-compartir visor-mostrador-compartir-articulo"
@@ -491,6 +509,7 @@ export function VisorMostrador({ vertical, refreshTrigger = 0, userIdCatalogo }:
                 >
                   <IconoCompartirCatalogo />
                 </button>
+                )}
               </div>
             </li>
           );

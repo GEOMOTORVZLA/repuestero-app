@@ -26,6 +26,22 @@
   gap: 0.75rem 1.25rem;
 }
 
+.visor-mostrador-buscar-bloque {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.visor-mostrador-titulo-visita {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.25;
+}
+
 .visor-mostrador-buscar-label {
   flex: 1 1 auto;
   min-width: 0;
