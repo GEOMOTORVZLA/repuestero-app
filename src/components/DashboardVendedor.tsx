@@ -259,8 +259,7 @@ export function DashboardVendedor({ onVolverInicio, vertical = VERTICAL_AUTO }: 
               <div className="dashboard-importar-row dashboard-importar-row-final">
                 <div className="dashboard-importar-bloque">
                   <p className="dashboard-importar-texto">
-                    Puedes subir tus productos de {etiquetaVertical} de manera masiva: descarga la plantilla Excel,
-                    llénala en la hoja Productos y súbela aquí. La categoría la asigna la app según el nombre.
+                    Sube varios productos de {etiquetaVertical} con un Excel.
                   </p>
                   <button
                     type="button"

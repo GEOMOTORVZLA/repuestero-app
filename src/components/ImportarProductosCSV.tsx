@@ -308,10 +308,10 @@ export function ImportarProductosCSV({
   };
 
   const etiquetaModo = esFreemarket
-    ? 'Freemarket con fotos en URL'
+    ? 'Artículos con código y foto con URL'
     : esSync
-      ? 'Sincronizar inventario'
-      : 'Alta nueva';
+      ? 'Artículos con código SKU'
+      : 'Artículos sin código';
 
   /** Analiza el Excel y pide confirmación; aún no escribe en la base. */
   const analizarArchivo = async () => {
@@ -400,7 +400,7 @@ export function ImportarProductosCSV({
     if (esFreemarket && headerMap.get(normalizeHeader('imagen_url')) === undefined) {
       setEstado('error');
       setMensaje(
-        'Falta la columna "imagen_url". Descarga el modelo Freemarket con fotos en URL.'
+        'Falta la columna "imagen_url". Descarga la plantilla de artículos con código y foto con URL.'
       );
       return;
     }
@@ -429,7 +429,7 @@ export function ImportarProductosCSV({
       if (usaCodigoObligatorio) {
         if (!codigoNorm) {
           erroresFila.push(
-            `Fila ${rowNumber}: falta "codigo" (obligatorio en ${esFreemarket ? 'Freemarket' : 'sincronizar'}).`
+            `Fila ${rowNumber}: falta "codigo". Esta carga lo pide.`
           );
           continue;
         }
@@ -664,15 +664,15 @@ export function ImportarProductosCSV({
     setMensaje(
       esFreemarketLote
         ? modoAdmin
-          ? `Freemarket: actualizando inventario y fotos URL en ${etiquetaDestino?.trim() || 'la tienda'}...`
-          : 'Freemarket: actualizando inventario y fotos por URL...'
+          ? `Subiendo inventario y fotos en ${etiquetaDestino?.trim() || 'la tienda'}...`
+          : 'Subiendo inventario y fotos...'
         : esSyncLote
           ? modoAdmin
-            ? `Sincronizando inventario en ${etiquetaDestino?.trim() || 'la tienda'}...`
-            : 'Sincronizando inventario (precio, stock, nombre y descripción; conserva categoría y fotos)...'
+            ? `Subiendo inventario en ${etiquetaDestino?.trim() || 'la tienda'}...`
+            : 'Subiendo inventario...'
           : modoAdmin
-            ? `Insertando productos en ${etiquetaDestino?.trim() || 'la tienda seleccionada'}...`
-            : 'Insertando productos...'
+            ? `Publicando artículos en ${etiquetaDestino?.trim() || 'la tienda seleccionada'}...`
+            : 'Publicando artículos...'
     );
 
     let okInsert = 0;
@@ -812,12 +812,12 @@ export function ImportarProductosCSV({
     setEstado('ok');
     setMensaje(
       esFreemarketLote
-        ? `Freemarket completado: ${okUpdate} actualizado(s), ${okInsert} nuevo(s).${textoFotos}`
+        ? `Listo: ${okUpdate} actualizado(s), ${okInsert} nuevo(s).${textoFotos}`
         : esSyncLote
-          ? `Sincronización completada: ${okUpdate} actualizado(s) (categoría y fotos intactas), ${okInsert} nuevo(s) sin foto.`
+          ? `Listo: ${okUpdate} actualizado(s). La categoría y las fotos no cambiaron. ${okInsert} nuevo(s) sin foto.`
           : modoAdmin
-            ? `Importación completada: ${okInsert} producto(s) insertados en ${etiquetaDestino?.trim() || 'la tienda'} (sin fotos).`
-            : `Importación completada: ${okInsert} producto(s) insertados (sin fotos). Ya están publicados.`
+            ? `Listo: ${okInsert} artículo(s) publicados en ${etiquetaDestino?.trim() || 'la tienda'}.`
+            : `Listo: ${okInsert} artículo(s) publicados.`
     );
     onImportado?.();
   };
@@ -826,93 +826,63 @@ export function ImportarProductosCSV({
     <div className="importar-productos">
       <div className="importar-productos-header">
         <h3 className="importar-productos-titulo">
-          {modoAdmin
-            ? 'Carga masiva de productos para un vendedor'
-            : esFreemarket
-              ? 'Importar Freemarket (Excel con fotos en URL)'
-              : 'Importar productos desde Excel (.xlsx, sin fotos)'}
+          {modoAdmin ? 'Carga de inventario del vendedor' : 'Carga de inventario'}
         </h3>
-      <p className="importar-productos-ayuda">
-        Elige el modo según tu flujo. <strong>Alta nueva</strong> crea productos.{' '}
-        <strong>Sincronizar inventario</strong> actualiza por <code>codigo</code> y{' '}
-        <strong>conserva fotos</strong>. <strong>Freemarket con fotos en URL</strong> usa la misma
-        estructura de sincronizar y una columna <code>imagen_url</code> con URLs separadas por{' '}
-        <code>;</code> (hasta 4 fotos). Misma plantilla simple para{' '}
-        {vertical === 'moto' ? 'motocicleta' : 'automóvil'}: sin columnas de marca, modelo, año ni
-        categoría. La app clasifica por el nombre. Marca, modelo y año van en comentarios.
-      </p>
       </div>
 
-      <div className="importar-productos-modo" role="group" aria-label="Modo de importación">
-        <button
-          type="button"
-          className={`importar-productos-modo-btn${modoImportacion === 'alta' ? ' activo' : ''}`}
-          disabled={ocupado}
-          onClick={() => {
-            setModoImportacion('alta');
-            setArchivo(null);
-            reiniciarFormularioParcial();
-          }}
-        >
-          Alta nueva
-        </button>
-        <button
-          type="button"
-          className={`importar-productos-modo-btn${modoImportacion === 'sincronizar' ? ' activo' : ''}`}
-          disabled={ocupado}
-          onClick={() => {
-            setModoImportacion('sincronizar');
-            setArchivo(null);
-            reiniciarFormularioParcial();
-          }}
-        >
-          Sincronizar inventario
-        </button>
-        <button
-          type="button"
-          className={`importar-productos-modo-btn${modoImportacion === 'freemarket_fotos' ? ' activo' : ''}`}
-          disabled={ocupado}
-          onClick={() => {
-            setModoImportacion('freemarket_fotos');
-            setArchivo(null);
-            reiniciarFormularioParcial();
-          }}
-        >
-          Freemarket con fotos en URL
-        </button>
+      <div className="importar-productos-modo" role="group" aria-label="Tipo de carga">
+        <div className="importar-productos-modo-fila">
+          <button
+            type="button"
+            className={`importar-productos-modo-btn${modoImportacion === 'alta' ? ' activo' : ''}`}
+            disabled={ocupado}
+            onClick={() => {
+              setModoImportacion('alta');
+              setArchivo(null);
+              reiniciarFormularioParcial();
+            }}
+          >
+            Artículos sin código
+          </button>
+          <p className="importar-productos-modo-nota">
+            Crea artículos nuevos, sin código. La categoría la asigna la app.
+          </p>
+        </div>
+        <div className="importar-productos-modo-fila">
+          <button
+            type="button"
+            className={`importar-productos-modo-btn${modoImportacion === 'sincronizar' ? ' activo' : ''}`}
+            disabled={ocupado}
+            onClick={() => {
+              setModoImportacion('sincronizar');
+              setArchivo(null);
+              reiniciarFormularioParcial();
+            }}
+          >
+            Artículos con código SKU
+          </button>
+          <p className="importar-productos-modo-nota">
+            Actualiza precio, nombre y cantidad con el código. Las fotos no cambian.
+          </p>
+        </div>
+        <div className="importar-productos-modo-fila">
+          <button
+            type="button"
+            className={`importar-productos-modo-btn${modoImportacion === 'freemarket_fotos' ? ' activo' : ''}`}
+            disabled={ocupado}
+            onClick={() => {
+              setModoImportacion('freemarket_fotos');
+              setArchivo(null);
+              reiniciarFormularioParcial();
+            }}
+          >
+            Artículos con código y foto con URL
+          </button>
+          <p className="importar-productos-modo-nota">
+            Actualiza por código y guarda las fotos desde los enlaces del Excel.
+          </p>
+        </div>
       </div>
-
-      <p className="importar-productos-ayuda">
-        {esFreemarket ? (
-          <>
-            Descarga el <strong>modelo Freemarket con fotos en URL</strong> ({vertical === 'moto' ? 'moto' : 'auto'}
-            ): misma estructura que sincronizar más una columna <code>imagen_url</code>. En esa celda
-            pones las URLs en orden (foto 1; foto 2; foto 3; foto 4) separadas por <code>;</code>. Al
-            importar, cada enlace externo se copia al almacenamiento de Geomotors. Por{' '}
-            <strong>codigo</strong> actualiza inventario y fotos. Si el código viene repetido, el mismo
-            nombre se junta en un producto; si el nombre es otro, se guarda con un sufijo (-2, -3) y la
-            carga no se detiene. Códigos nuevos se crean con foto y la categoría que asigna la app.
-            Si el archivo trae una categoría de Geomotor, esa se respeta. Máx. 1000 filas.
-          </>
-        ) : esSync ? (
-          <>
-            Descarga la <strong>plantilla de sincronizar ({vertical === 'moto' ? 'moto' : 'auto'})</strong>{' '}
-            con columna <strong>codigo</strong>. Si el código ya existe: actualiza nombre, descripción
-            (comentarios), precio y cantidad; <strong>no cambia categoría ni fotos</strong>. Si es
-            código nuevo: lo crea y la app le asigna la categoría por el nombre. Si el archivo trae
-            una categoría de Geomotor, esa se respeta. Si el código viene repetido, el
-            mismo nombre se junta en un producto; si el nombre es otro, se guarda con un sufijo (-2, -3)
-            y la carga no se detiene. Cantidad 0 pausa sin borrar fotos. Máx. 1000 filas.
-          </>
-        ) : (
-          <>
-            Plantilla <strong>{vertical === 'moto' ? 'moto' : 'auto'}</strong>: nombre, comentarios
-            (marca, modelo y año), precio, moneda y cantidad. La categoría la asigna la app por el
-            nombre. Si el archivo trae una categoría de Geomotor, esa se respeta.
-          </>
-        )}{' '}
-        Tras analizar el archivo te pediremos confirmación antes de escribir en el inventario.
-      </p>
 
       <input
         type="file"
@@ -938,11 +908,7 @@ export function ImportarProductosCSV({
           className="importar-productos-link"
           disabled={ocupado}
         >
-          {esFreemarket
-            ? 'Descargar modelo Freemarket con fotos en URL (.xlsx)'
-            : esSync
-              ? 'Descargar plantilla sincronizar (.xlsx)'
-              : 'Descargar plantilla alta nueva (.xlsx)'}
+          Descargar plantilla (.xlsx)
         </button>
 
         <button
@@ -954,13 +920,7 @@ export function ImportarProductosCSV({
             modoAdmin && !tiendaIdDestino ? 'Selecciona primero el vendedor destino' : undefined
           }
         >
-          {estado === 'analizando'
-            ? 'Analizando archivo...'
-            : esFreemarket
-              ? 'Analizar Freemarket'
-              : esSync
-                ? 'Analizar sincronización'
-                : 'Analizar alta'}
+          {estado === 'analizando' ? 'Revisando archivo...' : 'Subir inventario a la app'}
         </button>
       </div>
 

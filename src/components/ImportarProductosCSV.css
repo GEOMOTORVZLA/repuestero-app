@@ -64,19 +64,43 @@
 
 .importar-productos-modo {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
+  flex-direction: column;
+  gap: 0.55rem;
+  align-items: stretch;
+}
+
+.importar-productos-modo-fila {
+  display: grid;
+  grid-template-columns: minmax(16rem, 22.5rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.35rem 1rem;
+}
+
+.importar-productos-modo-nota {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: #4a5568;
 }
 
 .importar-productos-modo-btn {
+  width: 100%;
+  text-align: left;
   border: 1px solid #cbd5e1;
   background: #f8fafc;
   color: #334155;
-  border-radius: 999px;
-  padding: 0.4rem 0.85rem;
-  font-size: 0.84rem;
+  border-radius: 8px;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.88rem;
   font-weight: 650;
   cursor: pointer;
+}
+
+@media (max-width: 720px) {
+  .importar-productos-modo-fila {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
 }
 
 .importar-productos-modo-btn.activo {
