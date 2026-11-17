@@ -13,24 +13,21 @@ import { parseStockActualInput, patchDesdeStockActual } from '../utils/stockActu
 import { LIMITE_DESCRIPCION_PRODUCTO } from '../utils/limiteDescripcionProducto';
 import { copiarFotosExternasDeProductos } from '../utils/copiarFotosImportacion';
 import { resolverCodigosRepetidos } from '../utils/codigosImportacionDuplicados';
+import {
+  categoriaRespaldoImportacion,
+  clasificarCategoriaPorNombre,
+  resumenClasificacionImportacion,
+} from '../utils/clasificarCategoriaProducto';
 import './ImportarProductosCSV.css';
 
 type ModoImportacion = 'alta' | 'sincronizar' | 'freemarket_fotos';
 
-/** Plantilla simple: marca/modelo/año van en comentarios/descripción. */
-const PLANTILLA_ALTA_HEADERS = [
-  'nombre',
-  'categoria',
-  'comentarios',
-  'precio',
-  'moneda',
-  'cantidad',
-] as const;
+/** Plantilla simple: marca/modelo/año van en comentarios. La categoría la asigna la app. */
+const PLANTILLA_ALTA_HEADERS = ['nombre', 'comentarios', 'precio', 'moneda', 'cantidad'] as const;
 
 const PLANTILLA_SYNC_HEADERS = [
   'codigo',
   'nombre',
-  'categoria',
   'comentarios',
   'precio',
   'moneda',
@@ -46,17 +43,10 @@ const EJEMPLO_CODIGO_PLANTILLA = 'EJEMPLO-001';
 const EJEMPLO_IMAGEN_URL_PLANTILLA =
   'https://ejemplo.com/foto1.jpg;https://ejemplo.com/foto2.jpg;https://ejemplo.com/foto3.jpg';
 
-function listasPlantillaImport(vertical: VerticalVehiculo) {
-  return {
-    categorias: vertical === 'moto' ? [...CATEGORIAS_PRODUCTO_MOTO] : [...CATEGORIAS_PRODUCTO],
-  };
-}
-
 function filaEjemploAlta(vertical: VerticalVehiculo): string[] {
   if (vertical === 'moto') {
     return [
       EJEMPLO_NOMBRE_PLANTILLA,
-      'Frenos',
       'Pastillas delanteras Yamaha YBR 125 2022',
       '18.50',
       'USD',
@@ -65,7 +55,6 @@ function filaEjemploAlta(vertical: VerticalVehiculo): string[] {
   }
   return [
     EJEMPLO_NOMBRE_PLANTILLA,
-    'Filtros',
     'Filtro de aceite Toyota Corolla 2020',
     '25.50',
     'USD',
@@ -115,13 +104,6 @@ function parseUrlsImagenCelda(raw: string): { urls: string[]; error?: string } {
   return { urls };
 }
 
-function sheetListaReferenciaPlantilla(titulo: string, valores: readonly string[]): XLSX.WorkSheet {
-  const rows = [[titulo], ...valores.map((v) => [v])];
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{ wch: Math.max(titulo.length, ...valores.map((v) => v.length), 12) + 2 }];
-  return ws;
-}
-
 function esFilaEjemploPlantilla(nombre: string, codigo?: string): boolean {
   const n = nombre.trim();
   const c = (codigo ?? '').trim().toUpperCase();
@@ -140,20 +122,18 @@ function normalizarCodigoProducto(raw: string): string {
 }
 
 function nombreArchivoPlantilla(vertical: VerticalVehiculo, modo: ModoImportacion): string {
-  // -v2: plantilla sin marca/modelo/año (van en comentarios)
+  // -v3: sin columna categoria. La app la asigna por el nombre.
   if (modo === 'freemarket_fotos') {
     return vertical === 'moto'
-      ? 'template_freemarket_fotos_url_moto.xlsx'
-      : 'template_freemarket_fotos_url_auto.xlsx';
+      ? 'template_freemarket_fotos_url_moto-v3.xlsx'
+      : 'template_freemarket_fotos_url_auto-v3.xlsx';
   }
   if (modo === 'sincronizar') {
     return vertical === 'moto'
-      ? 'template_sincronizar_inventario_moto-v2.xlsx'
-      : 'template_sincronizar_inventario_auto-v2.xlsx';
+      ? 'template_sincronizar_inventario_moto-v3.xlsx'
+      : 'template_sincronizar_inventario_auto-v3.xlsx';
   }
-  return vertical === 'moto'
-    ? 'template_productos_moto-v2.xlsx'
-    : 'template_productos_auto-v2.xlsx';
+  return vertical === 'moto' ? 'template_productos_moto-v3.xlsx' : 'template_productos_auto-v3.xlsx';
 }
 
 function headersPlantilla(modo: ModoImportacion): string[] {
@@ -169,34 +149,16 @@ function filaEjemploPlantilla(vertical: VerticalVehiculo, modo: ModoImportacion)
 }
 
 function descargarPlantillaImportacion(vertical: VerticalVehiculo, modo: ModoImportacion): void {
-  const { categorias } = listasPlantillaImport(vertical);
   const headers = headersPlantilla(modo);
   const ejemplo = filaEjemploPlantilla(vertical, modo);
   const wsProductos = XLSX.utils.aoa_to_sheet([headers, ejemplo]);
   const colsBase =
     modo === 'alta'
-      ? [
-          { wch: 34 },
-          { wch: 28 },
-          { wch: 42 },
-          { wch: 10 },
-          { wch: 8 },
-          { wch: 10 },
-        ]
-      : [
-          { wch: 18 },
-          { wch: 34 },
-          { wch: 28 },
-          { wch: 42 },
-          { wch: 10 },
-          { wch: 8 },
-          { wch: 10 },
-        ];
-  wsProductos['!cols'] =
-    modo === 'freemarket_fotos' ? [...colsBase, { wch: 72 }] : colsBase;
+      ? [{ wch: 42 }, { wch: 42 }, { wch: 10 }, { wch: 8 }, { wch: 10 }]
+      : [{ wch: 18 }, { wch: 42 }, { wch: 42 }, { wch: 10 }, { wch: 8 }, { wch: 10 }];
+  wsProductos['!cols'] = modo === 'freemarket_fotos' ? [...colsBase, { wch: 72 }] : colsBase;
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, wsProductos, PLANTILLA_SHEET_PRODUCTOS);
-  XLSX.utils.book_append_sheet(wb, sheetListaReferenciaPlantilla('categoria', categorias), 'Categorias');
   XLSX.writeFile(wb, nombreArchivoPlantilla(vertical, modo), { compression: true });
 }
 
@@ -214,6 +176,7 @@ type ParsedRow = {
   codigo: string | null;
   nombre: string;
   categoria: string;
+  origenCategoria: 'archivo' | 'nombre' | 'respaldo';
   comentarios: string | null;
   precio: number;
   moneda: Moneda;
@@ -424,8 +387,8 @@ export function ImportarProductosCSV({
     };
 
     const REQUIRED = usaCodigoObligatorio
-      ? (['codigo', 'nombre', 'categoria', 'precio', 'moneda'] as const)
-      : (['nombre', 'categoria', 'precio', 'moneda'] as const);
+      ? (['codigo', 'nombre', 'precio', 'moneda'] as const)
+      : (['nombre', 'precio', 'moneda'] as const);
     const missingHeaders = REQUIRED.filter((k) => headerMap.get(normalizeHeader(k)) === undefined);
     if (missingHeaders.length) {
       setEstado('error');
@@ -473,7 +436,7 @@ export function ImportarProductosCSV({
       }
 
       const nombre = nombreRaw.toUpperCase();
-      const categoria = get(row, 'categoria').trim();
+      const categoriaEscrita = get(row, 'categoria').trim();
       const comentariosRaw = get(row, 'comentarios') || get(row, 'descripcion') || '';
       const precioRaw = get(row, 'precio');
       const monedaRaw = get(row, 'moneda');
@@ -483,13 +446,20 @@ export function ImportarProductosCSV({
         erroresFila.push(`Fila ${rowNumber}: falta "nombre".`);
         continue;
       }
-      const categoriaFinal =
-        categoria && categoriasLookup.has(categoria.toUpperCase())
-          ? categoriasLookup.get(categoria.toUpperCase()) ?? null
+      let categoriaFinal =
+        categoriaEscrita && categoriasLookup.has(categoriaEscrita.toUpperCase())
+          ? categoriasLookup.get(categoriaEscrita.toUpperCase()) ?? null
           : null;
+      let origenCategoria: ParsedRow['origenCategoria'] = 'archivo';
       if (!categoriaFinal) {
-        erroresFila.push(`Fila ${rowNumber}: "categoria" no es válida (${categoria || 'vacío'}).`);
-        continue;
+        const porNombre = clasificarCategoriaPorNombre(nombreRaw, vertical);
+        if (porNombre) {
+          categoriaFinal = porNombre;
+          origenCategoria = 'nombre';
+        } else {
+          categoriaFinal = categoriaRespaldoImportacion(vertical);
+          origenCategoria = 'respaldo';
+        }
       }
 
       const precio = parsePrecioProducto(precioRaw);
@@ -545,6 +515,7 @@ export function ImportarProductosCSV({
         codigo: codigoNorm || null,
         nombre,
         categoria: categoriaFinal,
+        origenCategoria,
         comentarios: comentarios.length ? comentarios : null,
         precio,
         moneda,
@@ -613,13 +584,23 @@ export function ImportarProductosCSV({
 
     let aActualizar = 0;
     let aCrear = 0;
+    let clasificadosPorNombre = 0;
+    let quedaronEnRespaldo = 0;
     for (const r of filasListas) {
-      if ((esSync || esFreemarket) && r.codigo && codigosExistentes.has(r.codigo)) {
+      const actualizaExistente = (esSync || esFreemarket) && r.codigo && codigosExistentes.has(r.codigo);
+      if (actualizaExistente) {
         aActualizar += 1;
-      } else {
-        aCrear += 1;
+        continue;
       }
+      aCrear += 1;
+      if (r.origenCategoria === 'nombre') clasificadosPorNombre += 1;
+      if (r.origenCategoria === 'respaldo') quedaronEnRespaldo += 1;
     }
+    const textoClasificacion = resumenClasificacionImportacion(
+      vertical,
+      clasificadosPorNombre,
+      quedaronEnRespaldo
+    );
 
     setLotePendiente({
       filas: filasListas,
@@ -631,7 +612,9 @@ export function ImportarProductosCSV({
     });
     setEstado('confirmar');
     setMensaje(
-      `Lote listo para revisar: ${filasListas.length} fila(s) válida(s). Confirma si deseas subirlo.`
+      `Lote listo para revisar: ${filasListas.length} fila(s) válida(s).${
+        textoClasificacion ? ` ${textoClasificacion}` : ''
+      } Confirma si deseas subirlo.`
     );
   };
 
@@ -855,8 +838,8 @@ export function ImportarProductosCSV({
         <strong>conserva fotos</strong>. <strong>Freemarket con fotos en URL</strong> usa la misma
         estructura de sincronizar y una columna <code>imagen_url</code> con URLs separadas por{' '}
         <code>;</code> (hasta 4 fotos). Misma plantilla simple para{' '}
-        {vertical === 'moto' ? 'motocicleta' : 'automóvil'}: sin columnas de marca, modelo ni año
-        (escríbelos en comentarios).
+        {vertical === 'moto' ? 'motocicleta' : 'automóvil'}: sin columnas de marca, modelo, año ni
+        categoría. La app clasifica por el nombre. Marca, modelo y año van en comentarios.
       </p>
       </div>
 
@@ -908,22 +891,24 @@ export function ImportarProductosCSV({
             importar, cada enlace externo se copia al almacenamiento de Geomotors. Por{' '}
             <strong>codigo</strong> actualiza inventario y fotos. Si el código viene repetido, el mismo
             nombre se junta en un producto; si el nombre es otro, se guarda con un sufijo (-2, -3) y la
-            carga no se detiene. Códigos nuevos se crean con foto. Máx. 1000 filas.
+            carga no se detiene. Códigos nuevos se crean con foto y la categoría que asigna la app.
+            Si el archivo trae una categoría de Geomotor, esa se respeta. Máx. 1000 filas.
           </>
         ) : esSync ? (
           <>
             Descarga la <strong>plantilla de sincronizar ({vertical === 'moto' ? 'moto' : 'auto'})</strong>{' '}
             con columna <strong>codigo</strong>. Si el código ya existe: actualiza nombre, descripción
             (comentarios), precio y cantidad; <strong>no cambia categoría ni fotos</strong>. Si es
-            código nuevo: crea el producto (usa la categoría del Excel). Si el código viene repetido, el
+            código nuevo: lo crea y la app le asigna la categoría por el nombre. Si el archivo trae
+            una categoría de Geomotor, esa se respeta. Si el código viene repetido, el
             mismo nombre se junta en un producto; si el nombre es otro, se guarda con un sufijo (-2, -3)
             y la carga no se detiene. Cantidad 0 pausa sin borrar fotos. Máx. 1000 filas.
           </>
         ) : (
           <>
-            Plantilla <strong>{vertical === 'moto' ? 'moto' : 'auto'}</strong>: nombre, categoria,
-            comentarios (marca/modelo/año), precio, moneda y cantidad. Solo hoja Categorias de
-            referencia (categorías de {vertical === 'moto' ? 'motocicleta' : 'automóvil'}).
+            Plantilla <strong>{vertical === 'moto' ? 'moto' : 'auto'}</strong>: nombre, comentarios
+            (marca, modelo y año), precio, moneda y cantidad. La categoría la asigna la app por el
+            nombre. Si el archivo trae una categoría de Geomotor, esa se respeta.
           </>
         )}{' '}
         Tras analizar el archivo te pediremos confirmación antes de escribir en el inventario.

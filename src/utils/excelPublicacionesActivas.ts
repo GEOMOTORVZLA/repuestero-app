@@ -1,6 +1,6 @@
 import { esMonedaBolivar } from './monedaProducto';
 
-/** Columnas de la plantilla de sincronizar. Sin fotos, para poder volver a subir el archivo. */
+/** Inventario publicado, con categoría, para volver a subirlo sin perder una corrección. */
 export const COLUMNAS_PUBLICACION_ACTIVA = [
   'codigo',
   'nombre',

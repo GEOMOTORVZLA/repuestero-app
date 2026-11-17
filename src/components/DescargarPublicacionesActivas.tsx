@@ -173,8 +173,9 @@ export function DescargarPublicacionesActivas({
               Baja un Excel con todo lo que tienes <strong>publicado</strong> de <strong>{etiqueta}</strong>.
             </>
           )}{' '}
-          Las columnas son las de la carga masiva, sin fotos: codigo, nombre, categoria, comentarios,
-          precio, moneda y cantidad. No incluye pausados, rechazados ni los que están en cantidad 0.
+          Este archivo sí trae la categoría, para que una corrección se respete al volver a subirlo.
+          Columnas: codigo, nombre, categoria, comentarios, precio, moneda y cantidad. No incluye
+          pausados, rechazados ni los que están en cantidad 0.
         </p>
         <p className="dashboard-productos-toolbar-hint">
           Modifica ese archivo y súbelo en modo <strong>Sincronizar inventario</strong>. Se actualizan los
