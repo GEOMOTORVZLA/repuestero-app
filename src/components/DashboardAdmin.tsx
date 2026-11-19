@@ -18,12 +18,13 @@ import { etiquetaMoneda } from '../utils/monedaProducto';
 import { formatearPrecioProducto } from '../utils/precioProducto';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
 import { VERTICAL_AUTO, VERTICAL_MOTO } from '../utils/verticalVehiculo';
-import { esTiendaVitrina, esUsuarioVitrina } from '../utils/vitrinaVisita';
+import { esTiendaVitrina, esUsuarioVitrina, vitrinaMuestraVisita } from '../utils/vitrinaVisita';
 import { mensajeNegocioNoListoParaAprobar } from '../utils/validarDatosNegocio';
 import { nombreTipoGrua } from '../data/tiposGrua';
 import { ImportarProductosCSV } from './ImportarProductosCSV';
 import { DescargarPublicacionesActivas } from './DescargarPublicacionesActivas';
 import { CargaApifyAdmin } from './CargaApifyAdmin';
+import { CrearUsuarioAdmin } from './CrearUsuarioAdmin';
 import { VisorMostrador } from './VisorMostrador';
 import {
   aplicarTerminosTextoABusquedaTiendas,
@@ -151,6 +152,7 @@ type AdminTab =
   | 'inventario_vendedores'
   | 'descarga_publicaciones'
   | 'apify'
+  | 'crear_usuario'
   | 'talleres'
   | 'gruas'
   | 'compradores';
@@ -238,6 +240,7 @@ function etiquetaPestañaAdmin(t: AdminTab): string {
     inventario_vendedores: 'Inventario por vendedor',
     descarga_publicaciones: 'Descarga de publicaciones activas',
     apify: 'Apify',
+    crear_usuario: 'Crear usuario',
     talleres: 'Talleres',
     gruas: 'Grúas',
     compradores: 'Compradores',
@@ -1884,6 +1887,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
         const vistos = new Set<string>();
         const unicos: AdminTienda[] = [];
         for (const t of all) {
+          if (!vitrinaMuestraVisita(t)) continue;
           if (vistos.has(t.user_id)) continue;
           vistos.add(t.user_id);
           unicos.push(t);
@@ -1925,6 +1929,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           const vistos = new Set<string>();
           const rows: AdminTienda[] = [];
           for (const t of (data ?? []) as AdminTienda[]) {
+            if (!vitrinaMuestraVisita(t)) continue;
             if (vistos.has(t.user_id)) continue;
             vistos.add(t.user_id);
             rows.push(t);
@@ -2124,9 +2129,9 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
     for (const v of mostradorRemotos) {
       if (!porUser.has(v.user_id)) porUser.set(v.user_id, v);
     }
-    const pool = [...porUser.values()].sort((a, b) =>
-      etiquetaVendedorMostrador(a).localeCompare(etiquetaVendedorMostrador(b), 'es')
-    );
+    const pool = [...porUser.values()]
+      .filter((v) => vitrinaMuestraVisita(v))
+      .sort((a, b) => etiquetaVendedorMostrador(a).localeCompare(etiquetaVendedorMostrador(b), 'es'));
     const q = mostradorTexto.trim();
     if (!q) return pool;
     return pool.filter((v) =>
@@ -3622,6 +3627,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
           <button type="button" className={`dashboard-menu-item ${tab === 'inventario_vendedores' ? 'activo' : ''}`} onClick={() => setTab('inventario_vendedores')}>Inventario por vendedor</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'descarga_publicaciones' ? 'activo' : ''}`} onClick={() => setTab('descarga_publicaciones')}>Descarga de publicaciones activas</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'apify' ? 'activo' : ''}`} onClick={() => setTab('apify')}>Apify</button>
+          <button type="button" className={`dashboard-menu-item ${tab === 'crear_usuario' ? 'activo' : ''}`} onClick={() => setTab('crear_usuario')}>Crear usuario</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'talleres' ? 'activo' : ''}`} onClick={() => setTab('talleres')}>Talleres</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'gruas' ? 'activo' : ''}`} onClick={() => setTab('gruas')}>Grúas</button>
           <button type="button" className={`dashboard-menu-item ${tab === 'compradores' ? 'activo' : ''}`} onClick={() => setTab('compradores')}>Compradores</button>
@@ -5181,8 +5187,21 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                     setMostradorListaAbierta(false);
                     setTab('mostrador');
                   }}
+                  onVitrinaReiniciada={({ userId }) => {
+                    setMostradorTodos(null);
+                    setMostradorRemotos([]);
+                    if (mostradorUserId === userId) {
+                      setMostradorUserId('');
+                      setMostradorTexto('');
+                      setMostradorTituloVisita('');
+                      setMostradorOcultarCompartir(false);
+                      setMostradorVerticalForzada(null);
+                    }
+                  }}
                 />
               )}
+
+              {tab === 'crear_usuario' && <CrearUsuarioAdmin onCreado={() => void cargar()} />}
 
               {tab === 'talleres' && (
                 <section className="dashboard-seccion">

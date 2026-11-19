@@ -14,3 +14,9 @@ verify_jwt = true
 
 [functions.copiar-foto-externa]
 verify_jwt = true
+
+[functions.admin-crear-negocio]
+verify_jwt = true
+
+[functions.cambiar-correo-acceso]
+verify_jwt = true

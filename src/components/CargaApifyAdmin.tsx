@@ -12,6 +12,8 @@ import {
 import { resumenClasificacionImportacion } from '../utils/clasificarCategoriaProducto';
 import { resolverCodigosRepetidos } from '../utils/codigosImportacionDuplicados';
 import { copiarFotosExternasDeProductos } from '../utils/copiarFotosImportacion';
+import { pathStorageDesdeUrlPublicaProducto, pathStorageMiniaturaDesdePath } from '../utils/imagenProducto';
+import { urlsFotosProducto } from '../utils/productoImagenesExtra';
 import { permitirAccionCliente } from '../utils/rateLimitCliente';
 import { patchDesdeStockActual } from '../utils/stockActualInventario';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
@@ -35,6 +37,7 @@ type Props = {
   vendedores: VendedorApify[];
   onImportado?: () => void;
   onAbrirVisor?: (info: { userId: string; vertical: VerticalVehiculo; nombre: string }) => void;
+  onVitrinaReiniciada?: (info: { userId: string }) => void;
 };
 
 function etiquetaVendedor(v: VendedorApify): string {
@@ -139,7 +142,112 @@ async function buscarVitrina(vertical: VerticalVehiculo): Promise<
   };
 }
 
-export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor }: Props) {
+type FilaFotoVitrina = {
+  id: string;
+  imagen_url: string | null;
+  imagenes_extra: (string | null)[] | null;
+};
+
+type VitrinaLeida = {
+  id: string;
+  userId: string;
+  nombre: string;
+};
+
+function pathsFotoVitrina(productoId: string, urls: string[]): string[] {
+  const paths = new Set<string>();
+  for (const url of urls) {
+    const path = pathStorageDesdeUrlPublicaProducto(url);
+    if (!path || !path.startsWith(`${productoId}/`)) continue;
+    paths.add(path);
+    const thumb = pathStorageMiniaturaDesdePath(path);
+    if (thumb) paths.add(thumb);
+  }
+  return [...paths];
+}
+
+async function borrarFotosVitrina(filas: FilaFotoVitrina[]): Promise<string | null> {
+  const paths = new Set<string>();
+  for (const fila of filas) {
+    for (const path of pathsFotoVitrina(fila.id, urlsFotosProducto(fila))) paths.add(path);
+  }
+  const bucket = supabase.storage.from('productos');
+  let cursor = 0;
+  let errorLista = '';
+  async function leerCarpeta() {
+    while (cursor < filas.length) {
+      const fila = filas[cursor];
+      cursor += 1;
+      const { data, error } = await bucket.list(fila.id, { limit: 100 });
+      if (error) {
+        errorLista = error.message || 'No se pudieron revisar las fotos.';
+        return;
+      }
+      for (const item of data ?? []) {
+        if (!item.name) continue;
+        paths.add(`${fila.id}/${item.name}`);
+      }
+    }
+  }
+  const lectores = Math.max(1, Math.min(6, filas.length));
+  await Promise.all(Array.from({ length: lectores }, () => leerCarpeta()));
+  if (errorLista) return errorLista;
+  const lista = [...paths];
+  if (lista.length === 0) return null;
+  for (let i = 0; i < lista.length; i += 100) {
+    const { error } = await bucket.remove(lista.slice(i, i + 100));
+    if (error) return error.message || 'No se pudieron borrar las fotos.';
+  }
+  return null;
+}
+
+async function listarProductosVitrina(tiendaId: string): Promise<
+  | { ok: true; filas: FilaFotoVitrina[] }
+  | { ok: false; error: string }
+> {
+  const filas: FilaFotoVitrina[] = [];
+  const PAGE = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('productos')
+      .select('id, imagen_url, imagenes_extra')
+      .eq('tienda_id', tiendaId)
+      .range(from, from + PAGE - 1);
+    if (error) return { ok: false, error: error.message || 'No se pudo leer el catálogo de la vitrina.' };
+    const batch = (data ?? []) as FilaFotoVitrina[];
+    filas.push(...batch);
+    if (batch.length < PAGE) break;
+    from += PAGE;
+  }
+  return { ok: true, filas };
+}
+
+async function leerVitrina(vertical: VerticalVehiculo): Promise<
+  | { ok: true; vitrina: VitrinaLeida | null }
+  | { ok: false; error: string }
+> {
+  const { data, error } = await supabase
+    .from('tiendas')
+    .select('id, user_id, nombre_comercial, nombre, rif')
+    .eq('rif', rifVitrina(vertical))
+    .limit(1)
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message || 'No se pudo leer la vitrina.' };
+  if (!data?.id || !data.user_id) return { ok: true, vitrina: null };
+  const fila = data as {
+    id: string;
+    user_id: string;
+    nombre_comercial: string | null;
+    nombre: string | null;
+    rif: string | null;
+  };
+  if (!esTiendaVitrina(fila.rif)) return { ok: true, vitrina: null };
+  const nombre = fila.nombre_comercial?.trim() || fila.nombre?.trim() || '';
+  return { ok: true, vitrina: { id: fila.id, userId: fila.user_id, nombre } };
+}
+
+export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor, onVitrinaReiniciada }: Props) {
   const { user } = useAuth();
   const [vertical, setVertical] = useState<VerticalVehiculo>(VERTICAL_AUTO);
   const [destino, setDestino] = useState<'vitrina' | 'vendedor'>('vitrina');
@@ -160,6 +268,9 @@ export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor }: Props
   const [pasoEstado, setPasoEstado] = useState<'idle' | 'contando' | 'confirmar' | 'pasando' | 'ok' | 'error'>('idle');
   const [pasoMensaje, setPasoMensaje] = useState('');
   const [pasoCantidad, setPasoCantidad] = useState(0);
+  const [resetEstado, setResetEstado] = useState<'idle' | 'contando' | 'confirmar' | 'borrando' | 'ok' | 'error'>('idle');
+  const [resetMensaje, setResetMensaje] = useState('');
+  const [resetCantidad, setResetCantidad] = useState(0);
 
   const ocupado =
     estado === 'preparando' ||
@@ -167,7 +278,10 @@ export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor }: Props
     estado === 'confirmar' ||
     pasoEstado === 'contando' ||
     pasoEstado === 'pasando' ||
-    pasoEstado === 'confirmar';
+    pasoEstado === 'confirmar' ||
+    resetEstado === 'contando' ||
+    resetEstado === 'confirmar' ||
+    resetEstado === 'borrando';
 
   useEffect(() => {
     if (estado !== 'confirmar') return;
@@ -633,6 +747,131 @@ export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor }: Props
     onImportado?.();
   };
 
+  const textoVertical = vertical === VERTICAL_MOTO ? 'motocicleta' : 'automóvil';
+
+  const pedirReset = async () => {
+    setResetEstado('contando');
+    setResetMensaje('Revisando la vitrina...');
+    const leida = await leerVitrina(vertical);
+    if (!leida.ok) {
+      setResetEstado('error');
+      setResetMensaje(leida.error);
+      return;
+    }
+    if (!leida.vitrina) {
+      setResetEstado('error');
+      setResetMensaje(`La vitrina de ${textoVertical} no tiene un catálogo provisional.`);
+      return;
+    }
+    const { count, error } = await supabase
+      .from('productos')
+      .select('id', { count: 'exact', head: true })
+      .eq('tienda_id', leida.vitrina.id);
+    if (error) {
+      setResetEstado('error');
+      setResetMensaje(error.message || 'No se pudo contar el catálogo.');
+      return;
+    }
+    const total = count ?? 0;
+    if (total === 0 && leida.vitrina.nombre.length < 2) {
+      setResetEstado('ok');
+      setResetMensaje(`La vitrina de ${textoVertical} ya está limpia.`);
+      return;
+    }
+    setResetCantidad(total);
+    setResetEstado('confirmar');
+    const quien = leida.vitrina.nombre.length >= 2 ? ` «${leida.vitrina.nombre}»` : '';
+    setResetMensaje(
+      total > 0
+        ? `Se borran ${total} artículo(s), las fotos copiadas y el nombre${quien} de la vitrina de ${textoVertical}. Una tienda ya creada no se toca. Esto no se puede deshacer.`
+        : `Se quita el nombre${quien} de la vitrina de ${textoVertical}. No quedan artículos. Esto no se puede deshacer.`
+    );
+  };
+
+  const borrarVitrina = async () => {
+    if (!user) {
+      setResetEstado('error');
+      setResetMensaje('La sesión no está activa. Entra otra vez como administrador.');
+      return;
+    }
+    const rl = permitirAccionCliente('apify-reset-vitrina', {
+      maxIntentos: 8,
+      ventanaMs: 10 * 60 * 1000,
+      bloqueoMs: 3 * 60 * 1000,
+    });
+    if (!rl.ok) {
+      setResetEstado('error');
+      setResetMensaje(rl.mensaje);
+      return;
+    }
+    setResetEstado('borrando');
+    setResetMensaje('Leyendo el catálogo provisional...');
+    const leida = await leerVitrina(vertical);
+    if (!leida.ok) {
+      setResetEstado('error');
+      setResetMensaje(leida.error);
+      return;
+    }
+    if (!leida.vitrina) {
+      setResetEstado('error');
+      setResetMensaje(`La vitrina de ${textoVertical} no tiene un catálogo provisional.`);
+      return;
+    }
+    const productos = await listarProductosVitrina(leida.vitrina.id);
+    if (!productos.ok) {
+      setResetEstado('error');
+      setResetMensaje(productos.error);
+      return;
+    }
+    if (productos.filas.length > 0) {
+      setResetMensaje(`Borrando fotos (${productos.filas.length})...`);
+      const fotos = await borrarFotosVitrina(productos.filas);
+      if (fotos) {
+        setResetEstado('error');
+        setResetMensaje(`${fotos} Los artículos siguen en la vitrina.`);
+        return;
+      }
+      setResetMensaje('Borrando los artículos...');
+      const vacio = await vaciarCatalogoVitrina(leida.vitrina.id);
+      if (vacio) {
+        setResetEstado('error');
+        setResetMensaje(`${vacio} Las fotos ya se quitaron. Vuelve a pulsarlo para terminar.`);
+        return;
+      }
+    }
+    const { error: errorNombre } = await supabase
+      .from('tiendas')
+      .update({
+        nombre: '',
+        nombre_comercial: null,
+        aviso_normas_productos_eliminados: 0,
+        telefono: null,
+        email: null,
+        estado: null,
+        ciudad: null,
+        direccion: null,
+      })
+      .eq('id', leida.vitrina.id)
+      .eq('rif', rifVitrina(vertical));
+    if (errorNombre) {
+      setResetEstado('error');
+      setResetMensaje(errorNombre.message || 'Se borró el catálogo, pero no se pudo quitar el nombre.');
+      onImportado?.();
+      return;
+    }
+    const borrados = productos.filas.length;
+    setResetCantidad(0);
+    setResetEstado('ok');
+    setVisitaLista(null);
+    setResetMensaje(
+      borrados > 0
+        ? `Listo. Se borraron ${borrados} artículo(s), sus fotos y el nombre de la visita. La vitrina de ${textoVertical} quedó limpia.`
+        : `Listo. Se quitó el nombre de la visita. La vitrina de ${textoVertical} quedó limpia.`
+    );
+    onImportado?.();
+    onVitrinaReiniciada?.({ userId: leida.vitrina.userId });
+  };
+
   return (
     <section className="dashboard-seccion carga-apify">
       <h2 className="dashboard-seccion-titulo">Apify</h2>
@@ -654,6 +893,9 @@ export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor }: Props
               setPasoTiendaId('');
               setPasoEstado('idle');
               setPasoMensaje('');
+              setResetEstado('idle');
+              setResetMensaje('');
+              setResetCantidad(0);
               setVisitaLista(null);
               limpiarLote();
               setEstado('idle');
@@ -920,6 +1162,50 @@ export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor }: Props
         {pasoMensaje && pasoEstado !== 'confirmar' && (
           <p className={`importar-productos-mensaje ${pasoEstado === 'error' ? 'error' : pasoEstado === 'ok' ? 'ok' : ''}`}>
             {pasoMensaje}
+          </p>
+        )}
+      </div>
+
+      <div className="carga-apify-pasar carga-apify-borrar">
+        <h3 className="carga-apify-pasar-titulo">Borrar el catálogo provisional</h3>
+        <p className="dashboard-kpi-grid-hint">
+          Quita de la vitrina de {textoVertical} los artículos, las fotos y el nombre de la visita. Sirve cuando el
+          vendedor no concreta. Una tienda ya creada no se toca.
+        </p>
+        <div className="importar-productos-botones-row">
+          <button
+            type="button"
+            className="carga-apify-boton-borrar"
+            disabled={ocupado}
+            onClick={() => void pedirReset()}
+          >
+            {resetEstado === 'borrando' ? 'Borrando...' : resetEstado === 'contando' ? 'Revisando...' : 'Borrar catálogo provisional'}
+          </button>
+        </div>
+        {resetEstado === 'confirmar' && (
+          <div className="importar-productos-confirmacion" role="alertdialog">
+            <p className="importar-productos-confirmacion-titulo">¿Borrar esta visita?</p>
+            <p className="importar-productos-confirmacion-aviso">{resetMensaje}</p>
+            <div className="importar-productos-botones-row">
+              <button
+                type="button"
+                className="importar-productos-boton-cancelar"
+                onClick={() => {
+                  setResetEstado('idle');
+                  setResetMensaje('No se borró nada.');
+                }}
+              >
+                No, cancelar
+              </button>
+              <button type="button" className="carga-apify-boton-borrar" onClick={() => void borrarVitrina()}>
+                {resetCantidad > 0 ? `Sí, borrar ${resetCantidad} artículo(s)` : 'Sí, limpiar la vitrina'}
+              </button>
+            </div>
+          </div>
+        )}
+        {resetMensaje && resetEstado !== 'confirmar' && (
+          <p className={`importar-productos-mensaje ${resetEstado === 'error' ? 'error' : resetEstado === 'ok' ? 'ok' : ''}`}>
+            {resetMensaje}
           </p>
         )}
       </div>

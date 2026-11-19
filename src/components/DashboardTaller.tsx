@@ -5,6 +5,7 @@ import { PerfilTaller } from './PerfilTaller';
 import { bannerEstadoCuentaNegocio } from '../utils/estadoCuentaVendedorTaller';
 import type { BannerEstadoCuenta } from '../utils/estadoCuentaVendedorTaller';
 import { EstadoCuentaNegocioBanner } from './EstadoCuentaNegocioBanner';
+import { CambiarCorreoAcceso } from './CambiarCorreoAcceso';
 import './Dashboard.css';
 
 type TabTaller = 'datos' | 'seguridad';
@@ -170,6 +171,7 @@ export function DashboardTaller({ onVolverInicio }: DashboardTallerProps) {
             <section className="dashboard-seccion">
               <h2 className="dashboard-seccion-titulo">Seguridad de la cuenta</h2>
               <div className="dashboard-card">
+                <CambiarCorreoAcceso />
                 <form onSubmit={guardarPassword} className="perfil-usuario-form">
                   <div className="perfil-usuario-grid">
                     <div className="perfil-usuario-campo">

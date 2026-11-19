@@ -1,0 +1,74 @@
+.crear-usuario-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem 1rem;
+  max-width: 56rem;
+  margin-bottom: 0.9rem;
+}
+
+.crear-usuario-grid label,
+.crear-usuario-ancho label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: #334155;
+}
+
+.crear-usuario-grid input,
+.crear-usuario-grid select,
+.crear-usuario-ancho input {
+  min-height: 36px;
+  padding: 0.42rem 0.55rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.crear-usuario-ancho {
+  max-width: 56rem;
+  margin-bottom: 0.9rem;
+}
+
+.crear-usuario-usuario {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.crear-usuario-usuario input {
+  flex: 1;
+}
+
+.crear-usuario-dominio {
+  color: #475569;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.crear-usuario-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.8rem;
+  margin: 0.35rem 0 0.9rem;
+  max-width: 56rem;
+}
+
+.crear-usuario-checks label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.84rem;
+  font-weight: 550;
+  color: #1f2937;
+}
+
+.crear-usuario-mapa {
+  max-width: 56rem;
+  margin-bottom: 0.9rem;
+}

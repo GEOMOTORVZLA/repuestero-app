@@ -15,3 +15,14 @@ export function rifVitrina(vertical: 'auto' | 'moto'): string {
 export function esUsuarioVitrina(email: string | null | undefined): boolean {
   return (email ?? '').trim().toLowerCase().endsWith(EMAIL_VITRINA_SUFIJO);
 }
+
+/** Una vitrina sin nombre de visita no debe aparecer en el visor. */
+export function vitrinaMuestraVisita(t: {
+  rif?: string | null;
+  nombre?: string | null;
+  nombre_comercial?: string | null;
+}): boolean {
+  if (!esTiendaVitrina(t.rif)) return true;
+  const nombre = (t.nombre_comercial ?? '').trim() || (t.nombre ?? '').trim();
+  return nombre.length >= 2;
+}

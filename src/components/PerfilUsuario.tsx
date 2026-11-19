@@ -11,6 +11,7 @@ import {
 } from '../utils/validarDatosNegocio';
 import { mensajeTelefonosAdicionales } from '../utils/telefonosNegocio';
 import { EstadoCuentaNegocioBanner } from './EstadoCuentaNegocioBanner';
+import { CambiarCorreoAcceso } from './CambiarCorreoAcceso';
 import './PerfilUsuario.css';
 
 function esCuentaRegistradaComoTaller(u: User | null): boolean {
@@ -382,6 +383,7 @@ export function PerfilUsuario() {
             <input type="email" value={user.email ?? ''} disabled />
           </div>
         </div>
+        <CambiarCorreoAcceso />
       </section>
 
       {errCargaTienda && (

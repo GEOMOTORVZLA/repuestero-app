@@ -5,6 +5,7 @@ import { PerfilGrua } from './PerfilGrua';
 import { bannerEstadoCuentaNegocio } from '../utils/estadoCuentaVendedorTaller';
 import type { BannerEstadoCuenta } from '../utils/estadoCuentaVendedorTaller';
 import { EstadoCuentaNegocioBanner } from './EstadoCuentaNegocioBanner';
+import { CambiarCorreoAcceso } from './CambiarCorreoAcceso';
 import './Dashboard.css';
 
 type TabGrua = 'datos' | 'seguridad';
@@ -170,6 +171,7 @@ export function DashboardGrua({ onVolverInicio }: DashboardGruaProps) {
             <section className="dashboard-seccion">
               <h2 className="dashboard-seccion-titulo">Seguridad de la cuenta</h2>
               <div className="dashboard-card">
+                <CambiarCorreoAcceso />
                 <form onSubmit={guardarPassword} className="perfil-usuario-form">
                   <div className="perfil-usuario-grid">
                     <div className="perfil-usuario-campo">
