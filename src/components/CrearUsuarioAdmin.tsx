@@ -9,6 +9,7 @@ import {
   esRestoTelefonoValido,
   esRifValido,
   mensajeValidacionDatosNegocio,
+  parseCoordenadaRegistro,
   rifDesdeFormularioRegistro,
 } from '../utils/validarDatosNegocio';
 import { correoAccesoInterno, mensajeErrorFuncion, usuarioAccesoDesdeNombre } from '../utils/correoAcceso';
@@ -68,6 +69,8 @@ export function CrearUsuarioAdmin({ onCreado }: { onCreado?: () => void }) {
     setMensaje('');
     const telefono = `${codigoTel}${restoTel.replace(/\D/g, '')}`;
     const rif = rifDesdeFormularioRegistro(tipoRif, numeroRif);
+    const lat = parseCoordenadaRegistro(latitud);
+    const lng = parseCoordenadaRegistro(longitud);
     if (!esRestoTelefonoValido(restoTel)) {
       setFase('error');
       setMensaje('Indica el teléfono completo (7 dígitos después del código).');
@@ -84,8 +87,8 @@ export function CrearUsuarioAdmin({ onCreado }: { onCreado?: () => void }) {
       telefono,
       estado,
       ciudad,
-      latitud: latitud ? Number(latitud) : null,
-      longitud: longitud ? Number(longitud) : null,
+      latitud: lat,
+      longitud: lng,
       rif,
     });
     if (errorDatos) {
@@ -141,8 +144,8 @@ export function CrearUsuarioAdmin({ onCreado }: { onCreado?: () => void }) {
         rif,
         estado,
         ciudad,
-        latitud: Number(latitud),
-        longitud: Number(longitud),
+        latitud: lat,
+        longitud: lng,
         usuario: local,
         password,
         especialidad: especialidades,
@@ -339,6 +342,35 @@ export function CrearUsuarioAdmin({ onCreado }: { onCreado?: () => void }) {
         )}
 
         <div className="crear-usuario-mapa">
+          <p className="dashboard-kpi-grid-hint">
+            Escribe la latitud y la longitud, o marca el punto en el mapa. Los dos quedan sincronizados.
+          </p>
+          <div className="crear-usuario-grid">
+            <label>
+              Latitud
+              <input
+                type="text"
+                value={latitud}
+                disabled={ocupado}
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder="Latitud (ej: 10.500000)"
+                onChange={(ev) => setLatitud(ev.target.value)}
+              />
+            </label>
+            <label>
+              Longitud
+              <input
+                type="text"
+                value={longitud}
+                disabled={ocupado}
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder="Longitud (ej: -66.900000)"
+                onChange={(ev) => setLongitud(ev.target.value)}
+              />
+            </label>
+          </div>
           <RegistroUbicacionMapa
             latitudStr={latitud}
             longitudStr={longitud}
