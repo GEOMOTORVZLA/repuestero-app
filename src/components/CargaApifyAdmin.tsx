@@ -641,7 +641,7 @@ export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor, onVitri
     setPasoCantidad(total);
     setPasoEstado('confirmar');
     setPasoMensaje(
-      `Se pasarán ${total} artículo(s) de la vitrina ${vitrina.nombre} a ${etiquetaVendedor(tiendaPaso)}. No se vuelve a subir el Excel. Siguen ocultos en la web hasta que los apruebes en Productos.`
+      `Se pasarán ${total} artículo(s) de la vitrina ${vitrina.nombre} a ${etiquetaVendedor(tiendaPaso)}. No se vuelve a subir el Excel. Quedan publicados en esa tienda.`
     );
   };
 
@@ -724,7 +724,7 @@ export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor, onVitri
       const lote = ids.slice(i, i + 80);
       const { error } = await supabase
         .from('productos')
-        .update({ tienda_id: tiendaPaso.id, vertical })
+        .update({ tienda_id: tiendaPaso.id, vertical, aprobacion_publica: 'aprobado' })
         .in('id', lote);
       if (error) {
         setPasoEstado('error');
@@ -742,7 +742,7 @@ export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor, onVitri
 
     setPasoEstado('ok');
     setPasoMensaje(
-      `Listo: ${pasados} artículo(s) quedaron en ${etiquetaVendedor(tiendaPaso)}. La vitrina quedó vacía. Siguen ocultos en la web hasta que los apruebes en Productos.`
+      `Listo: ${pasados} artículo(s) quedaron publicados en ${etiquetaVendedor(tiendaPaso)}. La vitrina quedó vacía.`
     );
     onImportado?.();
   };
