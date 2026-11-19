@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { CODIGOS_TELEFONO, ESPECIALIDADES_TALLER, ESPECIALIDADES_TALLER_MOTO, TIPOS_RIF } from '../data/registroVenezuela';
 import { ESTADOS_VENEZUELA, getCiudadesPorEstado } from '../data/ciudadesVenezuela';
@@ -26,6 +26,47 @@ const ETIQUETA: Record<TipoNegocio, string> = {
   grua: 'grúa',
 };
 
+type NegocioCreado = {
+  id: string;
+  user_id: string;
+  email: string;
+  tipo: TipoNegocio;
+  nombre: string | null;
+  nombre_comercial: string | null;
+  rif: string | null;
+  telefono: string | null;
+  estado: string | null;
+  ciudad: string | null;
+  latitud: number | null;
+  longitud: number | null;
+  vertical?: string | null;
+  especialidad?: string[] | string | null;
+  tipos?: string[] | null;
+  servicio_24h?: boolean | null;
+  auxilio_vial?: boolean | null;
+};
+
+function partirTelefono(telefono: string | null): { codigo: string; resto: string } {
+  const digitos = String(telefono ?? '').replace(/\D/g, '');
+  const codigo = [...CODIGOS_TELEFONO.map((c) => c.codigo)].sort((a, b) => b.length - a.length).find((c) =>
+    digitos.startsWith(c)
+  );
+  if (!codigo) return { codigo: CODIGOS_TELEFONO[0].codigo, resto: digitos.slice(0, 7) };
+  return { codigo, resto: digitos.slice(codigo.length, codigo.length + 7) };
+}
+
+function partirRif(rif: string | null): { tipo: string; numero: string } {
+  const limpio = String(rif ?? '').trim().toUpperCase();
+  const tipo = TIPOS_RIF.find((item) => limpio.startsWith(item)) ?? TIPOS_RIF[0];
+  return { tipo, numero: limpio.startsWith(tipo) ? limpio.slice(tipo.length) : limpio };
+}
+
+function comoLista(valor: string[] | string | null | undefined): string[] {
+  if (Array.isArray(valor)) return valor.filter((item) => typeof item === 'string');
+  if (typeof valor === 'string' && valor.trim()) return [valor.trim()];
+  return [];
+}
+
 export function CrearUsuarioAdmin({ onCreado }: { onCreado?: () => void }) {
   const [tipo, setTipo] = useState<TipoNegocio>('vendedor');
   const [vertical, setVertical] = useState<VerticalVehiculo>(VERTICAL_AUTO);
@@ -47,13 +88,98 @@ export function CrearUsuarioAdmin({ onCreado }: { onCreado?: () => void }) {
   const [tiposGrua, setTiposGrua] = useState<TipoGruaId[]>([]);
   const [servicio24h, setServicio24h] = useState(false);
   const [auxilioVial, setAuxilioVial] = useState(false);
-  const [fase, setFase] = useState<'idle' | 'creando' | 'ok' | 'error'>('idle');
+  const [fase, setFase] = useState<'idle' | 'creando' | 'guardando' | 'ok' | 'error'>('idle');
   const [mensaje, setMensaje] = useState('');
+  const [lista, setLista] = useState<NegocioCreado[]>([]);
+  const [busqueda, setBusqueda] = useState('');
+  const [editando, setEditando] = useState<NegocioCreado | null>(null);
 
-  const ciudades = useMemo(() => (estado ? getCiudadesPorEstado(estado) : []), [estado]);
+  const ciudades = useMemo(() => {
+    const base = estado ? getCiudadesPorEstado(estado) : [];
+    if (ciudad && !base.includes(ciudad)) return [ciudad, ...base];
+    return base;
+  }, [estado, ciudad]);
   const especialidadOpciones = vertical === 'moto' ? ESPECIALIDADES_TALLER_MOTO : ESPECIALIDADES_TALLER;
   const usuarioVisible = usuarioTocado ? usuario : usuarioAccesoDesdeNombre(nombreComercial || nombre);
-  const ocupado = fase === 'creando';
+  const ocupado = fase === 'creando' || fase === 'guardando';
+  const listaFiltrada = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return lista;
+    return lista.filter((fila) =>
+      [fila.nombre, fila.nombre_comercial, fila.telefono, fila.rif, fila.email, ETIQUETA[fila.tipo]]
+        .join(' ')
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [lista, busqueda]);
+
+  const cargarLista = async () => {
+    const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string; filas?: NegocioCreado[] }>(
+      'admin-negocios-creados',
+      { body: { accion: 'listar' } }
+    );
+    if (error || data?.ok === false) return;
+    setLista(Array.isArray(data?.filas) ? data.filas : []);
+  };
+
+  useEffect(() => {
+    void cargarLista();
+  }, []);
+
+  const limpiarAlta = () => {
+    setEditando(null);
+    setTipo('vendedor');
+    setVertical(VERTICAL_AUTO);
+    setNombre('');
+    setNombreComercial('');
+    setUsuarioTocado(false);
+    setUsuario('');
+    setPassword('');
+    setPassword2('');
+    setCodigoTel(CODIGOS_TELEFONO[0].codigo);
+    setRestoTel('');
+    setTipoRif(TIPOS_RIF[0]);
+    setNumeroRif('');
+    setEstado('');
+    setCiudad('');
+    setLatitud('');
+    setLongitud('');
+    setEspecialidades([]);
+    setTiposGrua([]);
+    setServicio24h(false);
+    setAuxilioVial(false);
+    setFase('idle');
+    setMensaje('');
+  };
+
+  const abrirEdicion = (fila: NegocioCreado) => {
+    const tel = partirTelefono(fila.telefono);
+    const rif = partirRif(fila.rif);
+    const tipoFila: TipoNegocio = fila.tipo === 'taller' || fila.tipo === 'grua' ? fila.tipo : 'vendedor';
+    setEditando(fila);
+    setTipo(tipoFila);
+    setVertical(fila.vertical === 'moto' ? VERTICAL_MOTO : VERTICAL_AUTO);
+    setNombre(fila.nombre ?? '');
+    setNombreComercial(fila.nombre_comercial ?? '');
+    setUsuarioTocado(true);
+    setUsuario(fila.email);
+    setPassword('');
+    setPassword2('');
+    setCodigoTel(tel.codigo);
+    setRestoTel(tel.resto);
+    setTipoRif(rif.tipo);
+    setNumeroRif(rif.numero);
+    setEstado(fila.estado ?? '');
+    setCiudad(fila.ciudad ?? '');
+    setLatitud(fila.latitud == null ? '' : String(fila.latitud));
+    setLongitud(fila.longitud == null ? '' : String(fila.longitud));
+    setEspecialidades(comoLista(fila.especialidad));
+    setTiposGrua(comoLista(fila.tipos).filter((item): item is TipoGruaId => TIPOS_GRUA.some((op) => op.id === item)));
+    setServicio24h(fila.servicio_24h === true);
+    setAuxilioVial(fila.auxilio_vial === true);
+    setFase('idle');
+    setMensaje('');
+  };
 
   const alCambiarComercial = (valor: string) => {
     setNombreComercial(valor);
@@ -166,6 +292,103 @@ export function CrearUsuarioAdmin({ onCreado }: { onCreado?: () => void }) {
     setPassword('');
     setPassword2('');
     onCreado?.();
+    void cargarLista();
+  };
+
+  const guardar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editando) return;
+    setMensaje('');
+    const telefono = `${codigoTel}${restoTel.replace(/\D/g, '')}`;
+    const rif = rifDesdeFormularioRegistro(tipoRif, numeroRif);
+    const lat = parseCoordenadaRegistro(latitud);
+    const lng = parseCoordenadaRegistro(longitud);
+    if (!esRestoTelefonoValido(restoTel)) {
+      setFase('error');
+      setMensaje('Indica el teléfono completo (7 dígitos después del código).');
+      return;
+    }
+    if (!esRifValido(tipoRif, numeroRif)) {
+      setFase('error');
+      setMensaje('Indica el RIF.');
+      return;
+    }
+    const errorDatos = mensajeValidacionDatosNegocio({
+      nombre,
+      nombre_comercial: nombreComercial,
+      telefono,
+      estado,
+      ciudad,
+      latitud: lat,
+      longitud: lng,
+      rif,
+    });
+    if (errorDatos) {
+      setFase('error');
+      setMensaje(errorDatos);
+      return;
+    }
+    if (tipo === 'taller' && especialidades.length === 0) {
+      setFase('error');
+      setMensaje('Selecciona al menos una especialidad del taller.');
+      return;
+    }
+    if (tipo === 'grua' && tiposGrua.length === 0) {
+      setFase('error');
+      setMensaje('Selecciona al menos un tipo de grúa.');
+      return;
+    }
+    if ((password || password2) && password.length < 6) {
+      setFase('error');
+      setMensaje('La clave nueva debe tener al menos 6 caracteres.');
+      return;
+    }
+    if (password !== password2) {
+      setFase('error');
+      setMensaje('Las claves no coinciden.');
+      return;
+    }
+    setFase('guardando');
+    const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string; nombre?: string }>(
+      'admin-negocios-creados',
+      {
+        body: {
+          accion: 'actualizar',
+          userId: editando.user_id,
+          negocioId: editando.id,
+          tipo,
+          vertical,
+          nombre: nombre.trim(),
+          nombre_comercial: nombreComercial.trim(),
+          telefono,
+          rif,
+          estado,
+          ciudad,
+          latitud: lat,
+          longitud: lng,
+          password,
+          especialidad: especialidades,
+          tipos: tiposGrua,
+          servicio_24h: servicio24h,
+          auxilio_vial: auxilioVial,
+        },
+      }
+    );
+    if (error || data?.ok === false) {
+      setFase('error');
+      setMensaje(await mensajeErrorFuncion(error, data));
+      return;
+    }
+    setFase('ok');
+    setPassword('');
+    setPassword2('');
+    setMensaje(
+      `Listo. ${data?.nombre || nombreComercial || nombre} quedó actualizado.${
+        password ? ' La clave también cambió.' : ''
+      }`
+    );
+    onCreado?.();
+    void cargarLista();
   };
 
   return (
@@ -173,15 +396,60 @@ export function CrearUsuarioAdmin({ onCreado }: { onCreado?: () => void }) {
       <h2 className="dashboard-seccion-titulo">Crear usuario</h2>
       <p className="dashboard-kpi-grid-hint">
         Crea una tienda, un taller o una grúa sin correo de confirmación. El acceso es un correo inventado que no
-        recibe mensajes, con la clave que tú asignas. El negocio queda publicado en la página.
+        recibe mensajes, con la clave que tú asignas. El negocio queda publicado en la página. Abajo puedes corregir
+        los que ya creaste aquí.
       </p>
-      <form onSubmit={(ev) => void crear(ev)}>
+      <div className="crear-usuario-lista">
+        <h3 className="crear-usuario-lista-titulo">Negocios creados aquí</h3>
+        <label className="crear-usuario-buscar">
+          Buscar
+          <input
+            type="search"
+            value={busqueda}
+            placeholder="Nombre, teléfono, RIF o usuario"
+            onChange={(ev) => setBusqueda(ev.target.value)}
+          />
+        </label>
+        {listaFiltrada.length === 0 ? (
+          <p className="dashboard-texto-placeholder">Todavía no hay negocios creados desde esta sección.</p>
+        ) : (
+          <div className="dashboard-admin-table-wrap">
+            <table className="dashboard-admin-table">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Tipo</th>
+                  <th>Teléfono</th>
+                  <th>Usuario</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {listaFiltrada.map((fila) => (
+                  <tr key={fila.id}>
+                    <td className="dashboard-admin-texto-td">{fila.nombre_comercial || fila.nombre || '—'}</td>
+                    <td>{ETIQUETA[fila.tipo] ?? fila.tipo}</td>
+                    <td>{fila.telefono || '—'}</td>
+                    <td className="dashboard-admin-texto-td">{fila.email}</td>
+                    <td>
+                      <button type="button" className="dashboard-btn-accion" onClick={() => abrirEdicion(fila)}>
+                        Modificar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <form onSubmit={(ev) => void (editando ? guardar(ev) : crear(ev))}>
         <div className="crear-usuario-grid">
           <label>
             Tipo
             <select
               value={tipo}
-              disabled={ocupado}
+              disabled={ocupado || Boolean(editando)}
               onChange={(ev) => {
                 setTipo(ev.target.value as TipoNegocio);
                 setEspecialidades([]);
@@ -385,27 +653,32 @@ export function CrearUsuarioAdmin({ onCreado }: { onCreado?: () => void }) {
         <div className="crear-usuario-grid">
           <label>
             Usuario de acceso
-            <span className="crear-usuario-usuario">
-              <input
-                value={usuarioVisible}
-                disabled={ocupado}
-                maxLength={48}
-                autoComplete="off"
-                onChange={(ev) => {
-                  setUsuarioTocado(true);
-                  setUsuario(ev.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ''));
-                }}
-              />
-              <span className="crear-usuario-dominio">@{correoAccesoInterno('x').split('@')[1]}</span>
-            </span>
+            {editando ? (
+              <input value={editando.email} disabled />
+            ) : (
+              <span className="crear-usuario-usuario">
+                <input
+                  value={usuarioVisible}
+                  disabled={ocupado}
+                  maxLength={48}
+                  autoComplete="off"
+                  onChange={(ev) => {
+                    setUsuarioTocado(true);
+                    setUsuario(ev.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ''));
+                  }}
+                />
+                <span className="crear-usuario-dominio">@{correoAccesoInterno('x').split('@')[1]}</span>
+              </span>
+            )}
           </label>
           <label>
-            Clave
+            {editando ? 'Nueva clave' : 'Clave'}
             <input
               type="text"
               value={password}
               disabled={ocupado}
               autoComplete="new-password"
+              placeholder={editando ? 'Vacía si no cambia' : ''}
               onChange={(ev) => setPassword(ev.target.value)}
             />
           </label>
@@ -416,14 +689,20 @@ export function CrearUsuarioAdmin({ onCreado }: { onCreado?: () => void }) {
               value={password2}
               disabled={ocupado}
               autoComplete="new-password"
+              placeholder={editando ? 'Vacía si no cambia' : ''}
               onChange={(ev) => setPassword2(ev.target.value)}
             />
           </label>
         </div>
 
         <div className="importar-productos-botones-row">
+          {editando && (
+            <button type="button" className="importar-productos-boton-cancelar" disabled={ocupado} onClick={limpiarAlta}>
+              Volver a crear uno nuevo
+            </button>
+          )}
           <button type="submit" className="importar-productos-boton" disabled={ocupado}>
-            {ocupado ? 'Creando...' : `Crear ${ETIQUETA[tipo]}`}
+            {ocupado ? 'Guardando...' : editando ? 'Guardar cambios' : `Crear ${ETIQUETA[tipo]}`}
           </button>
         </div>
       </form>
