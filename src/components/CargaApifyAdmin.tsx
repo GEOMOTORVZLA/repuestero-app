@@ -424,7 +424,7 @@ export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor, onVitri
     setMensaje(
       destino === 'vitrina'
         ? `Se reemplaza el catálogo de la vitrina de ${vertical === 'moto' ? 'motocicleta' : 'automóvil'} y se verá como ${nombreVitrina.trim()}. No sale en la web ni en la lista de vendedores. El visor sí lo muestra.`
-        : `Se subirán ${filas.length} artículo(s) a ${etiquetaVendedor(vendedor!)}. Los nuevos quedan ocultos en la web hasta que los apruebes en Productos. El visor sí los muestra.`
+        : `Se subirán ${filas.length} artículo(s) a ${etiquetaVendedor(vendedor!)}. Quedan publicados en esa tienda.`
     );
   };
 
@@ -531,6 +531,7 @@ export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor, onVitri
         };
         if (inv.activo !== undefined) patch.activo = inv.activo;
         if (inv.stock_confirmado_at) patch.stock_confirmado_at = inv.stock_confirmado_at;
+        if (destino === 'vendedor') patch.aprobacion_publica = 'aprobado';
         const { error } = await supabase.from('productos').update(patch).eq('id', existenteId);
         if (error) {
           erroresOp.push(`Fila ${fila.rowNumber}: ${error.message || 'No se pudo actualizar.'}`);
@@ -557,7 +558,7 @@ export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor, onVitri
           stock_actual: inv.stock_actual,
           disponibilidad_aviso: inv.disponibilidad_aviso ?? null,
           activo: inv.activo !== undefined ? inv.activo : true,
-          aprobacion_publica: 'pendiente',
+          aprobacion_publica: destino === 'vendedor' ? 'aprobado' : 'pendiente',
           stock_confirmado_at: inv.stock_confirmado_at ?? new Date().toISOString(),
           pausado_por_stock_vencido: inv.pausado_por_stock_vencido ?? false,
           vertical,
@@ -602,7 +603,7 @@ export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor, onVitri
     setMensaje(
       destino === 'vitrina'
         ? `Listo en la vitrina de ${etiquetaDestino}: ${okInsert} artículo(s).${textoFotos} Ábrelo en el visor. La web no los muestra.`
-        : `Listo en ${etiquetaDestino}: ${okInsert} nuevo(s) ocultos al público, ${okUpdate} actualizado(s).${textoFotos} Apruébalos en Productos cuando el vendedor autorice.`
+        : `Listo en ${etiquetaDestino}: ${okInsert} nuevo(s) publicado(s), ${okUpdate} actualizado(s).${textoFotos}`
     );
     if (okInsert + okUpdate > 0) onImportado?.();
   };
