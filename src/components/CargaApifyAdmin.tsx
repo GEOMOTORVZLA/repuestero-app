@@ -577,6 +577,8 @@ export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor, onVitri
       okInsert += 1;
     }
 
+    if (okInsert + okUpdate > 0) onImportado?.();
+
     let fotosCopiadas = 0;
     const fallosFoto: string[] = [];
     if (fotosPendientes.length) {
@@ -605,7 +607,6 @@ export function CargaApifyAdmin({ vendedores, onImportado, onAbrirVisor, onVitri
         ? `Listo en la vitrina de ${etiquetaDestino}: ${okInsert} artículo(s).${textoFotos} Ábrelo en el visor. La web no los muestra.`
         : `Listo en ${etiquetaDestino}: ${okInsert} nuevo(s) publicado(s), ${okUpdate} actualizado(s).${textoFotos}`
     );
-    if (okInsert + okUpdate > 0) onImportado?.();
   };
 
   const tiendaPaso = tiendasParaPaso.find((v) => v.id === pasoTiendaId) ?? null;
