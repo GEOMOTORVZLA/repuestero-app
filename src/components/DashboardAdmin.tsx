@@ -5177,7 +5177,6 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                   vendedores={vendedores}
                   onImportado={() => {
                     void cargarKpis();
-                    void cargarProductosPrimeraPagina();
                   }}
                   onAbrirVisor={({ userId, vertical, nombre }) => {
                     setMostradorUserId(userId);
