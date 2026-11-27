@@ -2,14 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  PIEZAS_GUIA_AUTO,
   PIEZAS_TOP15_AUTO,
   piezaGuiaPorId,
   sugerenciasDePieza,
   type PiezaGuiaAuto,
 } from '../data/piezasGuiaAuto';
 import {
-  PIEZAS_GUIA_MOTO,
   PIEZAS_TOP15_MOTO,
   piezaGuiaMotoPorId,
   sugerenciasDePiezaMoto,
@@ -22,7 +20,6 @@ import {
   buscarProductosPorPiezaGuia,
   ordenarProductosPorCercania,
   RESULTADOS_GUIA_MIN,
-  resolverPiezaDesdeTexto,
   type FiltroVehiculoGuia,
   type ProductoGuia,
 } from '../services/consultaPiezasGuia';
@@ -42,6 +39,10 @@ import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from 
 import { mensajeWhatsappVendedorProducto } from '../utils/linkWhatsAppGeomotor';
 import { BotonesWhatsappContacto } from './BotonesWhatsappContacto';
 import { VERTICAL_MOTO, type VerticalVehiculo } from '../utils/verticalVehiculo';
+import {
+  terminosBusquedaProducto,
+  textoCodigoRepuestoEnBusqueda,
+} from '../utils/busquedaProductosTexto';
 import './GuiaRepuestosLanding.css';
 import './BusquedaRepuestos.css';
 
@@ -76,7 +77,6 @@ function GuiaRepuestosVertical({
 }) {
   const { user } = useAuth();
   const esMoto = vertical === VERTICAL_MOTO;
-  const catalogo = esMoto ? PIEZAS_GUIA_MOTO : PIEZAS_GUIA_AUTO;
   const top15 = esMoto ? PIEZAS_TOP15_MOTO : PIEZAS_TOP15_AUTO;
   const lookupPieza = esMoto ? piezaGuiaMotoPorId : piezaGuiaPorId;
   const sugerir = esMoto ? sugerenciasDePiezaMoto : sugerenciasDePieza;
@@ -191,40 +191,61 @@ function GuiaRepuestosVertical({
       return;
     }
     const t = texto.trim();
-    if (t.length < 2) {
-      setAvisoVacio('Escribe el nombre de la pieza o pulsa el tipo en los 15 más reemplazados.');
-      return;
-    }
-    const pieza = resolverPiezaDesdeTexto(t, catalogo);
-    if (pieza) {
-      setPiezaId(pieza.id);
-      void ejecutarPieza(pieza, vehiculo);
+    if (t.length < 2 || terminosBusquedaProducto(t).length === 0) {
+      setAvisoVacio('Escribe al menos una palabra clave de 2 caracteres o más.');
       return;
     }
     setPiezaId(null);
+    setRelacionados([]);
     setCargando(true);
     setError(null);
-    setRelacionados([]);
+    setAvisoVacio(null);
     void (async () => {
-      const { filas, error: err } = await buscarProductosGuiaLibre({
+      const primera = await buscarProductosGuiaLibre({
         texto: t,
         vehiculo,
         offset: 0,
         vertical,
       });
+      if (!primera.error && primera.filas.length > 0) {
+        setCargando(false);
+        setResultados(topCercanos(primera.filas));
+        setEtiquetaActiva(t);
+        setAvisoVacio(null);
+        return;
+      }
+      const codigo = textoCodigoRepuestoEnBusqueda(t);
+      if (codigo) {
+        const porCodigo = await buscarProductosGuiaLibre({
+          texto: codigo,
+          vehiculo: { marca: '', modelo: '', anio: vehiculo.anio },
+          offset: 0,
+          vertical,
+        });
+        setCargando(false);
+        if (porCodigo.error || primera.error) {
+          setError(porCodigo.error || primera.error);
+          setResultados([]);
+          return;
+        }
+        setResultados(topCercanos(porCodigo.filas));
+        setEtiquetaActiva(codigo);
+        setAvisoVacio(
+          porCodigo.filas.length > 0
+            ? `No coincidió todo el texto. Estos resultados son por el código ${codigo}.`
+            : `No hay publicados que coincidan con «${t}» para ${vehiculo.marca} ${vehiculo.modelo}.`
+        );
+        return;
+      }
       setCargando(false);
-      if (err) {
-        setError(err);
+      if (primera.error) {
+        setError(primera.error);
         setResultados([]);
         return;
       }
-      setResultados(topCercanos(filas));
+      setResultados([]);
       setEtiquetaActiva(t);
-      if (filas.length === 0) {
-        setAvisoVacio(`No hay publicados que coincidan con «${t}» para ${vehiculo.marca} ${vehiculo.modelo}.`);
-      } else {
-        setAvisoVacio(null);
-      }
+      setAvisoVacio(`No hay publicados que coincidan con «${t}» para ${vehiculo.marca} ${vehiculo.modelo}.`);
     })();
   };
 
@@ -363,6 +384,9 @@ function GuiaRepuestosVertical({
         >
           BUSQUEDA PERSONALIZADA INTELIGENTE
         </button>
+        <p className="guia-repuestos-cta-nota">
+          En esta sección encontrarás de manera personalizada los principales repuestos que necesita tu vehículo.
+        </p>
       </section>
 
       {panelAbierto && (

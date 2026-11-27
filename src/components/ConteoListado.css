@@ -1,0 +1,49 @@
+.conteo-listado {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  width: 100%;
+}
+
+.conteo-listado > button {
+  flex: 0 1 auto;
+}
+
+.conteo-listado-cifra {
+  display: inline-grid;
+  grid-template-columns: minmax(2.6rem, auto) auto minmax(2.6rem, auto);
+  column-gap: 0.4rem;
+  align-items: baseline;
+  justify-content: center;
+  margin: 0;
+  min-width: 8.5rem;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  font-weight: 650;
+  color: #1e293b;
+}
+
+.conteo-listado-num {
+  text-align: center;
+}
+
+.conteo-listado-de {
+  font-size: 0.78em;
+  font-weight: 550;
+  color: #64748b;
+}
+
+@media (max-width: 520px) {
+  .conteo-listado {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .conteo-listado-cifra {
+    min-width: 0;
+    font-size: 0.92rem;
+  }
+}

@@ -4,6 +4,7 @@ import { ESTADOS_VENEZUELA, getCiudadesPorEstado, valoresCiudadFiltroBd } from '
 import { nombreTipoGrua, TIPOS_GRUA, type TipoGruaId } from '../data/tiposGrua';
 import { PAGE_SIZE_GRUAS_BUSQUEDA } from '../constants/limitesConsultaPublica';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
+import { ConteoListado } from './ConteoListado';
 import {
   MENSAJE_AVISO_NAVEGACION_MAPS_GRUA,
   TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS,
@@ -56,6 +57,7 @@ export function BusquedaGruas({ vertical = VERTICAL_AUTO }: BusquedaGruasProps) 
   const [ciudad, setCiudad] = useState('');
   const [gruas, setGruas] = useState<Grua[]>([]);
   const [hayMas, setHayMas] = useState(false);
+  const [totalGruas, setTotalGruas] = useState<number | null>(null);
   const [cargandoMas, setCargandoMas] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [buscado, setBuscado] = useState(false);
@@ -75,18 +77,22 @@ export function BusquedaGruas({ vertical = VERTICAL_AUTO }: BusquedaGruasProps) 
     setErrorDirectorio(false);
   }, [vertical]);
 
-  const construirQuery = (filtros?: {
-    tipo?: TipoGruaId | '';
-    solo24h?: boolean;
-    soloAuxilio?: boolean;
-  }) => {
+  const construirQuery = (
+    filtros?: {
+      tipo?: TipoGruaId | '';
+      solo24h?: boolean;
+      soloAuxilio?: boolean;
+    },
+    conTotal = false
+  ) => {
     const tipoQ = filtros?.tipo ?? tipo;
     const h24 = filtros?.solo24h ?? solo24h;
     const auxilio = filtros?.soloAuxilio ?? soloAuxilio;
     let query = supabase
       .from('gruas')
       .select(
-        'id, nombre, nombre_comercial, rif, tipos, servicio_24h, auxilio_vial, acerca_de, estado, ciudad, telefono, telefono_2, telefono_3, telefono_4, email, direccion, latitud, longitud'
+        'id, nombre, nombre_comercial, rif, tipos, servicio_24h, auxilio_vial, acerca_de, estado, ciudad, telefono, telefono_2, telefono_3, telefono_4, email, direccion, latitud, longitud',
+        conTotal ? { count: 'exact' } : undefined
       );
 
     if (tipoQ) query = query.contains('tipos', [tipoQ]);
@@ -124,7 +130,7 @@ export function BusquedaGruas({ vertical = VERTICAL_AUTO }: BusquedaGruasProps) 
     setCargando(true);
     setHayMas(false);
 
-    const { data, error } = await construirQuery(filtros).range(0, PAGE_SIZE_GRUAS_BUSQUEDA);
+    const { data, error, count } = await construirQuery(filtros, true).range(0, PAGE_SIZE_GRUAS_BUSQUEDA);
 
     if (error) {
       setGruas([]);
@@ -136,6 +142,7 @@ export function BusquedaGruas({ vertical = VERTICAL_AUTO }: BusquedaGruasProps) 
       const mas = filas.length > PAGE_SIZE_GRUAS_BUSQUEDA;
       setGruas(mas ? filas.slice(0, PAGE_SIZE_GRUAS_BUSQUEDA) : filas);
       setHayMas(mas);
+      setTotalGruas(typeof count === 'number' ? count : null);
     }
     setCargando(false);
   };
@@ -369,8 +376,10 @@ export function BusquedaGruas({ vertical = VERTICAL_AUTO }: BusquedaGruasProps) 
                       );
                     })}
                   </div>
-                  {hayMas && (
+                  {(hayMas || totalGruas != null) && (
                     <div className="vendedores-cerca-cargar-mas">
+                      <ConteoListado mostrados={gruas.length} total={totalGruas}>
+                      {hayMas && (
                       <button
                         type="button"
                         className="vendedores-cerca-cargar-mas-btn"
@@ -379,6 +388,8 @@ export function BusquedaGruas({ vertical = VERTICAL_AUTO }: BusquedaGruasProps) 
                       >
                         {cargandoMas ? 'Cargando…' : 'Ver más grúas'}
                       </button>
+                      )}
+                      </ConteoListado>
                     </div>
                   )}
                 </div>

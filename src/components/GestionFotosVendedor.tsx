@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../supabaseClient';
+import { ConteoListado } from './ConteoListado';
 import { ImagenProducto } from './ImagenProducto';
 import {
   EditorFotosProductoModal,
@@ -49,6 +50,7 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
   const [cargando, setCargando] = useState(true);
   const [cargandoMas, setCargandoMas] = useState(false);
   const [hayMas, setHayMas] = useState(false);
+  const [totalConsulta, setTotalConsulta] = useState<number | null>(null);
   const [offset, setOffset] = useState(0);
   const [tiendaIds, setTiendaIds] = useState<string[]>([]);
   const [conCodigo, setConCodigo] = useState(true);
@@ -91,6 +93,7 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
       setError(pagina.error);
       setProductos([]);
       setHayMas(false);
+      setTotalConsulta(null);
       setOffset(0);
       return;
     }
@@ -101,6 +104,7 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
     setProductos(filas);
     setOffset(filas.length);
     setHayMas(pagina.hayMas);
+    setTotalConsulta(pagina.total);
     setSeleccionados([]);
     setBusquedaAplicada(opts.texto);
   };
@@ -469,10 +473,8 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
         {mensaje && <p className="mis-productos-ajuste-masivo-mensaje">{mensaje}</p>}
         <p className="mis-productos-filtros-resumen" role="status">
           {busquedaAplicada.trim()
-            ? `Búsqueda «${busquedaAplicada.trim()}»: ${listaVisible.length} en esta vista${
-                hayMas ? ' (hay más)' : ''
-              }.`
-            : `Mostrando ${listaVisible.length}${hayMas ? '+' : ''} producto(s).`}
+            ? `Búsqueda «${busquedaAplicada.trim()}».`
+            : 'Productos de tu catálogo.'}
         </p>
       </section>
 
@@ -559,16 +561,20 @@ export function GestionFotosVendedor({ vertical, refreshTrigger = 0 }: GestionFo
         )}
       </div>
 
-      {hayMas && (
+      {(hayMas || totalConsulta != null) && (
         <div className="mis-productos-cargar-mas">
-          <button
-            type="button"
-            className="mis-productos-btn-primario"
-            disabled={cargandoMas || cargando || aplicando}
-            onClick={() => void cargarMas()}
-          >
-            {cargandoMas ? 'Cargando…' : `Cargar más (${PRODUCTOS_VENDEDOR_LISTA_PAGE})`}
-          </button>
+          <ConteoListado mostrados={listaVisible.length} total={totalConsulta}>
+            {hayMas && (
+              <button
+                type="button"
+                className="mis-productos-btn-primario"
+                disabled={cargandoMas || cargando || aplicando}
+                onClick={() => void cargarMas()}
+              >
+                {cargandoMas ? 'Cargando…' : `Cargar más (${PRODUCTOS_VENDEDOR_LISTA_PAGE})`}
+              </button>
+            )}
+          </ConteoListado>
         </div>
       )}
 

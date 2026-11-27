@@ -1,14 +1,13 @@
 import { supabase } from '../supabaseClient';
-import {
-  categoriasConsultaPieza,
-  piezaGuiaPorId,
-  type PiezaGuiaAuto,
-} from '../data/piezasGuiaAuto';
+import { piezaGuiaPorId, type PiezaGuiaAuto } from '../data/piezasGuiaAuto';
 import { VERTICAL_AUTO, type VerticalVehiculo } from '../utils/verticalVehiculo';
 import {
   aplicarTerminosTextoABusquedaProductos,
-  comillasFiltroPostgrest,
   normalizarTextoBusqueda,
+  patronIlikeTerminoProducto,
+  terminosBusquedaProducto,
+  variantesAcentoParaIlike,
+  variantesFormaPalabra,
 } from '../utils/busquedaProductosTexto';
 import { TABLA_CATALOGO_PUBLICO } from '../utils/catalogoPublico';
 import type { ProductoTarjetaBusqueda } from '../components/TarjetaProductoBusqueda';
@@ -86,15 +85,6 @@ export type FiltroVehiculoGuia = {
   anio: number | null;
 };
 
-function aplicarFiltrosVehiculo<T extends {
-  ilike: (col: string, pat: string) => T;
-}>(query: T, vehiculo: FiltroVehiculoGuia): T {
-  let q = query.ilike('marca', `%${vehiculo.marca.replace(/%/g, '')}%`);
-  const modelo = vehiculo.modelo.trim();
-  if (modelo) q = q.ilike('modelo', `%${modelo.replace(/%/g, '')}%`);
-  return q;
-}
-
 function filtrarAnioSiAplica(filas: ProductoGuia[], anio: number | null): ProductoGuia[] {
   if (anio == null) return filas;
   return filas.filter((p) => p.anio == null || p.anio === anio);
@@ -114,18 +104,97 @@ function mapFilas(raw: unknown[]): ProductoGuia[] {
   });
 }
 
-function orAliasNombre(alias: string[]): string {
+function variantesIlikeNombre(termino: string): string[] {
+  const formas = variantesFormaPalabra(termino);
+  const base = formas.length > 0 ? formas : [termino];
   const partes: string[] = [];
   const vistos = new Set<string>();
-  for (const a of alias) {
-    const limpio = a.replace(/[%_]/g, '').trim();
-    if (limpio.length < 2) continue;
-    const pat = comillasFiltroPostgrest(`%${limpio}%`);
-    if (vistos.has(pat)) continue;
-    vistos.add(pat);
-    partes.push(`nombre.ilike.${pat}`);
+  for (const forma of base) {
+    for (const variante of variantesAcentoParaIlike(forma)) {
+      const pieza = `nombre.ilike.${patronIlikeTerminoProducto(variante)}`;
+      if (vistos.has(pieza)) continue;
+      vistos.add(pieza);
+      partes.push(pieza);
+    }
   }
-  return partes.join(',');
+  return partes;
+}
+
+function grupoTerminoNombre(termino: string): string | null {
+  const partes = variantesIlikeNombre(termino);
+  if (partes.length === 0) return null;
+  if (partes.length === 1) return partes[0];
+  return `or(${partes.join(',')})`;
+}
+
+function grupoFraseNombre(frase: string): string | null {
+  const grupos = terminosBusquedaProducto(frase)
+    .map(grupoTerminoNombre)
+    .filter((grupo): grupo is string => Boolean(grupo));
+  if (grupos.length === 0) return null;
+  if (grupos.length === 1) return grupos[0];
+  return `and(${grupos.join(',')})`;
+}
+
+function raizTermino(termino: string): string {
+  const formas = variantesFormaPalabra(termino);
+  if (formas.length === 0) return normalizarTextoBusqueda(termino);
+  return formas.reduce((corta, forma) => (forma.length < corta.length ? forma : corta));
+}
+
+function raicesDeFrase(frase: string): string[] {
+  return terminosBusquedaProducto(frase).map(raizTermino);
+}
+
+function esSubconjunto(menor: string[], mayor: string[]): boolean {
+  const destino = new Set(mayor);
+  return menor.every((raiz) => destino.has(raiz));
+}
+
+/**
+ * El título de la casilla, partido en « / » o « y ».
+ * Un alias de varias palabras se suma solo si nombra el repuesto sin ampliar una parte
+ * (así «kit de tiempo» entra y «spark» o «alternador» no).
+ */
+function frasesTituloPieza(pieza: PiezaGuiaAuto): string[] {
+  const partes = pieza.etiqueta
+    .split(/\s*(?:\/|\by\b)\s*/i)
+    .map((parte) => parte.trim())
+    .filter((parte) => raicesDeFrase(parte).length > 0);
+  const frases = partes.length > 0 ? partes : [pieza.etiqueta];
+  const raicesPartes = frases.map(raicesDeFrase);
+  const raicesEtiqueta = raicesDeFrase(pieza.etiqueta);
+  const vistos = new Set(frases.map((frase) => raicesDeFrase(frase).join(' ')));
+  for (const alias of pieza.alias) {
+    const raices = raicesDeFrase(alias);
+    if (raices.length < 2) continue;
+    if (!esSubconjunto(raices, raicesEtiqueta)) continue;
+    if (raicesPartes.some((parte) => esSubconjunto(raices, parte))) continue;
+    const clave = raices.join(' ');
+    if (vistos.has(clave)) continue;
+    vistos.add(clave);
+    frases.push(alias.trim());
+  }
+  // «Bujía», «bobina» y «rodamiento» se publican con una sola palabra.
+  // Pedir también «encendido» o «rueda» dejaba la casilla vacía.
+  const nombreSoloBasta = new Set(['bujia', 'bobina', 'rodamiento']);
+  for (const alias of pieza.alias) {
+    const raices = raicesDeFrase(alias);
+    if (raices.length !== 1 || !nombreSoloBasta.has(raices[0])) continue;
+    if (!raicesEtiqueta.includes(raices[0]) || vistos.has(raices[0])) continue;
+    vistos.add(raices[0]);
+    frases.push(alias.trim());
+  }
+  return frases;
+}
+
+function filtroTituloPieza(pieza: PiezaGuiaAuto): string | null {
+  const grupos = frasesTituloPieza(pieza)
+    .map(grupoFraseNombre)
+    .filter((grupo): grupo is string => Boolean(grupo));
+  if (grupos.length === 0) return null;
+  if (grupos.length === 1) return grupos[0];
+  return `or(${grupos.join(',')})`;
 }
 
 function queryBasePublica(vertical: VerticalVehiculo = VERTICAL_AUTO) {
@@ -137,6 +206,15 @@ function queryBasePublica(vertical: VerticalVehiculo = VERTICAL_AUTO) {
     .eq('vertical', vertical);
 }
 
+function queryPorTituloPieza(pieza: PiezaGuiaAuto, vehiculo: FiltroVehiculoGuia, vertical?: VerticalVehiculo) {
+  const filtro = filtroTituloPieza(pieza);
+  if (!filtro) return null;
+  let query = queryBasePublica(vertical).or(filtro);
+  const vehiculoTexto = [vehiculo.marca.trim(), vehiculo.modelo.trim()].filter((parte) => parte.length > 0).join(' ');
+  if (vehiculoTexto) query = aplicarTerminosTextoABusquedaProductos(query, vehiculoTexto);
+  return query;
+}
+
 export async function buscarProductosPorPiezaGuia(opts: {
   pieza: PiezaGuiaAuto;
   vehiculo: FiltroVehiculoGuia;
@@ -144,15 +222,10 @@ export async function buscarProductosPorPiezaGuia(opts: {
   vertical?: VerticalVehiculo;
 }): Promise<{ filas: ProductoGuia[]; hayMas: boolean; error: string | null }> {
   const offset = opts.offset ?? 0;
-  const cats = categoriasConsultaPieza(opts.pieza);
-  const aliasOr = orAliasNombre(opts.pieza.alias);
-  if (!aliasOr) {
+  const query = queryPorTituloPieza(opts.pieza, opts.vehiculo, opts.vertical);
+  if (!query) {
     return { filas: [], hayMas: false, error: null };
   }
-
-  let query = queryBasePublica(opts.vertical).in('categoria', cats);
-  query = aplicarFiltrosVehiculo(query, opts.vehiculo);
-  query = query.or(aliasOr);
 
   const { data, error } = await query
     .order('nombre', { ascending: true })
@@ -178,15 +251,10 @@ export async function buscarProductoMasCercanoPorPieza(opts: {
   userLoc: { lat: number; lng: number } | null;
   vertical?: VerticalVehiculo;
 }): Promise<{ producto: ProductoGuia | null; error: string | null }> {
-  const cats = categoriasConsultaPieza(opts.pieza);
-  const aliasOr = orAliasNombre(opts.pieza.alias);
-  if (!aliasOr) {
+  const query = queryPorTituloPieza(opts.pieza, opts.vehiculo, opts.vertical);
+  if (!query) {
     return { producto: null, error: null };
   }
-
-  let query = queryBasePublica(opts.vertical).in('categoria', cats);
-  query = aplicarFiltrosVehiculo(query, opts.vehiculo);
-  query = query.or(aliasOr);
 
   const { data, error } = await query
     .order('nombre', { ascending: true })
@@ -201,6 +269,11 @@ export async function buscarProductoMasCercanoPorPieza(opts: {
   return { producto: ordenadas[0] ?? null, error: null };
 }
 
+/** Misma búsqueda por nombre que la barra principal; marca y modelo entran como palabras. */
+function textoBusquedaConVehiculo(texto: string, vehiculo: FiltroVehiculoGuia): string {
+  return [texto.trim(), vehiculo.marca.trim(), vehiculo.modelo.trim()].filter((parte) => parte.length > 0).join(' ');
+}
+
 export async function buscarProductosGuiaLibre(opts: {
   texto: string;
   vehiculo: FiltroVehiculoGuia;
@@ -209,8 +282,7 @@ export async function buscarProductosGuiaLibre(opts: {
 }): Promise<{ filas: ProductoGuia[]; hayMas: boolean; error: string | null }> {
   const offset = opts.offset ?? 0;
   let query = queryBasePublica(opts.vertical);
-  query = aplicarFiltrosVehiculo(query, opts.vehiculo);
-  query = aplicarTerminosTextoABusquedaProductos(query, opts.texto);
+  query = aplicarTerminosTextoABusquedaProductos(query, textoBusquedaConVehiculo(opts.texto, opts.vehiculo));
 
   const { data, error } = await query
     .order('nombre', { ascending: true })

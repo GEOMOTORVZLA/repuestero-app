@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import { urlsFotosProducto } from '../utils/productoImagenesExtra';
 import { EspecialidadTallerCeldaAdmin } from './EspecialidadTallerCeldaAdmin';
 import { ImagenProducto } from './ImagenProducto';
+import { ConteoListado } from './ConteoListado';
 import { GestionFotosAdmin } from './GestionFotosAdmin';
 import { AdminCeldaAutorizacionWeb } from './AdminCeldaAutorizacionWeb';
 import { AdminCeldaUbicacion } from './AdminCeldaUbicacion';
@@ -912,11 +913,35 @@ function aplicarFiltroEstadoAdminProductosQuery(
   return query;
 }
 
+async function contarProductosAdmin(
+  filtros: FiltrosConsultaAdminProductos,
+  conCodigo: boolean
+): Promise<number | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query: any = (supabase.from('productos') as any).select('id', { count: 'exact', head: true });
+  if (filtros.vertical === 'auto' || filtros.vertical === 'moto') {
+    query = query.eq('vertical', filtros.vertical);
+  }
+  if (filtros.tiendaId.trim()) query = query.eq('tienda_id', filtros.tiendaId.trim());
+  query = aplicarFiltroEstadoAdminProductosQuery(query, filtros.estado);
+  const texto = filtros.texto.trim();
+  if (texto) query = aplicarTerminosTextoAMisProductos(query, texto, conCodigo);
+  const { count, error } = await query;
+  if (error || typeof count !== 'number') return null;
+  return count;
+}
+
 async function fetchPaginaProductosAdmin(opts: {
   filtros: FiltrosConsultaAdminProductos;
   offset: number;
   conCodigo?: boolean;
-}): Promise<{ productos: AdminProducto[]; hayMas: boolean; error: string | null; conCodigo: boolean }> {
+}): Promise<{
+  productos: AdminProducto[];
+  hayMas: boolean;
+  error: string | null;
+  conCodigo: boolean;
+  total: number | null;
+}> {
   const { filtros, offset } = opts;
   let conCodigo = opts.conCodigo !== false;
   const selectCols = conCodigo ? ADMIN_PRODUCTOS_SELECT : ADMIN_PRODUCTOS_SELECT_SIN_CODIGO;
@@ -940,18 +965,22 @@ async function fetchPaginaProductosAdmin(opts: {
     query = aplicarTerminosTextoAMisProductos(query, texto, conCodigo);
   }
 
+  const conteo =
+    offset === 0 ? contarProductosAdmin(filtros, conCodigo) : Promise.resolve<number | null>(null);
   const { data, error } = await query.range(offset, offset + ADMIN_PRODUCTOS_LIMIT - 1);
   if (error) {
     if (conCodigo && errorAdminPorColumnaCodigo(error.message)) {
       return fetchPaginaProductosAdmin({ ...opts, conCodigo: false });
     }
-    return { productos: [], hayMas: false, error: error.message, conCodigo };
+    return { productos: [], hayMas: false, error: error.message, conCodigo, total: null };
   }
   const filas = (data ?? []) as unknown as AdminProducto[];
   const hayMas = filas.length === ADMIN_PRODUCTOS_LIMIT;
+  const total = await conteo;
   return {
     productos: filas,
     hayMas,
+    total,
     error: null,
     conCodigo,
   };
@@ -1048,6 +1077,7 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
   const [cargandoFiltrosProductos, setCargandoFiltrosProductos] = useState(false);
   const [cargandoMasProductosAdmin, setCargandoMasProductosAdmin] = useState(false);
   const [hayMasProductosAdmin, setHayMasProductosAdmin] = useState(false);
+  const [totalProductosAdmin, setTotalProductosAdmin] = useState<number | null>(null);
   const [offsetProductosAdmin, setOffsetProductosAdmin] = useState(0);
   const [consultaUsaCodigoAdmin, setConsultaUsaCodigoAdmin] = useState(true);
   const [productosTabCargada, setProductosTabCargada] = useState(false);
@@ -1193,12 +1223,14 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
         setError(pagina.error);
         setProductos([]);
         setHayMasProductosAdmin(false);
+        setTotalProductosAdmin(null);
         setOffsetProductosAdmin(0);
         return;
       }
       setConsultaUsaCodigoAdmin(pagina.conCodigo);
       setProductos(pagina.productos);
       setHayMasProductosAdmin(pagina.hayMas);
+      setTotalProductosAdmin(pagina.total);
       setOffsetProductosAdmin(pagina.productos.length);
       setProductosTabCargada(true);
     } finally {
@@ -4166,16 +4198,23 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </tbody>
                     </table>
                   </div>
-                  {hayMasUsuariosAdmin && (
+                  {(hayMasUsuariosAdmin || usuarios.length > 0) && (
                     <div className="dashboard-admin-cargar-mas">
-                      <button
-                        type="button"
-                        className="dashboard-admin-btn ok"
-                        disabled={cargandoMasUsuariosAdmin || cargando}
-                        onClick={() => void cargarMasUsuarios()}
+                      <ConteoListado
+                        mostrados={usuarios.length}
+                        total={hayMasUsuariosAdmin ? null : usuarios.length}
                       >
-                        {cargandoMasUsuariosAdmin ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
-                      </button>
+                        {hayMasUsuariosAdmin && (
+                          <button
+                            type="button"
+                            className="dashboard-admin-btn ok"
+                            disabled={cargandoMasUsuariosAdmin || cargando}
+                            onClick={() => void cargarMasUsuarios()}
+                          >
+                            {cargandoMasUsuariosAdmin ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
+                          </button>
+                        )}
+                      </ConteoListado>
                     </div>
                   )}
                 </section>
@@ -4577,18 +4616,25 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </tbody>
                     </table>
                   </div>
-                  {hayMasProductosAdmin && (
+                  {(hayMasProductosAdmin || productos.length > 0) && (
                     <div className="dashboard-admin-cargar-mas">
-                      <button
-                        type="button"
-                        className="dashboard-admin-btn ok"
-                        disabled={cargandoMasProductosAdmin || cargandoFiltrosProductos || cargando}
-                        onClick={() => void cargarMasProductosAdmin()}
+                      <ConteoListado
+                        mostrados={productos.length}
+                        total={totalProductosAdmin ?? (hayMasProductosAdmin ? null : productos.length)}
                       >
-                        {cargandoMasProductosAdmin
-                          ? 'Cargando…'
-                          : `Cargar más (${ADMIN_PRODUCTOS_LIMIT})`}
-                      </button>
+                        {hayMasProductosAdmin && (
+                          <button
+                            type="button"
+                            className="dashboard-admin-btn ok"
+                            disabled={cargandoMasProductosAdmin || cargandoFiltrosProductos || cargando}
+                            onClick={() => void cargarMasProductosAdmin()}
+                          >
+                            {cargandoMasProductosAdmin
+                              ? 'Cargando…'
+                              : `Cargar más (${ADMIN_PRODUCTOS_LIMIT})`}
+                          </button>
+                        )}
+                      </ConteoListado>
                     </div>
                   )}
                 </section>
@@ -4983,16 +5029,23 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </tbody>
                     </table>
                   </div>
-                  {hayMasVendedoresAdmin && (
+                  {(hayMasVendedoresAdmin || vendedores.length > 0) && (
                     <div className="dashboard-admin-cargar-mas">
-                      <button
-                        type="button"
-                        className="dashboard-admin-btn ok"
-                        disabled={cargandoMasVendedoresAdmin || cargando}
-                        onClick={() => void cargarMasVendedores()}
+                      <ConteoListado
+                        mostrados={vendedoresVisibles.length}
+                        total={hayMasVendedoresAdmin ? null : vendedoresVisibles.length}
                       >
-                        {cargandoMasVendedoresAdmin ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
-                      </button>
+                        {hayMasVendedoresAdmin && (
+                          <button
+                            type="button"
+                            className="dashboard-admin-btn ok"
+                            disabled={cargandoMasVendedoresAdmin || cargando}
+                            onClick={() => void cargarMasVendedores()}
+                          >
+                            {cargandoMasVendedoresAdmin ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
+                          </button>
+                        )}
+                      </ConteoListado>
                     </div>
                   )}
                 </section>
@@ -5105,16 +5158,23 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </tbody>
                     </table>
                   </div>
-                  {hayMasInventarioVendedores && (
+                  {(hayMasInventarioVendedores || inventarioVendedores.length > 0) && (
                     <div className="dashboard-admin-cargar-mas">
-                      <button
-                        type="button"
-                        className="dashboard-admin-btn ok"
-                        disabled={cargandoMasInventarioVendedores || cargando}
-                        onClick={() => void cargarMasInventarioPorVendedor()}
+                      <ConteoListado
+                        mostrados={inventarioVendedores.length}
+                        total={hayMasInventarioVendedores ? null : inventarioVendedores.length}
                       >
-                        {cargandoMasInventarioVendedores ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
-                      </button>
+                        {hayMasInventarioVendedores && (
+                          <button
+                            type="button"
+                            className="dashboard-admin-btn ok"
+                            disabled={cargandoMasInventarioVendedores || cargando}
+                            onClick={() => void cargarMasInventarioPorVendedor()}
+                          >
+                            {cargandoMasInventarioVendedores ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
+                          </button>
+                        )}
+                      </ConteoListado>
                     </div>
                   )}
                 </section>
@@ -5449,16 +5509,23 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </tbody>
                     </table>
                   </div>
-                  {hayMasTalleresAdmin && (
+                  {(hayMasTalleresAdmin || talleres.length > 0) && (
                     <div className="dashboard-admin-cargar-mas">
-                      <button
-                        type="button"
-                        className="dashboard-admin-btn ok"
-                        disabled={cargandoMasTalleresAdmin || cargando}
-                        onClick={() => void cargarMasTalleres()}
+                      <ConteoListado
+                        mostrados={talleres.length}
+                        total={hayMasTalleresAdmin ? null : talleres.length}
                       >
-                        {cargandoMasTalleresAdmin ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
-                      </button>
+                        {hayMasTalleresAdmin && (
+                          <button
+                            type="button"
+                            className="dashboard-admin-btn ok"
+                            disabled={cargandoMasTalleresAdmin || cargando}
+                            onClick={() => void cargarMasTalleres()}
+                          >
+                            {cargandoMasTalleresAdmin ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
+                          </button>
+                        )}
+                      </ConteoListado>
                     </div>
                   )}
                 </section>
@@ -5714,16 +5781,23 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </tbody>
                     </table>
                   </div>
-                  {hayMasGruasAdmin && (
+                  {(hayMasGruasAdmin || gruas.length > 0) && (
                     <div className="dashboard-admin-cargar-mas">
-                      <button
-                        type="button"
-                        className="dashboard-admin-btn ok"
-                        disabled={cargandoMasGruasAdmin || cargando}
-                        onClick={() => void cargarMasGruas()}
+                      <ConteoListado
+                        mostrados={gruas.length}
+                        total={hayMasGruasAdmin ? null : gruas.length}
                       >
-                        {cargandoMasGruasAdmin ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
-                      </button>
+                        {hayMasGruasAdmin && (
+                          <button
+                            type="button"
+                            className="dashboard-admin-btn ok"
+                            disabled={cargandoMasGruasAdmin || cargando}
+                            onClick={() => void cargarMasGruas()}
+                          >
+                            {cargandoMasGruasAdmin ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
+                          </button>
+                        )}
+                      </ConteoListado>
                     </div>
                   )}
                 </section>
@@ -5830,16 +5904,23 @@ export function DashboardAdmin({ onVolverInicio, vertical: verticalEntrada }: Da
                       </tbody>
                     </table>
                   </div>
-                  {hayMasCompradoresAdmin && (
+                  {(hayMasCompradoresAdmin || compradores.length > 0) && (
                     <div className="dashboard-admin-cargar-mas">
-                      <button
-                        type="button"
-                        className="dashboard-admin-btn ok"
-                        disabled={cargandoMasCompradoresAdmin || cargando}
-                        onClick={() => void cargarMasCompradores()}
+                      <ConteoListado
+                        mostrados={compradores.length}
+                        total={hayMasCompradoresAdmin ? null : compradores.length}
                       >
-                        {cargandoMasCompradoresAdmin ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
-                      </button>
+                        {hayMasCompradoresAdmin && (
+                          <button
+                            type="button"
+                            className="dashboard-admin-btn ok"
+                            disabled={cargandoMasCompradoresAdmin || cargando}
+                            onClick={() => void cargarMasCompradores()}
+                          >
+                            {cargandoMasCompradoresAdmin ? 'Cargando…' : `Cargar más (${ADMIN_LIST_PAGE})`}
+                          </button>
+                        )}
+                      </ConteoListado>
                     </div>
                   )}
                 </section>

@@ -12,6 +12,7 @@ import {
 import { abrirNavegacionGoogleMapsDesdeAqui, urlGoogleMapsDirSoloDestino } from '../utils/googleMapsNavegar';
 import { mensajeWhatsappVendedorZona } from '../utils/linkWhatsAppGeomotor';
 import { BotonesWhatsappContacto } from './BotonesWhatsappContacto';
+import { ConteoListado } from './ConteoListado';
 import {
   abrirWhatsappConTexto,
   construirUrlTiendaCompartida,
@@ -62,6 +63,7 @@ type EstadoProductosVendedor = {
   cargando: boolean;
   cargandoMas: boolean;
   hayMas: boolean;
+  total: number | null;
   offset: number;
   error: string | null;
 };
@@ -118,6 +120,7 @@ function estadoProductosVacio(parcial?: Partial<EstadoProductosVendedor>): Estad
     cargando: false,
     cargandoMas: false,
     hayMas: false,
+    total: null,
     offset: 0,
     error: null,
     ...parcial,
@@ -130,13 +133,13 @@ async function fetchPaginaProductosPublicosTienda(opts: {
   vertical: VerticalVehiculo;
   offset: number;
   texto?: string;
-}): Promise<{ productos: ProductoVendedorCerca[]; hayMas: boolean; error: string | null }> {
+}): Promise<{ productos: ProductoVendedorCerca[]; hayMas: boolean; total: number | null; error: string | null }> {
   const { tiendaId, vertical, offset } = opts;
   const texto = (opts.texto ?? '').trim();
 
   let query = supabase
     .from(TABLA_CATALOGO_PUBLICO)
-    .select(SELECT_PRODUCTOS_VENDEDOR_CERCA)
+    .select(SELECT_PRODUCTOS_VENDEDOR_CERCA, offset === 0 ? { count: 'exact' } : undefined)
     .eq('tienda_id', tiendaId)
     .eq('activo', true)
     .eq('aprobacion_publica', 'aprobado')
@@ -146,7 +149,7 @@ async function fetchPaginaProductosPublicosTienda(opts: {
     query = aplicarTerminosTextoABusquedaProductos(query, texto);
   }
 
-  const { data, error } = await query
+  const { data, error, count } = await query
     .order('nombre', { ascending: true })
     .order('id', { ascending: true })
     .range(offset, offset + PRODUCTOS_VENDEDOR_CERCA_PAGE);
@@ -155,6 +158,7 @@ async function fetchPaginaProductosPublicosTienda(opts: {
     return {
       productos: [],
       hayMas: false,
+      total: null,
       error: error.message || 'No se pudieron cargar los productos de este vendedor.',
     };
   }
@@ -166,6 +170,7 @@ async function fetchPaginaProductosPublicosTienda(opts: {
   return {
     productos: hayMas ? filas.slice(0, PRODUCTOS_VENDEDOR_CERCA_PAGE) : filas,
     hayMas,
+    total: offset === 0 && typeof count === 'number' ? count : null,
     error: null,
   };
 }
@@ -210,6 +215,7 @@ export function VendedoresCercaDeMi({
   const [cargando, setCargando] = useState(true);
   const [cargandoMas, setCargandoMas] = useState(false);
   const [hayMas, setHayMas] = useState(false);
+  const [totalTiendas, setTotalTiendas] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [estadoFiltro, setEstadoFiltro] = useState('');
   const [ciudadFiltro, setCiudadFiltro] = useState('');
@@ -252,10 +258,13 @@ export function VendedoresCercaDeMi({
     onLimpiarEnlaceTienda?.();
   };
 
-  const construirQueryTiendas = (textoNombre = busquedaNombreListaAplicada) => {
+  const construirQueryTiendas = (textoNombre = busquedaNombreListaAplicada, conTotal = false) => {
     let query = supabase
       .from('tiendas')
-      .select('id, user_id, nombre, nombre_comercial, rif, estado, ciudad, latitud, longitud, telefono, telefono_2, telefono_3, telefono_4, direccion, metodos_pago')
+      .select(
+        'id, user_id, nombre, nombre_comercial, rif, estado, ciudad, latitud, longitud, telefono, telefono_2, telefono_3, telefono_4, direccion, metodos_pago',
+        conTotal ? { count: 'exact' } : undefined
+      )
       .eq('vertical', vertical)
       .order('estado', { ascending: true, nullsFirst: false })
       .order('ciudad', { ascending: true, nullsFirst: false })
@@ -282,7 +291,7 @@ export function VendedoresCercaDeMi({
     setCargando(true);
     setError(null);
     setHayMas(false);
-    const { data, error } = await construirQueryTiendas(textoNombre).range(0, PAGE_SIZE_VENDEDORES);
+    const { data, error, count } = await construirQueryTiendas(textoNombre, true).range(0, PAGE_SIZE_VENDEDORES);
 
     if (error) {
       setError(
@@ -299,6 +308,7 @@ export function VendedoresCercaDeMi({
       const primeras = mas ? filas.slice(0, PAGE_SIZE_VENDEDORES) : filas;
       setTiendas(primeras);
       setHayMas(mas);
+      setTotalTiendas(typeof count === 'number' ? count : null);
     }
     setCargando(false);
   };
@@ -680,6 +690,7 @@ export function VendedoresCercaDeMi({
         [cacheKey]: estadoProductosVacio({
           productos,
           hayMas: res.hayMas,
+          total: res.total ?? actual?.total ?? null,
           offset: productos.length,
         }),
       };
@@ -1020,8 +1031,10 @@ export function VendedoresCercaDeMi({
                         );
                       })}
                     </div>
-                    {hayMas && (
+                    {(hayMas || totalTiendas != null) && (
                       <div className="busqueda-repuestos-cargar-mas">
+                        <ConteoListado mostrados={listaMostrar.length} total={totalTiendas}>
+                        {hayMas && (
                         <button
                           type="button"
                           className="busqueda-repuestos-btn busqueda-repuestos-btn--cargar-mas"
@@ -1030,6 +1043,8 @@ export function VendedoresCercaDeMi({
                         >
                           {cargandoMas ? 'Cargando…' : 'Cargar más vendedores'}
                         </button>
+                        )}
+                        </ConteoListado>
                       </div>
                     )}
                   </>
@@ -1243,18 +1258,25 @@ export function VendedoresCercaDeMi({
                           />
                         ))}
                       </div>
-                      {hayMasProductosTienda && (
+                      {(hayMasProductosTienda || estadoProductosVendedorAbierto?.total != null) && (
                         <div className="vendedores-cerca-productos-cargar-mas">
-                          <button
-                            type="button"
-                            className="busqueda-repuestos-btn"
-                            disabled={cargandoMasProductosTienda}
-                            onClick={() => void cargarMasProductosTienda()}
+                          <ConteoListado
+                            mostrados={estadoProductosVendedorAbierto?.productos.length ?? 0}
+                            total={estadoProductosVendedorAbierto?.total ?? null}
                           >
-                            {cargandoMasProductosTienda
-                              ? 'Cargando…'
-                              : `Cargar más (${PRODUCTOS_VENDEDOR_CERCA_PAGE})`}
-                          </button>
+                            {hayMasProductosTienda && (
+                              <button
+                                type="button"
+                                className="busqueda-repuestos-btn"
+                                disabled={cargandoMasProductosTienda}
+                                onClick={() => void cargarMasProductosTienda()}
+                              >
+                                {cargandoMasProductosTienda
+                                  ? 'Cargando…'
+                                  : `Cargar más (${PRODUCTOS_VENDEDOR_CERCA_PAGE})`}
+                              </button>
+                            )}
+                          </ConteoListado>
                         </div>
                       )}
                       </>

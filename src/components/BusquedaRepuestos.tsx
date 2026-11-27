@@ -25,6 +25,7 @@ import {
   textoCodigoRepuestoEnBusqueda,
 } from '../utils/busquedaProductosTexto';
 import { TABLA_CATALOGO_PUBLICO } from '../utils/catalogoPublico';
+import { ConteoListado } from './ConteoListado';
 import './BusquedaRepuestos.css';
 
 /** Distancia en km entre dos puntos (Haversine) */
@@ -110,10 +111,14 @@ function mapFilasASugerencias(
   return lista;
 }
 
-function queryProductosSugerencias(textoBusquedaTrim: string, vertical: VerticalVehiculo) {
+function queryProductosSugerencias(
+  textoBusquedaTrim: string,
+  vertical: VerticalVehiculo,
+  conTotal = false
+) {
   let query = supabase
     .from(TABLA_CATALOGO_PUBLICO)
-    .select('id, nombre, marca, modelo')
+    .select('id, nombre, marca, modelo', conTotal ? { count: 'exact' } : undefined)
     .eq('activo', true)
     .eq('aprobacion_publica', 'aprobado')
     .eq('vertical', vertical);
@@ -193,6 +198,7 @@ export function BusquedaRepuestos({
   const [textoBusqueda, setTextoBusqueda] = useState('');
   const [sugerencias, setSugerencias] = useState<SugerenciaRepuesto[]>([]);
   const [hayMasSugerencias, setHayMasSugerencias] = useState(false);
+  const [totalSugerencias, setTotalSugerencias] = useState<number | null>(null);
   const [cargandoMasSugerencias, setCargandoMasSugerencias] = useState(false);
   const sugerenciasFetchIdRef = useRef(0);
   const [dropdownAbierto, setDropdownAbierto] = useState(false);
@@ -204,10 +210,16 @@ export function BusquedaRepuestos({
   const textoUltimaBusquedaEjecutadaRef = useRef('');
   const [buscando, setBuscando] = useState(false);
   const [hayMasResultados, setHayMasResultados] = useState(false);
+  const [totalResultados, setTotalResultados] = useState<number | null>(null);
   const [cargandoMasResultados, setCargandoMasResultados] = useState(false);
   const [mensaje, setMensaje] = useState('');
   const paramsUltimaBusquedaRef = useRef<ParamsBusquedaProductos | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const userLocationRef = useRef(userLocation);
+  userLocationRef.current = userLocation;
+  /** Si ya se pidió otra página, una ubicación tardía no vuelve a mezclar la lista. */
+  const cargoMasResultadosRef = useRef(false);
+  const busquedaResultadosIdRef = useRef(0);
   /** En página completa: texto introductorio bajo el título; se oculta al ejecutar una búsqueda válida */
   const [mostrarIntroBusquedaPagina, setMostrarIntroBusquedaPagina] = useState(true);
 
@@ -219,6 +231,7 @@ export function BusquedaRepuestos({
     ) {
       setSugerencias([]);
       setHayMasSugerencias(false);
+      setTotalSugerencias(null);
       setDropdownAbierto(false);
       setIndiceSugerencia(-1);
       return;
@@ -228,6 +241,7 @@ export function BusquedaRepuestos({
     if (texto.length < 2) {
       setSugerencias([]);
       setHayMasSugerencias(false);
+      setTotalSugerencias(null);
       setDropdownAbierto(false);
       setIndiceSugerencia(-1);
       return;
@@ -236,7 +250,7 @@ export function BusquedaRepuestos({
     const idPeticion = ++sugerenciasFetchIdRef.current;
     const t = setTimeout(() => {
       void (async () => {
-        const { data, error } = await queryProductosSugerencias(texto, vertical).range(
+        const { data, error, count } = await queryProductosSugerencias(texto, vertical, true).range(
           0,
           SUGERENCIAS_TAM_PAGINA
         );
@@ -263,6 +277,7 @@ export function BusquedaRepuestos({
 
         setSugerencias(visibles);
         setHayMasSugerencias(hayMas);
+        setTotalSugerencias(typeof count === 'number' ? count : null);
         setIndiceSugerencia(-1);
         if (visibles.length) setDropdownAbierto(true);
       })();
@@ -290,10 +305,10 @@ export function BusquedaRepuestos({
     setIndiceSugerencia(-1);
   };
 
-  const armarQueryListaProductos = (p: ParamsBusquedaProductos) => {
+  const armarQueryListaProductos = (p: ParamsBusquedaProductos, conTotal = false) => {
     let query = supabase
       .from(TABLA_CATALOGO_PUBLICO)
-      .select(SELECT_PRODUCTOS_PUBLICO_LISTA)
+      .select(SELECT_PRODUCTOS_PUBLICO_LISTA, conTotal ? { count: 'exact' } : undefined)
       .eq('activo', true)
       .eq('aprobacion_publica', 'aprobado')
       .eq('vertical', vertical);
@@ -347,46 +362,55 @@ export function BusquedaRepuestos({
     setMensaje('');
     setDropdownAbierto(false);
     setHayMasSugerencias(false);
+      setTotalSugerencias(null);
     setIndiceSugerencia(-1);
     setHayMasResultados(false);
+    setTotalResultados(null);
 
     const params: ParamsBusquedaProductos = { texto };
+    const busquedaId = ++busquedaResultadosIdRef.current;
+    cargoMasResultadosRef.current = false;
 
     // No bloquear la búsqueda esperando GPS: si ya hay ubicación, ordenamos; si no, pedimos en segundo plano.
-    const ubicacionActual = userLocation;
-    if (!ubicacionActual) {
+    if (!userLocationRef.current) {
       void solicitarUbicacionActual().then((u) => {
-        if (!u) return;
+        if (!u || busquedaResultadosIdRef.current !== busquedaId) return;
+        userLocationRef.current = u;
         setUserLocation(u);
-        setResultados((prev) => (prev.length > 0 ? ordenarPorUbicacionUsuario(prev, u) : prev));
+        setResultados((prev) => {
+          if (cargoMasResultadosRef.current || busquedaResultadosIdRef.current !== busquedaId) return prev;
+          return prev.length > 0 ? ordenarPorUbicacionUsuario(prev, u) : prev;
+        });
       });
     }
 
     const consultar = async (textoConsulta: string) => {
-      const { data, error } = await armarQueryListaProductos({ texto: textoConsulta }).range(
+      const { data, error, count } = await armarQueryListaProductos({ texto: textoConsulta }, true).range(
         0,
         PAGE_SIZE_RESULTADOS_PUBLICOS
       );
       return {
         filas: (data as unknown as ProductoResultado[]) ?? [],
         error,
+        total: typeof count === 'number' ? count : null,
       };
     };
 
     const publicarPagina = (
       filasRaw: ProductoResultado[],
       paramsUsados: ParamsBusquedaProductos,
-      nota: string | null
+      nota: string | null,
+      total: number | null
     ) => {
       const hayMas = filasRaw.length > PAGE_SIZE_RESULTADOS_PUBLICOS;
       const primeraPagina = hayMas
         ? filasRaw.slice(0, PAGE_SIZE_RESULTADOS_PUBLICOS)
         : filasRaw;
       textoUltimaBusquedaEjecutadaRef.current = texto;
-      setResultados(
-        ubicacionActual ? ordenarPorUbicacionUsuario(primeraPagina, ubicacionActual) : primeraPagina
-      );
+      const ubicacion = userLocationRef.current;
+      setResultados(ubicacion ? ordenarPorUbicacionUsuario(primeraPagina, ubicacion) : primeraPagina);
       setHayMasResultados(hayMas && primeraPagina.length > 0);
+      setTotalResultados(total);
       if (!primeraPagina.length) {
         paramsUltimaBusquedaRef.current = null;
         setMensaje('No hay repuestos que coincidan con tu búsqueda.');
@@ -403,11 +427,12 @@ export function BusquedaRepuestos({
       setSugerencias([]);
       setDropdownAbierto(false);
       setHayMasResultados(false);
+      setTotalResultados(null);
     };
 
     const primera = await consultar(texto);
     if (!primera.error && primera.filas.length > 0) {
-      publicarPagina(primera.filas, params, null);
+      publicarPagina(primera.filas, params, null, primera.total);
     } else {
       const codigo = textoCodigoRepuestoEnBusqueda(texto);
       if (codigo) {
@@ -416,17 +441,18 @@ export function BusquedaRepuestos({
           publicarPagina(
             porCodigo.filas,
             { texto: codigo },
-            `No coincidió todo el texto. Estos resultados son por el código ${codigo}.`
+            `No coincidió todo el texto. Estos resultados son por el código ${codigo}.`,
+            porCodigo.total
           );
         } else if (primera.error || porCodigo.error) {
           falloConsulta();
         } else {
-          publicarPagina([], params, null);
+          publicarPagina([], params, null, null);
         }
       } else if (primera.error) {
         falloConsulta();
       } else {
-        publicarPagina([], params, null);
+        publicarPagina([], params, null, null);
       }
     }
     setBuscando(false);
@@ -453,11 +479,11 @@ export function BusquedaRepuestos({
     const filas = (data as unknown as ProductoResultado[]) ?? [];
     const hayMas = filas.length > PAGE_SIZE_RESULTADOS_PUBLICOS;
     const chunk = hayMas ? filas.slice(0, PAGE_SIZE_RESULTADOS_PUBLICOS) : filas;
+    const ubicacion = userLocationRef.current;
+    const paginaNueva = ubicacion ? ordenarPorUbicacionUsuario(chunk, ubicacion) : chunk;
+    if (paginaNueva.length > 0) cargoMasResultadosRef.current = true;
 
-    setResultados((prev) => {
-      const merged = [...prev, ...chunk];
-      return userLocation ? ordenarPorUbicacionUsuario(merged, userLocation) : merged;
-    });
+    setResultados((prev) => [...prev, ...paginaNueva]);
     setHayMasResultados(hayMas);
     setCargandoMasResultados(false);
   };
@@ -542,6 +568,7 @@ export function BusquedaRepuestos({
       setMensaje('');
       setSugerencias([]);
       setHayMasSugerencias(false);
+      setTotalSugerencias(null);
       setDropdownAbierto(false);
       setIndiceSugerencia(-1);
       setMostrarIntroBusquedaPagina(false);
@@ -669,8 +696,9 @@ export function BusquedaRepuestos({
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const u = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        userLocationRef.current = u;
         setUserLocation(u);
-        setResultados((prev) => ordenarPorUbicacionUsuario(prev, u));
+        setResultados((prev) => (cargoMasResultadosRef.current ? prev : ordenarPorUbicacionUsuario(prev, u)));
         setUbicacionProducto(p);
       },
       () => {
@@ -839,17 +867,21 @@ export function BusquedaRepuestos({
                   </li>
                 ))}
               </ul>
-              {hayMasSugerencias && (
+              {(hayMasSugerencias || totalSugerencias != null) && (
                 <div className="busqueda-repuestos-sugerencias-mas">
-                  <button
-                    type="button"
-                    className="busqueda-repuestos-sugerencias-mas-btn"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => void cargarMasSugerencias()}
-                    disabled={cargandoMasSugerencias}
-                  >
-                    {cargandoMasSugerencias ? 'Cargando…' : 'Cargar 20 más'}
-                  </button>
+                  <ConteoListado mostrados={sugerencias.length} total={totalSugerencias}>
+                    {hayMasSugerencias && (
+                      <button
+                        type="button"
+                        className="busqueda-repuestos-sugerencias-mas-btn"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => void cargarMasSugerencias()}
+                        disabled={cargandoMasSugerencias}
+                      >
+                        {cargandoMasSugerencias ? 'Cargando…' : 'Cargar 20 más'}
+                      </button>
+                    )}
+                  </ConteoListado>
                 </div>
               )}
             </div>
@@ -925,8 +957,7 @@ export function BusquedaRepuestos({
               {resultados.length > 0 && (
                 <div className="busqueda-repuestos-resultados">
                   <h3 className="busqueda-repuestos-resultados-titulo">
-                    Resultados ({resultados.length}
-                    {hayMasResultados ? ', hay más en el catálogo' : ''})
+                    Resultados{totalResultados != null ? '' : ` (${resultados.length})`}
                   </h3>
                   <div className="busqueda-repuestos-grid">
                     {resultados.map((p) => (
@@ -941,16 +972,20 @@ export function BusquedaRepuestos({
                       />
                     ))}
                   </div>
-                  {hayMasResultados && (
+                  {(hayMasResultados || totalResultados != null) && (
                     <div className="busqueda-repuestos-cargar-mas">
-                      <button
-                        type="button"
-                        className="busqueda-repuestos-btn busqueda-repuestos-btn--cargar-mas"
-                        onClick={() => void cargarMasResultados()}
-                        disabled={cargandoMasResultados || buscando}
-                      >
-                        {cargandoMasResultados ? 'Cargando…' : 'Cargar más resultados'}
-                      </button>
+                      <ConteoListado mostrados={resultados.length} total={totalResultados}>
+                        {hayMasResultados && (
+                          <button
+                            type="button"
+                            className="busqueda-repuestos-btn busqueda-repuestos-btn--cargar-mas"
+                            onClick={() => void cargarMasResultados()}
+                            disabled={cargandoMasResultados || buscando}
+                          >
+                            {cargandoMasResultados ? 'Cargando…' : 'Cargar más resultados'}
+                          </button>
+                        )}
+                      </ConteoListado>
                     </div>
                   )}
                 </div>

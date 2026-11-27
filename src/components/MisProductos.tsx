@@ -21,6 +21,7 @@ import {
   DIAS_STOCK_SEMAFORO_VERDE,
 } from '../utils/stockActualInventario';
 import { aplicarTerminosTextoAMisProductos } from '../utils/busquedaProductosTexto';
+import { ConteoListado } from './ConteoListado';
 
 const NETWORK_TIMEOUT_MS = 30000;
 const NETWORK_RETRIES = 1;
@@ -188,18 +189,25 @@ async function fetchPaginaProductosVendedor(opts: {
   filtros: FiltrosConsultaMisProductos;
   offset: number;
   conCodigo?: boolean;
-}): Promise<{ productos: ProductoPanel[]; hayMas: boolean; error: string | null; conCodigo: boolean }> {
+}): Promise<{
+  productos: ProductoPanel[];
+  hayMas: boolean;
+  error: string | null;
+  conCodigo: boolean;
+  total: number | null;
+}> {
   const { tiendaIds, filtros, offset } = opts;
   let conCodigo = opts.conCodigo !== false;
 
   if (tiendaIds.length === 0) {
-    return { productos: [], hayMas: false, error: null, conCodigo };
+    return { productos: [], hayMas: false, error: null, conCodigo, total: 0 };
   }
 
+  const pedirTotal = offset === 0;
   const selectCols = conCodigo ? PRODUCTOS_VENDEDOR_SELECT : PRODUCTOS_VENDEDOR_SELECT_SIN_CODIGO;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query: any = (supabase.from('productos') as any)
-    .select(selectCols)
+    .select(selectCols, pedirTotal ? { count: 'exact' } : undefined)
     .in('tienda_id', tiendaIds)
     .order('nombre')
     .order('id');
@@ -216,10 +224,11 @@ async function fetchPaginaProductosVendedor(opts: {
   }
 
   // Pedimos PAGE+1 para saber si hay más sin count exact.
-  const { data, error: errProd } = await withRetry(() =>
+  const { data, error: errProd, count } = await withRetry(() =>
     query.range(offset, offset + PRODUCTOS_VENDEDOR_PAGE) as PromiseLike<{
       data: ProductoPanel[] | null;
       error: { message?: string } | null;
+      count: number | null;
     }>
   );
 
@@ -232,6 +241,7 @@ async function fetchPaginaProductosVendedor(opts: {
       hayMas: false,
       error: errProd.message || 'Error al cargar tus productos.',
       conCodigo,
+      total: null,
     };
   }
 
@@ -242,6 +252,7 @@ async function fetchPaginaProductosVendedor(opts: {
     hayMas,
     error: null,
     conCodigo,
+    total: pedirTotal && typeof count === 'number' ? count : null,
   };
 }
 
@@ -301,6 +312,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
   const [cargandoFiltrosProductos, setCargandoFiltrosProductos] = useState(false);
   const [cargandoMasProductos, setCargandoMasProductos] = useState(false);
   const [hayMasProductos, setHayMasProductos] = useState(false);
+  const [totalProductosConsulta, setTotalProductosConsulta] = useState<number | null>(null);
   const [offsetProductos, setOffsetProductos] = useState(0);
   const [tiendaIds, setTiendaIds] = useState<string[]>([]);
   const [consultaUsaCodigo, setConsultaUsaCodigo] = useState(true);
@@ -337,6 +349,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
       setTiendaIds([]);
       setProductos([]);
       setHayMasProductos(false);
+      setTotalProductosConsulta(null);
       setOffsetProductos(0);
       setError(idsRes.error);
       return;
@@ -351,6 +364,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     if (pagina.error) {
       setProductos([]);
       setHayMasProductos(false);
+      setTotalProductosConsulta(null);
       setOffsetProductos(0);
       setError(pagina.error);
       return;
@@ -358,6 +372,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
     setConsultaUsaCodigo(pagina.conCodigo);
     setProductos(pagina.productos);
     setHayMasProductos(pagina.hayMas);
+    setTotalProductosConsulta(pagina.total);
     setOffsetProductos(pagina.productos.length);
     setProductosSeleccionados([]);
     setError(null);
@@ -409,6 +424,7 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         setConsultaUsaCodigo(pagina.conCodigo);
         setProductos(pagina.productos);
         setHayMasProductos(pagina.hayMas);
+        setTotalProductosConsulta(pagina.total);
         setOffsetProductos(pagina.productos.length);
         setCatalogoVacio(pagina.productos.length === 0 && !pagina.hayMas);
         setBusquedaProductosInput('');
@@ -898,12 +914,8 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         )}
         <p className="mis-productos-filtros-resumen" role="status">
           {busquedaProductosAplicada.trim()
-            ? `Búsqueda «${busquedaProductosAplicada.trim()}»: ${productosVisibles.length} producto(s) en esta vista${
-                hayMasProductos ? ' (hay más)' : ''
-              }.`
-            : `Mostrando ${productosVisibles.length} producto(s)${
-                hayMasProductos ? ' (hay más en el catálogo)' : ''
-              }.`}
+            ? `Búsqueda «${busquedaProductosAplicada.trim()}».`
+            : 'Productos de tu catálogo.'}
         </p>
       </section>
       <section className="mis-productos-acciones-masivas" aria-label="Acciones masivas sobre productos">
@@ -1474,16 +1486,20 @@ export function MisProductos({ refreshTrigger = 0, vertical }: MisProductosProps
         })
         )}
       </div>
-      {hayMasProductos && (
+      {(hayMasProductos || totalProductosConsulta != null) && (
         <div className="mis-productos-cargar-mas">
-          <button
-            type="button"
-            className="mis-productos-btn-primario"
-            disabled={cargandoMasProductos || cargandoFiltrosProductos}
-            onClick={() => void cargarMasProductos()}
-          >
-            {cargandoMasProductos ? 'Cargando…' : `Cargar más (${PRODUCTOS_VENDEDOR_PAGE})`}
-          </button>
+          <ConteoListado mostrados={productos.length} total={totalProductosConsulta}>
+            {hayMasProductos && (
+              <button
+                type="button"
+                className="mis-productos-btn-primario"
+                disabled={cargandoMasProductos || cargandoFiltrosProductos}
+                onClick={() => void cargarMasProductos()}
+              >
+                {cargandoMasProductos ? 'Cargando…' : `Cargar más (${PRODUCTOS_VENDEDOR_PAGE})`}
+              </button>
+            )}
+          </ConteoListado>
         </div>
       )}
     </div>

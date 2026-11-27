@@ -9,6 +9,7 @@ import {
   claseSemaforoStockPorDias,
   diasDesdeFechaISO,
 } from '../utils/stockActualInventario';
+import { ConteoListado } from './ConteoListado';
 import {
   PRODUCTOS_VENDEDOR_LISTA_PAGE,
   contarProductosVendedor,
@@ -95,6 +96,7 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
   const [listaDetalle, setListaDetalle] = useState<ProductoResumen[]>([]);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [hayMasDetalle, setHayMasDetalle] = useState(false);
+  const [totalDetalle, setTotalDetalle] = useState<number | null>(null);
   const [offsetDetalle, setOffsetDetalle] = useState(0);
   const [tiendaIds, setTiendaIds] = useState<string[]>([]);
 
@@ -172,6 +174,7 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
     if (!detalle || detalle === 'membresia' || !user) {
       setListaDetalle([]);
       setHayMasDetalle(false);
+      setTotalDetalle(null);
       setOffsetDetalle(0);
       return;
     }
@@ -191,10 +194,12 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
       if (pagina.error) {
         setListaDetalle([]);
         setHayMasDetalle(false);
+        setTotalDetalle(null);
       } else {
         setListaDetalle(pagina.filas as ProductoResumen[]);
         setOffsetDetalle(pagina.filas.length);
         setHayMasDetalle(pagina.hayMas);
+        setTotalDetalle(pagina.total);
       }
       setCargandoDetalle(false);
     })();
@@ -379,10 +384,6 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
                 <p className="dashboard-texto-placeholder">No hay productos en esta categoría.</p>
               ) : (
                 <>
-                  <p className="dashboard-kpi-modal-meta" style={{ marginTop: 0 }}>
-                    {listaDetalle.length} producto{listaDetalle.length === 1 ? '' : 's'}
-                    {hayMasDetalle ? ' (hay más)' : ''}
-                  </p>
                   <div className="dashboard-kpi-modal-table-wrap">
                     <table className="dashboard-admin-table">
                       <thead>
@@ -424,8 +425,10 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
                       </tbody>
                     </table>
                   </div>
-                  {hayMasDetalle && (
+                  {(hayMasDetalle || totalDetalle != null) && (
                     <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.75rem' }}>
+                      <ConteoListado mostrados={listaDetalle.length} total={totalDetalle}>
+                      {hayMasDetalle && (
                       <button
                         type="button"
                         className="dashboard-admin-btn ok"
@@ -436,6 +439,8 @@ export function ResumenVendedor({ vertical, refreshTrigger = 0 }: ResumenVendedo
                           ? 'Cargando…'
                           : `Cargar más (${PRODUCTOS_VENDEDOR_LISTA_PAGE})`}
                       </button>
+                      )}
+                      </ConteoListado>
                     </div>
                   )}
                 </>

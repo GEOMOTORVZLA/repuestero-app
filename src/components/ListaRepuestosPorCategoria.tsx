@@ -20,6 +20,7 @@ import {
   terminosBusquedaProducto,
 } from '../utils/busquedaProductosTexto';
 import { TABLA_CATALOGO_PUBLICO } from '../utils/catalogoPublico';
+import { ConteoListado } from './ConteoListado';
 import { categoriasEquivalentesConsulta } from '../data/categoriasProducto';
 import { permitirAccionCliente } from '../utils/rateLimitCliente';
 import type { VerticalVehiculo } from '../utils/verticalVehiculo';
@@ -97,15 +98,16 @@ export function ListaRepuestosPorCategoria({
   const [resultados, setResultados] = useState<ProductoResultado[]>([]);
   const [cargando, setCargando] = useState(true);
   const [hayMas, setHayMas] = useState(false);
+  const [totalConsulta, setTotalConsulta] = useState<number | null>(null);
   const [cargandoMas, setCargandoMas] = useState(false);
   const [productoExpandidoId, setProductoExpandidoId] = useState<string | null>(null);
   const [contactarProducto, setContactarProducto] = useState<ProductoResultado | null>(null);
 
   const armarQuery = useCallback(
-    (texto: string) => {
+    (texto: string, conTotal = false) => {
       let query = supabase
         .from(TABLA_CATALOGO_PUBLICO)
-        .select(SELECT_PRODUCTOS_CATEGORIA)
+        .select(SELECT_PRODUCTOS_CATEGORIA, conTotal ? { count: 'exact' } : undefined)
         .eq('activo', true)
         .eq('aprobacion_publica', 'aprobado')
         .eq('vertical', vertical)
@@ -119,7 +121,10 @@ export function ListaRepuestosPorCategoria({
 
   const cargarPagina = useCallback(
     async (texto: string, offset: number, reemplazar: boolean) => {
-      const { data, error } = await armarQuery(texto).range(offset, offset + PAGE_SIZE_LISTA_CATEGORIA);
+      const { data, error, count } = await armarQuery(texto, offset === 0).range(
+        offset,
+        offset + PAGE_SIZE_LISTA_CATEGORIA
+      );
 
       if (error) {
         if (reemplazar) {
@@ -135,6 +140,7 @@ export function ListaRepuestosPorCategoria({
 
       if (reemplazar) {
         setResultados(chunk);
+        setTotalConsulta(typeof count === 'number' ? count : null);
       } else {
         setResultados((prev) => [...prev, ...chunk]);
       }
@@ -239,8 +245,7 @@ export function ListaRepuestosPorCategoria({
     <div className="lista-repuestos-categoria">
       <div className="lista-repuestos-categoria-header">
         <h3 className="busqueda-repuestos-resultados-titulo">
-          {tituloResultados} ({resultados.length}
-          {hayMas && !cargando && !buscando ? ', hay más en el catálogo' : ''})
+          {tituloResultados}
         </h3>
         <button
           type="button"
@@ -351,16 +356,20 @@ export function ListaRepuestosPorCategoria({
               />
             ))}
           </div>
-          {hayMas && (
+          {(hayMas || totalConsulta != null) && (
             <div className="busqueda-repuestos-cargar-mas">
-              <button
-                type="button"
-                className="busqueda-repuestos-btn busqueda-repuestos-btn--cargar-mas"
-                onClick={() => void cargarMas()}
-                disabled={cargandoMas || cargando || buscando}
-              >
-                {cargandoMas ? 'Cargando…' : 'Cargar más repuestos'}
-              </button>
+              <ConteoListado mostrados={resultados.length} total={totalConsulta}>
+                {hayMas && (
+                  <button
+                    type="button"
+                    className="busqueda-repuestos-btn busqueda-repuestos-btn--cargar-mas"
+                    onClick={() => void cargarMas()}
+                    disabled={cargandoMas || cargando || buscando}
+                  >
+                    {cargandoMas ? 'Cargando…' : 'Cargar más repuestos'}
+                  </button>
+                )}
+              </ConteoListado>
             </div>
           )}
         </>

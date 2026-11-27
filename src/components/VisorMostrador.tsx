@@ -21,6 +21,7 @@ import {
   mensajeWhatsappCompartirCatalogoVendedor,
   mensajeWhatsappCompartirRepuesto,
 } from '../utils/enlaceCompartirProducto';
+import { ConteoListado } from './ConteoListado';
 import { ImagenProducto } from './ImagenProducto';
 import { VisorFotoProducto } from './VisorFotoProducto';
 import './VisorMostrador.css';
@@ -119,6 +120,7 @@ export function VisorMostrador({
   const [cargando, setCargando] = useState(true);
   const [cargandoMas, setCargandoMas] = useState(false);
   const [hayMas, setHayMas] = useState(false);
+  const [totalConsulta, setTotalConsulta] = useState<number | null>(null);
   const [offset, setOffset] = useState(0);
   const [tiendaIds, setTiendaIds] = useState<string[]>([]);
   const [tiendas, setTiendas] = useState<TiendaVendedorResumen[]>([]);
@@ -241,6 +243,7 @@ export function VisorMostrador({
             setError(pagina.error);
             setProductos([]);
             setHayMas(false);
+            setTotalConsulta(null);
             setOffset(0);
             return;
           }
@@ -251,6 +254,7 @@ export function VisorMostrador({
           setProductos(filas);
           setOffset(filas.length);
           setHayMas(pagina.hayMas);
+          setTotalConsulta(pagina.total);
         } catch (e) {
           if (!cancelado) {
             setError(e instanceof Error ? e.message : 'No se pudo cargar el catálogo.');
@@ -384,9 +388,9 @@ export function VisorMostrador({
             <span className="visor-mostrador-contador" role="status">
               {cargando
                 ? 'Buscando…'
-                : `${productos.length} resultado${productos.length === 1 ? '' : 's'}${
-                    hayMas ? '+' : ''
-                  }`}
+                : totalConsulta != null
+                  ? `${productos.length.toLocaleString('es-VE')} de ${totalConsulta.toLocaleString('es-VE')}`
+                  : `${productos.length} resultado${productos.length === 1 ? '' : 's'}${hayMas ? '+' : ''}`}
             </span>
             {!ocultarCompartir && (
             <button
@@ -516,16 +520,20 @@ export function VisorMostrador({
         })}
       </ul>
 
-      {hayMas && (
+      {(hayMas || totalConsulta != null) && (
         <div className="visor-mostrador-cargar-mas">
-          <button
-            type="button"
-            className="visor-mostrador-btn-mas"
-            disabled={cargandoMas || cargando}
-            onClick={() => void cargarMas()}
-          >
-            {cargandoMas ? 'Cargando…' : `Cargar más (${PRODUCTOS_VENDEDOR_LISTA_PAGE})`}
-          </button>
+          <ConteoListado mostrados={productos.length} total={totalConsulta}>
+            {hayMas && (
+              <button
+                type="button"
+                className="visor-mostrador-btn-mas"
+                disabled={cargandoMas || cargando}
+                onClick={() => void cargarMas()}
+              >
+                {cargandoMas ? 'Cargando…' : `Cargar más (${PRODUCTOS_VENDEDOR_LISTA_PAGE})`}
+              </button>
+            )}
+          </ConteoListado>
         </div>
       )}
 

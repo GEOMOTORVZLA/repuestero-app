@@ -97,6 +97,7 @@ export async function fetchPaginaProductosVendedorLista(
   hayMas: boolean;
   error: string | null;
   conCodigo: boolean;
+  total: number | null;
 }> {
   const {
     tiendaIds,
@@ -111,13 +112,14 @@ export async function fetchPaginaProductosVendedorLista(
   let selectCols = opts.select;
 
   if (tiendaIds.length === 0) {
-    return { filas: [], hayMas: false, error: null, conCodigo };
+    return { filas: [], hayMas: false, error: null, conCodigo, total: 0 };
   }
 
+  const pedirTotal = offset === 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query: any = supabase
     .from('productos')
-    .select(selectCols)
+    .select(selectCols, pedirTotal ? { count: 'exact' } : undefined)
     .in('tienda_id', tiendaIds)
     .order(orderBy.col, { ascending: orderBy.ascending !== false });
 
@@ -140,7 +142,7 @@ export async function fetchPaginaProductosVendedorLista(
     query = aplicarTerminosTextoAMisProductos(query, t, conCodigo);
   }
 
-  const { data, error } = await query.range(offset, offset + PRODUCTOS_VENDEDOR_LISTA_PAGE);
+  const { data, error, count } = await query.range(offset, offset + PRODUCTOS_VENDEDOR_LISTA_PAGE);
   if (error) {
     if (conCodigo && errorPorColumnaCodigoProducto(error.message)) {
       const selectSinCodigo = selectCols
@@ -154,7 +156,7 @@ export async function fetchPaginaProductosVendedorLista(
         conCodigo: false,
       });
     }
-    return { filas: [], hayMas: false, error: error.message || 'Error al cargar productos.', conCodigo };
+    return { filas: [], hayMas: false, error: error.message || 'Error al cargar productos.', conCodigo, total: null };
   }
 
   const filas = data ?? [];
@@ -164,6 +166,7 @@ export async function fetchPaginaProductosVendedorLista(
     hayMas,
     error: null,
     conCodigo,
+    total: pedirTotal && typeof count === 'number' ? count : null,
   };
 }
 

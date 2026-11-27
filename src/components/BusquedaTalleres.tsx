@@ -5,6 +5,7 @@ import { ESPECIALIDADES_TALLER, ESPECIALIDADES_TALLER_MOTO } from '../data/regis
 import { PAGE_SIZE_TALLERES_BUSQUEDA } from '../constants/limitesConsultaPublica';
 import { normalizeEspecialidadesTallerDb } from '../utils/tallerEspecialidades';
 import { MapVendedorUbicacion } from './MapaVendedorUbicacion';
+import { ConteoListado } from './ConteoListado';
 import {
   MENSAJE_AVISO_NAVEGACION_MAPS_TALLER,
   TEXTO_ENLACE_NAVEGACION_GOOGLE_MAPS,
@@ -53,6 +54,7 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
   const [ciudad, setCiudad] = useState('');
   const [talleres, setTalleres] = useState<Taller[]>([]);
   const [hayMasTalleres, setHayMasTalleres] = useState(false);
+  const [totalTalleres, setTotalTalleres] = useState<number | null>(null);
   const [cargandoMasTalleres, setCargandoMasTalleres] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [buscado, setBuscado] = useState(false);
@@ -70,11 +72,12 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
     setAvisoSeleccionarEstado(false);
   }, [vertical]);
 
-  const construirQueryTalleres = () => {
+  const construirQueryTalleres = (conTotal = false) => {
     let query = supabase
       .from('talleres')
       .select(
-        'id, nombre, nombre_comercial, rif, especialidad, marca_vehiculo, acerca_de, estado, ciudad, telefono, telefono_2, telefono_3, telefono_4, email, direccion, latitud, longitud, metodos_pago'
+        'id, nombre, nombre_comercial, rif, especialidad, marca_vehiculo, acerca_de, estado, ciudad, telefono, telefono_2, telefono_3, telefono_4, email, direccion, latitud, longitud, metodos_pago',
+        conTotal ? { count: 'exact' } : undefined
       )
       .eq('vertical', vertical);
 
@@ -108,7 +111,7 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
     setCargando(true);
     setHayMasTalleres(false);
 
-    const { data, error } = await construirQueryTalleres().range(0, PAGE_SIZE_TALLERES_BUSQUEDA);
+    const { data, error, count } = await construirQueryTalleres(true).range(0, PAGE_SIZE_TALLERES_BUSQUEDA);
 
     if (error) {
       setTalleres([]);
@@ -119,6 +122,7 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
       const mas = filas.length > PAGE_SIZE_TALLERES_BUSQUEDA;
       setTalleres(mas ? filas.slice(0, PAGE_SIZE_TALLERES_BUSQUEDA) : filas);
       setHayMasTalleres(mas);
+      setTotalTalleres(typeof count === 'number' ? count : null);
     }
     setCargando(false);
   };
@@ -355,16 +359,20 @@ export function BusquedaTalleres({ onBuscar, vertical = VERTICAL_AUTO }: Busqued
                       );
                     })}
                   </div>
-                  {hayMasTalleres && (
+                  {(hayMasTalleres || totalTalleres != null) && (
                     <div className="vendedores-cerca-cargar-mas">
-                      <button
-                        type="button"
-                        className="vendedores-cerca-cargar-mas-btn"
-                        onClick={() => void cargarMasTalleres()}
-                        disabled={cargandoMasTalleres}
-                      >
-                        {cargandoMasTalleres ? 'Cargando…' : 'Ver más talleres'}
-                      </button>
+                      <ConteoListado mostrados={talleres.length} total={totalTalleres}>
+                        {hayMasTalleres && (
+                          <button
+                            type="button"
+                            className="vendedores-cerca-cargar-mas-btn"
+                            onClick={() => void cargarMasTalleres()}
+                            disabled={cargandoMasTalleres}
+                          >
+                            {cargandoMasTalleres ? 'Cargando…' : 'Ver más talleres'}
+                          </button>
+                        )}
+                      </ConteoListado>
                     </div>
                   )}
                 </div>
